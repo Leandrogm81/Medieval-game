@@ -18,14 +18,14 @@ export const UNIT_STATS = {
     attack: 1.0, defense: 1.5, speed: 1 
   },
   archers: { 
-    cost: { gold: 15, food: 5, materials: 10, pop: 10 }, 
+    cost: { gold: 15, food: 5, materials: 8, pop: 10 }, 
     maintenance: { gold: 1, food: 1 },
     attack: 1.2, defense: 1.2, speed: 1,
     requires: 'wood' as StrategicResource
   },
   cavalry: { 
     cost: { gold: 30, food: 15, materials: 15, pop: 15 }, 
-    maintenance: { gold: 3, food: 2 },
+    maintenance: { gold: 2, food: 1 },
     attack: 2.0, defense: 1.0, speed: 2,
     requires: 'horse' as StrategicResource
   }
@@ -40,11 +40,19 @@ export const ACTION_COSTS = {
 };
 
 export const BUILDING_STATS = {
-  farms: { gold: 100, materials: 50 },
-  mines: { gold: 150, materials: 75 },
-  workshops: { gold: 120, materials: 60 },
-  courts: { gold: 200, materials: 100 },
-  fortify: { gold: 75 }
+  farms: { gold: 80, materials: 40 },
+  mines: { gold: 150, materials: 60 },
+  workshops: { gold: 100, materials: 40 },
+  courts: { gold: 180, materials: 80 },
+  fortify: { gold: 75, materials: 30 }
+};
+
+// Production bonus per building level
+export const BUILDING_PRODUCTION = {
+  farms: 12,      // +12 food per farm
+  mines: 8,       // +8 gold per mine
+  workshops: 7,   // +7 materials per workshop
+  courts: 10      // +10 loyalty stabilization
 };
 
 const PERSONALITIES: PersonalityType[] = ['expansionist', 'defensive', 'diplomatic', 'opportunistic', 'commercial'];
@@ -438,6 +446,9 @@ export function processAITurn(state: GameState): GameState {
         handleCommercialAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
     }
+
+    // 3. Shared Internal Management (using residual APs)
+    manageInternalAffairsAI(newState, realm, assessment);
   });
   
   return newState;
@@ -560,7 +571,7 @@ function processVassalTurn(state: GameState, realm: Realm) {
 
   for (const prov of borderProvs) {
     if (availableAPs >= ACTION_COSTS.recruit) {
-       executeRecruitment(newState, realm, prov);
+       executeRecruitment(state, realm, prov);
        availableAPs -= ACTION_COSTS.recruit;
     }
   }
@@ -776,19 +787,47 @@ function handleCommercialAI(state: GameState, realm: Realm, provinces: Province[
       }
     }
   }
-  
-  const constructionProvs = assessment.safeInternal.length > 0 ? assessment.safeInternal : provinces;
-  for (const prov of constructionProvs) {
-    if (currentAp >= ACTION_COSTS.build) {
-      if (executeBuilding(state, realm, prov, 'workshops')) {
-         currentAp -= ACTION_COSTS.build;
-         prov.wealth += 1; // Extra economic boost for commercial
-      }
-    }
-  }
-  
   realm.actionPoints = currentAp;
 }
+
+function manageInternalAffairsAI(state: GameState, realm: Realm, assessment: StrategicAssessment) {
+  const owned = Object.values(state.provinces).filter(p => p.ownerId === realm.id);
+  
+  for (const prov of owned) {
+    if (realm.actionPoints < ACTION_COSTS.build) break;
+
+    // 1. Loyalty check (Priority 1)
+    if (prov.loyalty < 45) {
+       if (executeBuilding(state, realm, prov, 'courts')) {
+          realm.actionPoints -= ACTION_COSTS.build;
+          continue;
+       }
+    }
+
+    // 2. Resource check (Priority 2)
+    if (realm.food < 100 && prov.population > prov.maxPopulation * 0.5) {
+       if (executeBuilding(state, realm, prov, 'farms')) {
+          realm.actionPoints -= ACTION_COSTS.build;
+          continue;
+       }
+    }
+    
+    if (realm.gold < 100) {
+       if (executeBuilding(state, realm, prov, 'mines')) {
+          realm.actionPoints -= ACTION_COSTS.build;
+          continue;
+       }
+    }
+
+    if (realm.materials < 50) {
+       if (executeBuilding(state, realm, prov, 'workshops')) {
+          realm.actionPoints -= ACTION_COSTS.build;
+          continue;
+       }
+    }
+  }
+}
+
 
 export function executeAttack(state: GameState, realm: Realm, attackerProv: Province, targetProv: Province) {
   const attackingArmy: Army = {
@@ -977,9 +1016,9 @@ export function processEndOfTurn(state: GameState): GameState {
 
     ownedProvinces.forEach(p => {
       const efficiency = p.population / p.maxPopulation;
-      goldIncome += (p.wealth + (p.buildings.mines * 5)) * efficiency;
-      foodIncome += (p.foodProduction + (p.buildings.farms * 10)) * efficiency;
-      materialIncome += (p.materialProduction + (p.buildings.workshops * 5)) * efficiency;
+      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
+      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
+      materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency;
 
       if (p.strategicResource === 'iron') materialIncome += 5;
       if (p.strategicResource === 'wood') materialIncome += 5;
@@ -987,7 +1026,7 @@ export function processEndOfTurn(state: GameState): GameState {
       if (p.strategicResource === 'stone') materialIncome += 5;
 
       if (p.population < p.maxPopulation) {
-        const growth = Math.floor(p.population * 0.05);
+        const growth = Math.floor(p.population * 0.07);
         p.population = Math.min(p.maxPopulation, p.population + growth);
       }
     });
@@ -1093,7 +1132,7 @@ export function processEndOfTurn(state: GameState): GameState {
 
       // Positive factors
       if (p.id === realm.capitalId) loyaltyChange += 10;
-      loyaltyChange += p.buildings.courts * 5;
+      loyaltyChange += p.buildings.courts * BUILDING_PRODUCTION.courts;
       loyaltyChange += Math.floor(p.troops / 50); // Military presence
 
       // Negative factors
@@ -1109,9 +1148,9 @@ export function processEndOfTurn(state: GameState): GameState {
       const loyaltyFactor = 0.5 + (p.loyalty / 200); // 100 loyalty = 100%, 0 loyalty = 50%
       const efficiency = (p.population / p.maxPopulation) * loyaltyFactor;
       
-      const pGold = (p.wealth + (p.buildings.mines * 5)) * efficiency;
-      const pFood = (p.foodProduction + (p.buildings.farms * 10)) * efficiency;
-      const pMats = (p.materialProduction + (p.buildings.workshops * 5)) * efficiency;
+      const pGold = (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
+      const pFood = (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
+      const pMats = (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency;
 
       goldIncome += pGold;
       foodIncome += pFood;

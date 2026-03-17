@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData } from './types';
-import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS } from './gameLogic';
+import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from './gameLogic';
 import { persistence } from './persistence';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
@@ -8,6 +8,8 @@ import { Minimap } from './components/Minimap';
 import { GameOverModal } from './components/GameOverModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { InstructionsModal } from './components/InstructionsModal';
+import { TurnSummaryModal, TurnSummaryData } from './components/TurnSummaryModal';
+import { CombatPreviewModal } from './components/CombatPreviewModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save } from 'lucide-react';
 
@@ -25,6 +27,12 @@ export default function App() {
   const [viewMode, setViewMode] = useState<ViewMode>('political');
   const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState<boolean>(false);
+  const [showTurnSummary, setShowTurnSummary] = useState<boolean>(false);
+  const [turnSummaryData, setTurnSummaryData] = useState<TurnSummaryData | null>(null);
+  const [showCombatPreview, setShowCombatPreview] = useState<boolean>(false);
+  const [combatAttackerProvId, setCombatAttackerProvId] = useState<string | null>(null);
+  const [combatDefenderProvId, setCombatDefenderProvId] = useState<string | null>(null);
+  const [combatAttackingArmy, setCombatAttackingArmy] = useState<Army | null>(null);
   const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     numProvinces: 25,
@@ -248,7 +256,6 @@ export default function App() {
           if (!playerRealm.wars.includes(target.ownerId)) {
              addLog(`Você precisa declarar guerra a ${gameState.realms[target.ownerId].name} antes de atacar!`);
           } else {
-             // Calculate attack forces - using 80% as we did before
              const attackingArmy: Army = {
                infantry: Math.floor(source.army.infantry * 0.8),
                archers: Math.floor(source.army.archers * 0.8),
@@ -257,24 +264,11 @@ export default function App() {
              const totalAttacking = attackingArmy.infantry + attackingArmy.archers + attackingArmy.cavalry;
 
              if (totalAttacking > 0) {
-               addVisualEffect('battle', target.center[0], target.center[1]);
-               setGameState(prev => {
-                 if (!prev) return prev;
-                 const next = { ...prev };
-                 const s = next.provinces[actionSourceId];
-                 const t = next.provinces[id];
-                 const r = next.realms[prev.playerRealmId];
-
-                 s.army.infantry -= attackingArmy.infantry;
-                 s.army.archers -= attackingArmy.archers;
-                 s.army.cavalry -= attackingArmy.cavalry;
-                 s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
-                 
-                 r.actionPoints -= ACTION_COSTS.attack;
-                 executeAttack(next, r, s, t);
-                 
-                 return next;
-               });
+               // Show combat preview instead of attacking directly
+               setCombatAttackerProvId(actionSourceId);
+               setCombatDefenderProvId(id);
+               setCombatAttackingArmy(attackingArmy);
+               setShowCombatPreview(true);
              } else {
                addLog("Tropas insuficientes na província de origem para atacar.");
              }
@@ -286,6 +280,31 @@ export default function App() {
       setActionState('idle');
       setActionSourceId(null);
     }
+  };
+
+  const confirmAttack = () => {
+    if (!gameState || !combatAttackerProvId || !combatDefenderProvId || !combatAttackingArmy) return;
+    playSound('combat');
+    const target = gameState.provinces[combatDefenderProvId];
+    addVisualEffect('battle', target.center[0], target.center[1]);
+    setGameState(prev => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      const s = next.provinces[combatAttackerProvId];
+      const t = next.provinces[combatDefenderProvId];
+      const r = next.realms[prev.playerRealmId];
+      s.army.infantry -= combatAttackingArmy.infantry;
+      s.army.archers -= combatAttackingArmy.archers;
+      s.army.cavalry -= combatAttackingArmy.cavalry;
+      s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
+      r.actionPoints -= ACTION_COSTS.attack;
+      executeAttack(next, r, s, t);
+      return next;
+    });
+    setShowCombatPreview(false);
+    setCombatAttackerProvId(null);
+    setCombatDefenderProvId(null);
+    setCombatAttackingArmy(null);
   };
 
   const handleAction = (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => {
@@ -344,26 +363,34 @@ export default function App() {
         return next;
       });
       addLog(`Recrutado ${recruitAmount} ${unitType === 'infantry' ? 'Infantaria' : unitType === 'archers' ? 'Arqueiros' : 'Cavalaria'} em ${prov.name}.`);
-    } else if (action === 'build_farm' || action === 'build_mine' || action === 'build_workshop' || action === 'build_courts') {
+    } else if (action === 'build_farm' || action === 'build_mine' || action === 'build_workshop' || action === 'build_courts' || action === 'fortify') {
       playSound('build');
       if (playerRealm.actionPoints < ACTION_COSTS.build) {
-        addLog("Pontos de Ação insuficientes para construir.");
+        addLog(`Pontos de Ação insuficientes para ${action === 'fortify' ? 'fortificar' : 'construir'}.`);
         return;
       }
 
-      const buildingType = action.replace('build_', '') as keyof typeof BUILDING_STATS;
-      const stats = BUILDING_STATS[buildingType as 'farms' | 'mines' | 'workshops' | 'courts'] || BUILDING_STATS.fortify;
-      const cost = (stats as any).gold || 0;
+      const isFortify = action === 'fortify';
+      const buildingType = isFortify ? 'fortify' : (action.replace('build_', '') as keyof typeof BUILDING_STATS);
+      const stats = BUILDING_STATS[buildingType];
+      const cost = stats.gold || 0;
       const matCost = (stats as any).materials || 0;
 
       if (playerRealm.gold >= cost && playerRealm.materials >= matCost) {
+        if (isFortify && prov.defense >= 5) {
+           addLog("Defesas já estão no nível máximo.");
+           return;
+        }
+
         setGameState(prev => {
           if (!prev) return prev;
           const next = { ...prev };
           next.realms[prev.playerRealmId].gold -= cost;
           next.realms[prev.playerRealmId].materials -= matCost;
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
-          if (buildingType === 'fortify' || action === 'fortify') {
+          
+          if (buildingType === 'fortify') {
+             next.provinces[selectedProvinceId].targetProvStatus = 'defend'; // irrelevant but matching logic if needed
              next.provinces[selectedProvinceId].defense += 1;
           } else {
              next.provinces[selectedProvinceId].buildings[buildingType as 'farms'] += 1;
@@ -371,27 +398,9 @@ export default function App() {
           return next;
         });
         const buildingNames: any = { farms: 'Fazenda', mines: 'Mina', workshops: 'Oficina', courts: 'Tribunal', fortify: 'Fortificação' };
-        addLog(`Construído um ${buildingNames[buildingType] || 'Melhoria'} em ${prov.name}.`);
+        addLog(`Finalizado: ${buildingNames[buildingType] || 'Melhoria'} em ${prov.name}.`);
       } else {
-        addLog("Ouro ou Materiais insuficientes para construir.");
-      }
-    } else if (action === 'fortify') {
-      if (playerRealm.actionPoints < ACTION_COSTS.build) {
-        addLog("Pontos de Ação insuficientes para fortificar.");
-        return;
-      }
-      if (playerRealm.gold >= 75 && prov.defense < 5) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          next.realms[prev.playerRealmId].gold -= 75;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
-          next.provinces[selectedProvinceId].defense += 1;
-          return next;
-        });
-        addLog(`Fortificado ${prov.name}.`);
-      } else {
-        addLog("Não é possível fortificar mais ou ouro insuficiente.");
+        addLog("Recursos insuficientes.");
       }
     } else if (action === 'move') {
       setActionState('moving');
@@ -630,7 +639,7 @@ export default function App() {
         addLog(`${targetRealm.name} recusa-se a dobrar o joelho.`);
       }
     } else if (action === 'buy_food') {
-      const cost = 20;
+      const cost = 25;
       const amount = 50;
       if (playerRealm.gold >= cost) {
         setGameState(prev => {
@@ -645,7 +654,7 @@ export default function App() {
         addLog("Ouro insuficiente.");
       }
     } else if (action === 'sell_food') {
-      const price = 10;
+      const price = 15;
       const amount = 50;
       if (playerRealm.food >= amount) {
         setGameState(prev => {
@@ -660,7 +669,7 @@ export default function App() {
         addLog("Comida insuficiente.");
       }
     } else if (action === 'buy_materials') {
-      const cost = 30;
+      const cost = 35;
       const amount = 25;
       if (playerRealm.gold >= cost) {
         setGameState(prev => {
@@ -675,7 +684,7 @@ export default function App() {
         addLog("Ouro insuficiente.");
       }
     } else if (action === 'sell_materials') {
-      const price = 15;
+      const price = 20;
       const amount = 25;
       if (playerRealm.materials >= amount) {
         setGameState(prev => {
@@ -737,13 +746,60 @@ export default function App() {
     if (!gameState) return;
     playSound('turn');
     
+    const prevState = gameState;
+    const prevPlayerProvs = new Set((Object.values(prevState.provinces) as Province[]).filter(p => p.ownerId === prevState.playerRealmId).map(p => p.id));
+    const prevWars = new Set(prevState.realms[prevState.playerRealmId].wars);
+
     let nextState = processAITurn(gameState);
     nextState = processEndOfTurn(nextState);
     
-    // Autosave
-    persistence.autoSave(nextState);
+    // Calculate turn summary
+    const playerRealm = nextState.realms[nextState.playerRealmId];
+    const nextPlayerProvs = (Object.values(nextState.provinces) as Province[]).filter(p => p.ownerId === nextState.playerRealmId);
+    const nextPlayerProvIds = new Set(nextPlayerProvs.map(p => p.id));
+
+    const provincesGained = [...nextPlayerProvIds].filter(id => !prevPlayerProvs.has(id)).map(id => nextState.provinces[id].name);
+    const provincesLost = [...prevPlayerProvs].filter(id => !nextPlayerProvIds.has(id)).map(id => nextState.provinces[id]?.name || 'Desconhecida');
     
+    const nextWars = new Set(playerRealm.wars);
+    const newWars = ([...nextWars] as string[]).filter(id => !prevWars.has(id)).map(id => nextState.realms[id]?.name || id);
+    const peaceTreaties = ([...prevWars] as string[]).filter(id => !nextWars.has(id)).map(id => nextState.realms[id]?.name || id);
+
+    const rebellionLogs = nextState.logs.filter(l => l.includes('REBELIÃO') || l.includes('MOTIM'));
+    const lowLoyaltyProvs = nextPlayerProvs.filter(p => p.loyalty < 30).map(p => p.name);
+
+    // Calculate income/maintenance
+    let goldIncome = 0, foodIncome = 0, materialIncome = 0;
+    let goldMaint = 0, foodMaint = 0;
+    nextPlayerProvs.forEach(p => {
+      const eff = p.population / p.maxPopulation;
+      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * eff;
+      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * eff;
+      materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * eff;
+      goldMaint += p.army.infantry * UNIT_STATS.infantry.maintenance.gold + p.army.archers * UNIT_STATS.archers.maintenance.gold + p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold;
+      foodMaint += p.army.infantry * UNIT_STATS.infantry.maintenance.food + p.army.archers * UNIT_STATS.archers.maintenance.food + p.army.cavalry * UNIT_STATS.cavalry.maintenance.food;
+    });
+
+    const summary: TurnSummaryData = {
+      turn: nextState.turn,
+      goldIncome: Math.floor(goldIncome),
+      goldMaintenance: Math.floor(goldMaint),
+      foodIncome: Math.floor(foodIncome),
+      foodMaintenance: Math.floor(foodMaint),
+      materialIncome: Math.floor(materialIncome),
+      provincesGained,
+      provincesLost,
+      newWars,
+      peaceTreaties,
+      rebellions: rebellionLogs.map(l => l.replace(/REBELIÃO:|MOTIM:/g, '').trim()),
+      lowLoyaltyProvinces: lowLoyaltyProvs,
+      event: nextState.currentEvent?.description || null,
+    };
+
+    persistence.autoSave(nextState);
     setGameState(nextState);
+    setTurnSummaryData(summary);
+    setShowTurnSummary(true);
     addLog(`--- Turno ${nextState.turn} ---`);
     setActionState('idle');
     setActionSourceId(null);
@@ -920,6 +976,7 @@ export default function App() {
             gameState={gameState}
             width={150}
             height={112}
+            selectedProvinceId={selectedProvinceId}
             onProvinceClick={(id) => setSelectedProvinceId(id)}
           />
 
@@ -970,6 +1027,26 @@ export default function App() {
       <InstructionsModal 
         isOpen={showInstructionsModal}
         onClose={() => setShowInstructionsModal(false)}
+      />
+
+      <TurnSummaryModal 
+        isOpen={showTurnSummary}
+        onClose={() => setShowTurnSummary(false)}
+        data={turnSummaryData}
+      />
+
+      <CombatPreviewModal
+        isOpen={showCombatPreview}
+        onClose={() => {
+          setShowCombatPreview(false);
+          setCombatAttackerProvId(null);
+          setCombatDefenderProvId(null);
+          setCombatAttackingArmy(null);
+        }}
+        onConfirm={confirmAttack}
+        attackerProv={combatAttackerProvId ? gameState.provinces[combatAttackerProvId] : null}
+        defenderProv={combatDefenderProvId ? gameState.provinces[combatDefenderProvId] : null}
+        attackingArmy={combatAttackingArmy}
       />
     </div>
   );

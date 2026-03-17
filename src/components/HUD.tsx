@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GameState, Province, Realm, ActionType, UnitType, ViewMode } from '../types';
 import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown } from 'lucide-react';
-import { UNIT_STATS, ACTION_COSTS } from '../gameLogic';
+import { UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from '../gameLogic';
 
 interface HUDProps {
   gameState: GameState;
@@ -44,12 +44,12 @@ export const HUD: React.FC<HUDProps> = ({
     
   const baseGoldIncome = playerProvinces.reduce((sum, p) => {
     const efficiency = p.population / p.maxPopulation;
-    return sum + (p.wealth + (p.buildings.mines * 5)) * efficiency;
+    return sum + (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
   }, 0);
     
   const baseFoodIncome = playerProvinces.reduce((sum, p) => {
     const efficiency = p.population / p.maxPopulation;
-    return sum + (p.foodProduction + (p.buildings.farms * 10)) * efficiency;
+    return sum + (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
   }, 0);
 
   const oePenalty = playerRealm.overextension > 20 ? (playerRealm.overextension - 20) / 100 : 0;
@@ -220,6 +220,52 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
+      {/* Smart Alerts */}
+      {(() => {
+        const alerts: { icon: React.ReactNode; text: string; color: string }[] = [];
+        
+        // Rebellion risk
+        playerProvinces.filter(p => p.loyalty < 30).forEach(p => {
+          alerts.push({ icon: <AlertTriangle size={12} />, text: `${p.name} em risco de rebelião (${p.loyalty}%)`, color: 'text-red-400 bg-red-900/20 border-red-500/20' });
+        });
+        
+        // Resource deficit
+        if (netGold < -10) alerts.push({ icon: <Coins size={12} />, text: `Déficit de ouro: ${netGold}/turno`, color: 'text-amber-400 bg-amber-900/20 border-amber-500/20' });
+        if (netFood < -10) alerts.push({ icon: <Wheat size={12} />, text: `Déficit de comida: ${netFood}/turno`, color: 'text-amber-400 bg-amber-900/20 border-amber-500/20' });
+        
+        // Threatened border
+        const warEnemies = playerRealm.wars;
+        if (warEnemies.length > 0) {
+          const threatened = playerProvinces.filter(p => 
+            p.neighbors.some(nId => {
+              const n = gameState.provinces[nId];
+              return n && warEnemies.includes(n.ownerId) && n.troops > p.troops;
+            })
+          );
+          threatened.slice(0, 1).forEach(p => {
+            alerts.push({ icon: <Shield size={12} />, text: `${p.name} ameaçada por inimigo superior`, color: 'text-orange-400 bg-orange-900/20 border-orange-500/20' });
+          });
+        }
+        
+        // Diplomatic opportunity
+        const otherRealms = (Object.values(gameState.realms) as Realm[]).filter(r => r.id !== playerRealm.id && !playerRealm.wars.includes(r.id));
+        otherRealms.filter(r => (playerRealm.relations[r.id] || 0) > 40 && !playerRealm.pacts.includes(r.id) && !playerRealm.alliances.includes(r.id)).slice(0, 1).forEach(r => {
+          alerts.push({ icon: <Handshake size={12} />, text: `${r.name} aberto a pacto (relação ${Math.floor(playerRealm.relations[r.id])})`, color: 'text-green-400 bg-green-900/20 border-green-500/20' });
+        });
+
+        if (alerts.length === 0) return null;
+        
+        return (
+          <div className="px-4 pt-2 space-y-1 max-h-24 overflow-y-auto">
+            {alerts.slice(0, 3).map((a, i) => (
+              <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[10px] font-bold ${a.color}`}>
+                {a.icon} {a.text}
+              </div>
+            ))}
+          </div>
+        );
+      })()}
+
       {/* Selected Province Info */}
       <div className="flex-1 p-4 overflow-y-auto">
         {activeTab === 'market' ? (
@@ -239,13 +285,13 @@ export const HUD: React.FC<HUDProps> = ({
                     onClick={() => onAction('buy_food')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Comprar 50 (20O)
+                    Comprar 50 (25O)
                   </button>
                   <button 
                     onClick={() => onAction('sell_food')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Vender 50 (10O)
+                    Vender 50 (15O)
                   </button>
                 </div>
               </div>
@@ -260,13 +306,13 @@ export const HUD: React.FC<HUDProps> = ({
                     onClick={() => onAction('buy_materials')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Comprar 25 (30O)
+                    Comprar 25 (35O)
                   </button>
                   <button 
                     onClick={() => onAction('sell_materials')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Vender 25 (15O)
+                    Vender 25 (20O)
                   </button>
                 </div>
               </div>
@@ -406,11 +452,11 @@ export const HUD: React.FC<HUDProps> = ({
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 flex items-center gap-1 text-xs"><Coins size={12} /> Ouro</span>
-                  <span className="font-bold text-yellow-400 text-xs">+{Math.floor((selectedProv.wealth + (selectedProv.buildings.mines * 5)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
+                  <span className="font-bold text-yellow-400 text-xs">+{Math.floor((selectedProv.wealth + (selectedProv.buildings.mines * BUILDING_PRODUCTION.mines)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 flex items-center gap-1 text-xs"><Wheat size={12} /> Comida</span>
-                  <span className="font-bold text-green-400 text-xs">+{Math.floor((selectedProv.foodProduction + (selectedProv.buildings.farms * 10)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
+                  <span className="font-bold text-green-400 text-xs">+{Math.floor((selectedProv.foodProduction + (selectedProv.buildings.farms * BUILDING_PRODUCTION.farms)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
                 </div>
               </div>
               
@@ -584,19 +630,19 @@ export const HUD: React.FC<HUDProps> = ({
                         <div className="grid grid-cols-1 gap-1 mt-1">
                           <button onClick={() => onAction('build_farm')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
                             <span className="flex items-center gap-2"><Tractor size={12} className="text-green-500" /> Fazenda</span>
-                            <span className="text-[10px] text-slate-400">100O, 50M</span>
+                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.farms.gold}O, {BUILDING_STATS.farms.materials}M</span>
                           </button>
                           <button onClick={() => onAction('build_mine')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
                             <span className="flex items-center gap-2"><Pickaxe size={12} className="text-yellow-500" /> Mina</span>
-                            <span className="text-[10px] text-slate-400">150O, 75M</span>
+                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.mines.gold}O, {BUILDING_STATS.mines.materials}M</span>
                           </button>
                           <button onClick={() => onAction('build_workshop')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
                             <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
-                            <span className="text-[10px] text-slate-400">120O, 60M</span>
+                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.workshops.gold}O, {BUILDING_STATS.workshops.materials}M</span>
                           </button>
                           <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
                             <span className="flex items-center gap-2"><Home size={12} className="text-blue-400" /> Tribunal</span>
-                            <span className="text-[10px] text-slate-400">200O, 100M</span>
+                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.courts.gold}O, {BUILDING_STATS.courts.materials}M</span>
                           </button>
                         </div>
                       </div>
