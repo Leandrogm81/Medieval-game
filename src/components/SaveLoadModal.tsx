@@ -76,7 +76,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
                     <div>
                       <h3 className="text-[#f5f2ed] font-bold text-lg">{save.name}</h3>
                       <div className="text-[#f5f2ed]/60 text-sm flex gap-4 mt-1">
-                        <span>Turno {save.state.turn}</span>
+                        <span>Turno {save.state?.turn ?? 0}</span>
                         <span>{new Date(save.date).toLocaleString()}</span>
                       </div>
                     </div>

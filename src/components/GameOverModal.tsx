@@ -4,12 +4,12 @@ import { Trophy, Skull, RefreshCw } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface GameOverModalProps {
-  gameState: GameState;
+  gameState: GameState | null;
   onRestart: () => void;
 }
 
 export const GameOverModal: React.FC<GameOverModalProps> = ({ gameState, onRestart }) => {
-  if (!gameState.gameOver) return null;
+  if (!gameState || !gameState.gameOver) return null;
 
   const isPlayerWinner = gameState.gameOver.winnerId === gameState.playerRealmId;
   const winner = gameState.realms[gameState.gameOver.winnerId];

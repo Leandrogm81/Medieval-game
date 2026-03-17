@@ -19,12 +19,12 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState, width, height, onPr
       className="absolute bottom-4 left-4 bg-black/60 backdrop-blur border border-slate-700 rounded-lg overflow-hidden shadow-2xl pointer-events-auto"
       style={{ width, height }}
     >
-      <svg width={width} height={height} className="pointer-events-none">
+      <svg width={width} height={height} className="pointer-events-auto">
         {(Object.values(gameState.provinces) as Province[]).map(prov => {
           const isVisible = gameState.visibleProvinces.includes(prov.id);
           const owner = gameState.realms[prov.ownerId];
           
-          const scaledPolygon = prov.polygon.map(([x, y]) => [x * scaleX, y * scaleY]);
+          const scaledPolygon = prov.polygon.map(([x, y]) => [x * (width / mapWidth), y * (height / mapHeight)]);
           const pathData = `M${scaledPolygon.map(p => p.join(',')).join('L')}Z`;
           
           return (
@@ -35,6 +35,8 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState, width, height, onPr
               fillOpacity={isVisible ? 0.8 : 0.5}
               stroke="#000"
               strokeWidth={0.5}
+              onClick={() => onProvinceClick(prov.id)}
+              className="cursor-pointer hover:stroke-white hover:stroke-2"
             />
           );
         })}

@@ -55,134 +55,141 @@ export function calculateVisibility(state: GameState): string[] {
 }
 
 export function generateInitialState(width: number, height: number, settings: GameSettings): GameState {
-  const { numProvinces, numRealms, resourceDensity } = settings;
-  // Generate random points
-  let points = Array.from({ length: numProvinces }, () => [Math.random() * width, Math.random() * height] as [number, number]);
+  console.log("Generating initial state...");
+  try {
+    const { numProvinces, numRealms, resourceDensity } = settings;
+    // Generate random points
+    let points = Array.from({ length: numProvinces }, () => [Math.random() * width, Math.random() * height] as [number, number]);
 
-  // Lloyd's relaxation for better province shapes
-  for (let i = 0; i < 3; i++) {
+    // Lloyd's relaxation for better province shapes
+    for (let i = 0; i < 3; i++) {
+      const delaunay = d3.Delaunay.from(points);
+      const voronoi = delaunay.voronoi([0, 0, width, height]);
+      points = points.map((_, j) => {
+        const polygon = voronoi.cellPolygon(j);
+        if (!polygon) return points[j];
+        return [d3.polygonCentroid(polygon)[0], d3.polygonCentroid(polygon)[1]] as [number, number];
+      });
+    }
+
     const delaunay = d3.Delaunay.from(points);
     const voronoi = delaunay.voronoi([0, 0, width, height]);
-    points = points.map((_, j) => {
-      const polygon = voronoi.cellPolygon(j);
-      if (!polygon) return points[j];
-      return [d3.polygonCentroid(polygon)[0], d3.polygonCentroid(polygon)[1]] as [number, number];
-    });
-  }
 
-  const delaunay = d3.Delaunay.from(points);
-  const voronoi = delaunay.voronoi([0, 0, width, height]);
+    const realms: Record<string, Realm> = {};
+    for (let i = 0; i < numRealms; i++) {
+      realms[`realm_${i}`] = {
+        id: `realm_${i}`,
+        name: REALM_NAMES[i],
+        color: REALM_COLORS[i],
+        gold: 200,
+        food: 200,
+        materials: 100,
+        isPlayer: i === 0,
+        actionPoints: 10,
+        maxActionPoints: 10,
+        overextension: 0,
+        relations: {},
+        memory: {},
+        alliances: [],
+        wars: [],
+        pacts: [],
+        tradeRoutes: [],
+        personality: PERSONALITIES[i % PERSONALITIES.length],
+        objective: OBJECTIVES[i % OBJECTIVES.length],
+        vassals: []
+      };
+    }
 
-  const realms: Record<string, Realm> = {};
-  for (let i = 0; i < numRealms; i++) {
-    realms[`realm_${i}`] = {
-      id: `realm_${i}`,
-      name: REALM_NAMES[i],
-      color: REALM_COLORS[i],
-      gold: 200,
-      food: 200,
-      materials: 100,
-      isPlayer: i === 0,
-      actionPoints: 10,
-      maxActionPoints: 10,
-      overextension: 0,
-      relations: {},
-      memory: {},
-      alliances: [],
-      wars: [],
-      pacts: [],
-      tradeRoutes: [],
-      personality: PERSONALITIES[i % PERSONALITIES.length],
-      objective: OBJECTIVES[i % OBJECTIVES.length],
-      vassals: []
-    };
-  }
-
-  // Initialize relations and memory
-  for (let i = 0; i < numRealms; i++) {
-    for (let j = 0; j < numRealms; j++) {
-      if (i !== j) {
-        realms[`realm_${i}`].relations[`realm_${j}`] = 0;
-        realms[`realm_${i}`].memory[`realm_${j}`] = {
-          betrayal: 0,
-          help: 0,
-          aggression: 0,
-          lastWarTurn: -1
-        };
+    // Initialize relations and memory
+    for (let i = 0; i < numRealms; i++) {
+      for (let j = 0; j < numRealms; j++) {
+        if (i !== j) {
+          realms[`realm_${i}`].relations[`realm_${j}`] = 0;
+          realms[`realm_${i}`].memory[`realm_${j}`] = {
+            betrayal: 0,
+            help: 0,
+            aggression: 0,
+            lastWarTurn: -1
+          };
+        }
       }
     }
-  }
 
-  const provinces: Record<string, Province> = {};
-  for (let i = 0; i < numProvinces; i++) {
-    const polygon = voronoi.cellPolygon(i);
-    if (!polygon) continue;
-    
-    const neighbors = Array.from(voronoi.neighbors(i)).map(n => `prov_${n}`);
-    const terrainRand = Math.random();
-    const terrain: Terrain = terrainRand < 0.5 ? 'plains' : terrainRand < 0.8 ? 'forest' : 'mountain';
-    
-    // Base production based on terrain
-    let wealth = Math.floor(Math.random() * 3) + 1;
-    let foodProduction = Math.floor(Math.random() * 3) + 1;
-    let materialProduction = Math.floor(Math.random() * 2) + 1;
+    const provinces: Record<string, Province> = {};
+    for (let i = 0; i < numProvinces; i++) {
+      const polygon = voronoi.cellPolygon(i);
+      if (!polygon) continue;
+      
+      const neighbors = Array.from(voronoi.neighbors(i)).map(n => `prov_${n}`);
+      const terrainRand = Math.random();
+      const terrain: Terrain = terrainRand < 0.5 ? 'plains' : terrainRand < 0.8 ? 'forest' : 'mountain';
+      
+      // Base production based on terrain
+      let wealth = Math.floor(Math.random() * 3) + 1;
+      let foodProduction = Math.floor(Math.random() * 3) + 1;
+      let materialProduction = Math.floor(Math.random() * 2) + 1;
 
-    if (terrain === 'plains') foodProduction += 3;
-    if (terrain === 'mountain') {
-      wealth += 2;
-      materialProduction += 2;
-    }
-    if (terrain === 'forest') materialProduction += 3;
-
-    const pop = Math.floor(Math.random() * 500) + 500;
-    const army: Army = {
-      infantry: Math.floor(Math.random() * 30) + 20,
-      archers: Math.floor(Math.random() * 15) + 5,
-      cavalry: Math.floor(Math.random() * 5)
-    };
-
-    provinces[`prov_${i}`] = {
-      id: `prov_${i}`,
-      name: PROVINCE_NAMES[i % PROVINCE_NAMES.length],
-      ownerId: `realm_${i % numRealms}`, // Distribute evenly initially
-      army,
-      troops: army.infantry + army.archers + army.cavalry,
-      population: pop,
-      maxPopulation: pop + 500,
-      strategicResource: Math.random() < (resourceDensity === 'high' ? 0.6 : resourceDensity === 'low' ? 0.2 : 0.4) 
-        ? STRATEGIC_RESOURCES[Math.floor(Math.random() * (STRATEGIC_RESOURCES.length - 1)) + 1] 
-        : 'none',
-      wealth,
-      foodProduction,
-      materialProduction,
-      defense: Math.floor(Math.random() * 2),
-      terrain,
-      neighbors,
-      polygon: polygon.map(p => [p[0], p[1]] as [number, number]),
-      center: points[i],
-      buildings: {
-        farms: 0,
-        mines: 0,
-        workshops: 0
+      if (terrain === 'plains') foodProduction += 3;
+      if (terrain === 'mountain') {
+        wealth += 2;
+        materialProduction += 2;
       }
+      if (terrain === 'forest') materialProduction += 3;
+
+      const pop = Math.floor(Math.random() * 500) + 500;
+      const army: Army = {
+        infantry: Math.floor(Math.random() * 30) + 20,
+        archers: Math.floor(Math.random() * 15) + 5,
+        cavalry: Math.floor(Math.random() * 5)
+      };
+
+      provinces[`prov_${i}`] = {
+        id: `prov_${i}`,
+        name: PROVINCE_NAMES[i % PROVINCE_NAMES.length],
+        ownerId: `realm_${i % numRealms}`, // Distribute evenly initially
+        army,
+        troops: army.infantry + army.archers + army.cavalry,
+        population: pop,
+        maxPopulation: pop + 500,
+        strategicResource: Math.random() < (resourceDensity === 'high' ? 0.6 : resourceDensity === 'low' ? 0.2 : 0.4) 
+          ? STRATEGIC_RESOURCES[Math.floor(Math.random() * (STRATEGIC_RESOURCES.length - 1)) + 1] 
+          : 'none',
+        wealth,
+        foodProduction,
+        materialProduction,
+        defense: Math.floor(Math.random() * 2),
+        terrain,
+        neighbors,
+        polygon: polygon.map(p => [p[0], p[1]] as [number, number]),
+        center: points[i],
+        buildings: {
+          farms: 0,
+          mines: 0,
+          workshops: 0
+        }
+      };
+    }
+
+    const initialState: GameState = {
+      turn: 1,
+      realms,
+      provinces,
+      playerRealmId: 'realm_0',
+      logs: ["Bem-vindo ao Medieval Realms!", "Sua jornada rumo à glória começa agora."],
+      currentEvent: null,
+      visualEffects: [],
+      coalitions: [],
+      visibleProvinces: [],
+      settings
     };
+
+    initialState.visibleProvinces = calculateVisibility(initialState);
+    console.log("Initial state generated successfully.");
+    return initialState;
+  } catch (error) {
+    console.error("Error in generateInitialState:", error);
+    throw error;
   }
-
-  const initialState: GameState = {
-    turn: 1,
-    realms,
-    provinces,
-    playerRealmId: 'realm_0',
-    logs: ["Bem-vindo ao Medieval Realms!", "Sua jornada rumo à glória começa agora."],
-    currentEvent: null,
-    visualEffects: [],
-    coalitions: [],
-    visibleProvinces: [],
-    settings
-  };
-
-  initialState.visibleProvinces = calculateVisibility(initialState);
-  return initialState;
 }
 
 export function checkGameOver(state: GameState): { winnerId: string, reason: string } | null {
@@ -244,6 +251,22 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
       winnerId: activeRealms[0],
       reason: `${state.realms[activeRealms[0]].name} é o último reino soberano.`
     };
+  }
+
+  // Diplomatic Victory
+  if (state.settings.victoryCondition === 'diplomatic') {
+    for (const realmId in state.realms) {
+      const realm = state.realms[realmId];
+      const otherRealms = Object.keys(state.realms).filter(id => id !== realmId);
+      const hasAlliancesWithAll = otherRealms.length > 0 && otherRealms.every(id => realm.alliances.includes(id));
+      
+      if (hasAlliancesWithAll) {
+        return {
+          winnerId: realmId,
+          reason: `${realm.name} unificou o continente através da diplomacia!`
+        };
+      }
+    }
   }
 
   return null;
@@ -502,7 +525,7 @@ function handleCommercialAI(state: GameState, realm: Realm, provinces: Province[
       const myProv = provinces[0];
       const theirProv = Object.values(state.provinces).find(p => p.ownerId === partner.id);
       if (myProv && theirProv) {
-        realm.tradeRoutes.push({ from: myProv.id, to: theirProv.id });
+        realm.tradeRoutes.push({ fromProvinceId: myProv.id, toProvinceId: theirProv.id });
         currentAp -= ACTION_COSTS.diplomacy;
         realm.gold -= 50;
         state.logs.push(`${realm.name} estabeleceu uma rota comercial com ${partner.name}.`);
@@ -684,8 +707,8 @@ export function processEndOfTurn(state: GameState): GameState {
     materialIncome *= oePenalty * difficultyMultiplier;
 
     const tradeIncome = realm.tradeRoutes.reduce((sum, route) => {
-      const p1 = newState.provinces[route.from];
-      const p2 = newState.provinces[route.to];
+      const p1 = newState.provinces[route.fromProvinceId];
+      const p2 = newState.provinces[route.toProvinceId];
       if (!p1 || !p2) return sum;
       return sum + Math.floor((p1.wealth + p2.wealth) * 0.5);
     }, 0);
@@ -721,8 +744,8 @@ export function processEndOfTurn(state: GameState): GameState {
       if (realm.relations[otherId] < 0) realm.relations[otherId] += 1;
 
       const hasTrade = realm.tradeRoutes.some(r => {
-        const p1 = newState.provinces[r.from];
-        const p2 = newState.provinces[r.to];
+        const p1 = newState.provinces[r.fromProvinceId];
+        const p2 = newState.provinces[r.toProvinceId];
         return (p1.ownerId === realm.id && p2.ownerId === otherId) || 
                (p1.ownerId === otherId && p2.ownerId === realm.id);
       });

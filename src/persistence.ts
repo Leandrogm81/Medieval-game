@@ -17,10 +17,16 @@ export const persistence = {
   },
 
   autoSave: (state: GameState): void => {
-    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state));
+    const saveData: SaveData = {
+      id: 'autosave',
+      name: 'Autosave',
+      date: new Date().toISOString(),
+      state
+    };
+    localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(saveData));
   },
 
-  loadAutoSave: (): GameState | null => {
+  loadAutoSave: (): SaveData | null => {
     const data = localStorage.getItem(AUTOSAVE_KEY);
     return data ? JSON.parse(data) : null;
   },

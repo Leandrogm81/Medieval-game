@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition } from './types';
+import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData } from './types';
 import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, UNIT_STATS, ACTION_COSTS } from './gameLogic';
 import { persistence } from './persistence';
 import { Map } from './components/Map';
@@ -20,10 +20,10 @@ export default function App() {
   const [selectedProvinceId, setSelectedProvinceId] = useState<string | null>(null);
   const [actionState, setActionState] = useState<ActionType>('idle');
   const [actionSourceId, setActionSourceId] = useState<string | null>(null);
-  const [logs, setLogs] = useState<string[]>([]);
   const [showMenu, setShowMenu] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<ViewMode>('political');
   const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
+  const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     numProvinces: 25,
     numRealms: 6,
@@ -59,13 +59,17 @@ export default function App() {
 
   const startNewGame = useCallback(() => {
     playSound('turn');
-    const initialState = generateInitialState(MAP_WIDTH, MAP_HEIGHT, gameSettings);
-    setGameState(initialState);
-    setLogs(initialState.logs);
-    setSelectedProvinceId(null);
-    setActionState('idle');
-    setActionSourceId(null);
-    setShowMenu(false);
+    try {
+      const initialState = generateInitialState(MAP_WIDTH, MAP_HEIGHT, gameSettings);
+      setGameState(initialState);
+      setSelectedProvinceId(null);
+      setActionState('idle');
+      setActionSourceId(null);
+      setShowMenu(false);
+    } catch (error) {
+      console.error("Failed to start new game:", error);
+      addLog("Erro ao iniciar novo jogo.");
+    }
   }, [gameSettings]);
 
   const handleSave = (name: string) => {
@@ -78,7 +82,6 @@ export default function App() {
     const loadedState = persistence.loadSave(id);
     if (loadedState) {
       setGameState(loadedState);
-      setLogs(loadedState.logs);
       setShowMenu(false);
       setShowSaveModal(false);
       addLog("Jogo carregado com sucesso.");
@@ -90,11 +93,15 @@ export default function App() {
   };
 
   const addLog = (msg: string) => {
-    setLogs(prev => [...prev, msg]);
+    setGameState(prev => {
+      if (!prev) return prev;
+      return { ...prev, logs: [...prev.logs, msg] };
+    });
   };
 
   // Cleanup visual effects
   useEffect(() => {
+    setAutosave(persistence.loadAutoSave());
     const timer = setInterval(() => {
       setGameState(prev => {
         if (!prev || prev.visualEffects.length === 0) return prev;
@@ -433,8 +440,10 @@ export default function App() {
         setGameState(prev => {
           if (!prev) return prev;
           const next = { ...prev };
-          next.realms[prev.playerRealmId].pacts.push(targetId);
-          next.realms[targetId].pacts.push(prev.playerRealmId);
+          if (!next.realms[prev.playerRealmId].pacts.includes(targetId)) {
+            next.realms[prev.playerRealmId].pacts.push(targetId);
+            next.realms[targetId].pacts.push(prev.playerRealmId);
+          }
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
           return next;
         });
@@ -453,8 +462,10 @@ export default function App() {
         setGameState(prev => {
           if (!prev) return prev;
           const next = { ...prev };
-          next.realms[prev.playerRealmId].alliances.push(targetId);
-          next.realms[targetId].alliances.push(prev.playerRealmId);
+          if (!next.realms[prev.playerRealmId].alliances.includes(targetId)) {
+            next.realms[prev.playerRealmId].alliances.push(targetId);
+            next.realms[targetId].alliances.push(prev.playerRealmId);
+          }
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
           return next;
         });
@@ -501,8 +512,10 @@ export default function App() {
         setGameState(prev => {
           if (!prev) return prev;
           const next = { ...prev };
-          next.realms[prev.playerRealmId].vassals.push(targetId);
-          next.realms[targetId].vassalOf = prev.playerRealmId;
+          if (!next.realms[prev.playerRealmId].vassals.includes(targetId)) {
+            next.realms[prev.playerRealmId].vassals.push(targetId);
+            next.realms[targetId].vassalOf = prev.playerRealmId;
+          }
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
           return next;
         });
@@ -576,7 +589,7 @@ export default function App() {
         return;
       }
       const targetId = prov.ownerId;
-      const existingRoute = playerRealm.tradeRoutes.find(r => (r.from === selectedProvinceId && r.to === targetId) || (r.from === targetId && r.to === selectedProvinceId));
+      const existingRoute = playerRealm.tradeRoutes.find(r => (r.fromProvinceId === selectedProvinceId && r.toProvinceId === targetId) || (r.fromProvinceId === targetId && r.toProvinceId === selectedProvinceId));
       
       if (existingRoute) {
         addLog("Rota comercial já existe.");
@@ -587,7 +600,7 @@ export default function App() {
         setGameState(prev => {
           if (!prev) return prev;
           const next = { ...prev };
-          next.realms[prev.playerRealmId].tradeRoutes.push({ from: selectedProvinceId!, to: targetId });
+          next.realms[prev.playerRealmId].tradeRoutes.push({ fromProvinceId: selectedProvinceId!, toProvinceId: targetId });
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
           return next;
         });
@@ -625,14 +638,14 @@ export default function App() {
     persistence.autoSave(nextState);
     
     setGameState(nextState);
-    setLogs(prev => [...prev.slice(-5), `--- Turno ${nextState.turn} ---`]);
+    addLog(`--- Turno ${nextState.turn} ---`);
     setActionState('idle');
     setActionSourceId(null);
   };
 
   const handleRestart = () => {
     setGameState(generateInitialState(MAP_WIDTH, MAP_HEIGHT, gameSettings));
-    setLogs(["Bem-vindo a uma nova campanha no Medieval Realms!"]);
+    addLog("Bem-vindo a uma nova campanha no Medieval Realms!");
     setSelectedProvinceId(null);
     setActionState('idle');
     setActionSourceId(null);
@@ -710,6 +723,22 @@ export default function App() {
               </div>
             </div>
 
+            {autosave && (
+              <button 
+                onClick={() => {
+                  setGameState(autosave.state);
+                  setShowMenu(false);
+                }}
+                className="group relative bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] py-4 px-8 rounded-xl font-bold text-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-[#d4af37]/20"
+              >
+                <Play size={24} fill="currentColor" />
+                <div className="flex flex-col items-start">
+                  <span>Continuar Campanha</span>
+                  <span className="text-xs font-normal opacity-70">Turno {autosave.state?.turn ?? 0}</span>
+                </div>
+              </button>
+            )}
+
             <button 
               onClick={startNewGame}
               className="group relative bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] py-4 px-8 rounded-xl font-bold text-xl transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-[#d4af37]/20"
@@ -767,11 +796,13 @@ export default function App() {
           />
 
           {/* Logs Overlay */}
-          <div className="absolute bottom-4 right-4 w-80 max-h-48 overflow-y-auto bg-black/60 backdrop-blur border border-slate-700 rounded-lg p-3 text-[10px] text-slate-300 pointer-events-none font-serif">
-            {logs.slice(-8).map((log, i) => (
-              <div key={i} className="mb-1 border-b border-white/5 pb-1 last:border-0">{log}</div>
-            ))}
-          </div>
+          {gameState && (
+            <div className="absolute bottom-4 right-4 w-80 max-h-48 overflow-y-auto bg-black/60 backdrop-blur border border-slate-700 rounded-lg p-3 text-[10px] text-slate-300 pointer-events-none font-serif">
+              {gameState.logs.slice(-8).map((log, i) => (
+                <div key={i} className="mb-1 border-b border-white/5 pb-1 last:border-0">{log}</div>
+              ))}
+            </div>
+          )}
         </div>
         
         <div className="w-96">

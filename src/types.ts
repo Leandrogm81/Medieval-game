@@ -34,7 +34,7 @@ export interface Realm {
   alliances: string[];
   wars: string[];
   pacts: string[]; // Non-aggression pacts with other realm IDs
-  tradeRoutes: { from: string; to: string }[];
+  tradeRoutes: { fromProvinceId: string; toProvinceId: string }[];
   personality: PersonalityType;
   objective: StrategicObjective;
   vassalOf?: string; // Overlord ID
