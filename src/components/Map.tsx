@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
-import { GameState, Province, Realm, ActionType, VisualEffect } from '../types';
+import { GameState, Province, Realm, ActionType, VisualEffect, ViewMode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Swords, Flag, TrendingUp, Wheat, Pickaxe, Hammer } from 'lucide-react';
+import { Swords, Flag, TrendingUp, Wheat, Pickaxe, Hammer, Users, Activity, Mountain, TreePine, Shield, Coins, Gem, Handshake } from 'lucide-react';
 
 interface MapProps {
   gameState: GameState;
   selectedProvinceId: string | null;
   actionState: ActionType;
   actionSourceId: string | null;
+  viewMode: ViewMode;
   onProvinceClick: (id: string) => void;
   width: number;
   height: number;
@@ -18,6 +19,7 @@ export const Map: React.FC<MapProps> = ({
   selectedProvinceId,
   actionState,
   actionSourceId,
+  viewMode,
   onProvinceClick,
   width,
   height
@@ -55,40 +57,129 @@ export const Map: React.FC<MapProps> = ({
         className={`flex flex-col items-center ${color}`}
       >
         <Icon size={32} className="drop-shadow-[0_0_8px_rgba(0,0,0,0.5)]" />
-        {effect.type === 'battle' && <span className="text-[10px] font-bold bg-black/50 px-1 rounded text-white">BATTLE!</span>}
+        {effect.type === 'battle' && <span className="text-[10px] font-bold bg-black/50 px-1 rounded text-white">BATALHA!</span>}
       </motion.div>
+    );
+  };
+
+  const getResourceIcon = (resource?: string) => {
+    switch (resource) {
+      case 'iron': return <Pickaxe size={10} className="text-slate-400" />;
+      case 'wood': return <TreePine size={10} className="text-green-600" />;
+      case 'horse': return <Activity size={10} className="text-amber-600" />;
+      case 'stone': return <Mountain size={10} className="text-slate-500" />;
+      default: return null;
+    }
+  };
+
+  const getProvinceColor = (prov: Province, isVisible: boolean) => {
+    if (!isVisible) return '#1a1a1a';
+    const owner = gameState.realms[prov.ownerId];
+    const playerRealm = gameState.realms[gameState.playerRealmId];
+
+    switch (viewMode) {
+      case 'political':
+        return owner?.color || '#cbd5e1';
+      case 'economic':
+        const wealth = prov.wealth + prov.buildings.mines * 5;
+        if (wealth > 15) return '#15803d'; // Rich
+        if (wealth > 8) return '#16a34a'; // Medium
+        return '#4ade80'; // Low
+      case 'military':
+        if (prov.troops > 100) return '#b91c1c'; // Strong
+        if (prov.troops > 50) return '#dc2626'; // Medium
+        return '#f87171'; // Weak
+      case 'diplomatic':
+        if (prov.ownerId === gameState.playerRealmId) return '#3b82f6';
+        const rel = playerRealm.relations[prov.ownerId] || 0;
+        if (rel > 50) return '#8b5cf6'; // Ally
+        if (rel > 0) return '#a78bfa'; // Friendly
+        if (rel < -50) return '#ef4444'; // Hostile
+        return '#94a3b8'; // Neutral
+      case 'resources':
+        if (prov.strategicResource === 'iron') return '#94a3b8';
+        if (prov.strategicResource === 'wood') return '#166534';
+        if (prov.strategicResource === 'horse') return '#92400e';
+        if (prov.strategicResource === 'stone') return '#475569';
+        return '#e2e8f0';
+      default:
+        return owner?.color || '#cbd5e1';
+    }
+  };
+
+  const renderArmyIcon = (prov: Province) => {
+    const total = prov.troops;
+    if (total === 0) return null;
+
+    let size = 24;
+    if (total > 100) size = 32;
+    else if (total > 50) size = 28;
+
+    return (
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex gap-1 bg-black/20 p-1 rounded-full backdrop-blur-sm border border-white/10">
+          {prov.army.infantry > 0 && <Shield size={size/2} className="text-slate-100 drop-shadow-md" />}
+          {prov.army.archers > 0 && <Swords size={size/2} className="text-slate-200 drop-shadow-md" />}
+          {prov.army.cavalry > 0 && <Activity size={size/2} className="text-amber-400 drop-shadow-md" />}
+        </div>
+        <div className="bg-[#1a0f0a] px-2.5 py-1 rounded-full text-sm font-bold text-white leading-none border-2 border-amber-500/50 shadow-lg">
+          {total}
+        </div>
+      </div>
     );
   };
 
   return (
     <div 
-      className="relative bg-blue-900/20 rounded-xl overflow-hidden shadow-2xl border-4 border-slate-800"
+      className="relative parchment-bg rounded-xl overflow-hidden shadow-2xl border-8 border-[#2c1810]"
       style={{ width, height }}
       onMouseMove={handleMouseMove}
     >
       <svg width={width} height={height} className="cursor-pointer">
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
+          <feOffset dx="2" dy="2" result="offsetblur" />
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.5" />
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
         <defs>
           <pattern id="forest" patternUnits="userSpaceOnUse" width="20" height="20">
-            <circle cx="10" cy="10" r="3" fill="rgba(0, 100, 0, 0.2)" />
+            <circle cx="10" cy="10" r="3" fill="rgba(0, 100, 0, 0.1)" />
           </pattern>
           <pattern id="mountain" patternUnits="userSpaceOnUse" width="20" height="20">
-            <path d="M0 20 L10 0 L20 20 Z" fill="rgba(100, 100, 100, 0.3)" />
+            <path d="M0 20 L10 0 L20 20 Z" fill="rgba(100, 100, 100, 0.2)" />
           </pattern>
         </defs>
         {(Object.values(gameState.provinces) as Province[]).map(prov => {
+          const isVisible = gameState.visibleProvinces.includes(prov.id);
           const owner = gameState.realms[prov.ownerId];
           const isSelected = selectedProvinceId === prov.id;
           const isSource = actionSourceId === prov.id;
           
-          let strokeColor = '#1e293b';
+          let strokeColor = isVisible ? '#2c1810' : '#000';
           let strokeWidth = 1;
+          let strokeOpacity = 0.3;
           
+          // Stronger borders between realms
+          const hasDifferentOwnerNeighbor = prov.neighbors.some(nId => gameState.provinces[nId].ownerId !== prov.ownerId);
+          if (hasDifferentOwnerNeighbor && isVisible) {
+            strokeWidth = 2;
+            strokeOpacity = 0.8;
+          }
+
           if (isSelected) {
             strokeColor = '#facc15';
             strokeWidth = 3;
+            strokeOpacity = 1;
           } else if (isSource) {
             strokeColor = '#3b82f6';
             strokeWidth = 3;
+            strokeOpacity = 1;
           }
 
           const pathData = `M${prov.polygon.map(p => p.join(',')).join('L')}Z`;
@@ -96,49 +187,116 @@ export const Map: React.FC<MapProps> = ({
           return (
             <g 
               key={prov.id} 
-              onClick={() => onProvinceClick(prov.id)} 
-              onMouseEnter={() => setHoveredProvinceId(prov.id)}
+              onClick={() => isVisible && onProvinceClick(prov.id)} 
+              onMouseEnter={() => isVisible && setHoveredProvinceId(prov.id)}
               onMouseLeave={() => setHoveredProvinceId(null)}
-              className="transition-all duration-200 hover:opacity-90"
+              className={`transition-all duration-200 ${isVisible ? 'hover:opacity-90' : 'opacity-40 cursor-default'}`}
             >
               <path
                 d={pathData}
-                fill={owner?.color || '#cbd5e1'}
-                fillOpacity={0.8}
+                fill={getProvinceColor(prov, isVisible)}
+                fillOpacity={isVisible ? (viewMode === 'political' ? 0.6 : 0.8) : 0.9}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
+                strokeOpacity={strokeOpacity}
                 strokeLinejoin="round"
+                filter={isSelected ? "url(#shadow)" : ""}
                 className="transition-colors duration-500"
               />
-              {prov.terrain === 'forest' && (
+              {isVisible && prov.terrain === 'forest' && (
                 <path d={pathData} fill="url(#forest)" pointerEvents="none" />
               )}
-              {prov.terrain === 'mountain' && (
+              {isVisible && prov.terrain === 'mountain' && (
                 <path d={pathData} fill="url(#mountain)" pointerEvents="none" />
               )}
+              
+              {/* Strategic Resource Icon on Map */}
+              {isVisible && prov.strategicResource && viewMode === 'resources' && (
+                <foreignObject
+                  x={prov.center[0] + 15}
+                  y={prov.center[1] - 15}
+                  width="16"
+                  height="16"
+                  className="pointer-events-none"
+                >
+                  <div className="bg-white/80 rounded-full p-0.5 shadow-sm border border-slate-300">
+                    {getResourceIcon(prov.strategicResource)}
+                  </div>
+                </foreignObject>
+              )}
+
               {/* Province Name */}
-              <text
-                x={prov.center[0]}
-                y={prov.center[1] - 6}
-                textAnchor="middle"
-                className="text-[7px] font-semibold fill-white pointer-events-none uppercase tracking-wider"
-                style={{ textShadow: '1px 1px 2px black' }}
-              >
-                {prov.name}
-              </text>
-              {/* Troop Count */}
-              <text
-                x={prov.center[0]}
-                y={prov.center[1] + 8}
-                textAnchor="middle"
-                className="text-[10px] font-bold fill-white pointer-events-none"
-                style={{ textShadow: '1px 1px 2px black' }}
-              >
-                {prov.troops}
-              </text>
+              {isVisible && (
+                <g className="pointer-events-none">
+                  <rect
+                    x={prov.center[0] - 50}
+                    y={prov.center[1] - 35}
+                    width="100"
+                    height="18"
+                    rx="4"
+                    fill="rgba(244, 234, 213, 0.9)"
+                    stroke="rgba(26, 15, 10, 0.4)"
+                    strokeWidth="1"
+                  />
+                  <text
+                    x={prov.center[0]}
+                    y={prov.center[1] - 22}
+                    textAnchor="middle"
+                    className="text-[12px] font-bold fill-[#1a0f0a] uppercase tracking-widest medieval-title"
+                  >
+                    {prov.name}
+                  </text>
+                </g>
+              )}
+              
+              {/* Army Representation */}
+              {isVisible && (
+                <foreignObject
+                  x={prov.center[0] - 30}
+                  y={prov.center[1] - 5}
+                  width="60"
+                  height="60"
+                  className="pointer-events-none"
+                >
+                  {renderArmyIcon(prov)}
+                </foreignObject>
+              )}
             </g>
           );
         })}
+        
+        {/* Movement Arrows */}
+        {actionState === 'moving' && actionSourceId && (
+          <g pointerEvents="none">
+            {gameState.provinces[actionSourceId].neighbors.map(nId => {
+              const target = gameState.provinces[nId];
+              if (target.ownerId !== gameState.playerRealmId) return null;
+              
+              const source = gameState.provinces[actionSourceId];
+              return (
+                <motion.line
+                  key={`arrow-${nId}`}
+                  x1={source.center[0]}
+                  y1={source.center[1]}
+                  x2={target.center[0]}
+                  y2={target.center[1]}
+                  stroke="#3b82f6"
+                  strokeWidth="4"
+                  strokeDasharray="8 4"
+                  initial={{ strokeDashoffset: 0 }}
+                  animate={{ strokeDashoffset: -12 }}
+                  transition={{ repeat: Infinity, duration: 0.5, ease: "linear" }}
+                  markerEnd="url(#arrowhead)"
+                />
+              );
+            })}
+            <defs>
+              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+              </marker>
+            </defs>
+          </g>
+        )}
       </svg>
 
       {/* Tooltip */}
@@ -155,23 +313,45 @@ export const Map: React.FC<MapProps> = ({
               pointerEvents: 'none',
               zIndex: 60
             }}
-            className="bg-slate-900/95 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-xl min-w-[150px]"
+            className="bg-slate-900/95 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-xl min-w-[180px]"
           >
-            <div className="text-xs font-bold text-slate-100 mb-2 border-b border-slate-700 pb-1">
-              {gameState.provinces[hoveredProvinceId].name}
+            <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+              <span className="text-xs font-bold text-slate-100">{gameState.provinces[hoveredProvinceId].name}</span>
+              {gameState.provinces[hoveredProvinceId].strategicResource && (
+                <span className="text-[8px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  {getResourceIcon(gameState.provinces[hoveredProvinceId].strategicResource)}
+                  {gameState.provinces[hoveredProvinceId].strategicResource === 'iron' ? 'Ferro' : 
+                   gameState.provinces[hoveredProvinceId].strategicResource === 'wood' ? 'Madeira' :
+                   gameState.provinces[hoveredProvinceId].strategicResource === 'horse' ? 'Cavalo' : 'Pedra'}
+                </span>
+              )}
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-slate-400 flex items-center gap-1"><Wheat size={10} /> Food</span>
-                <span className="text-green-400">+{gameState.provinces[hoveredProvinceId].foodProduction + (gameState.provinces[hoveredProvinceId].buildings.farms * 10)}</span>
+            
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 gap-1 text-[9px] text-center">
+                <div className="bg-slate-800 p-1 rounded">
+                  <div className="text-slate-500">Inf</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.infantry}</div>
+                </div>
+                <div className="bg-slate-800 p-1 rounded">
+                  <div className="text-slate-500">Arq</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.archers}</div>
+                </div>
+                <div className="bg-slate-800 p-1 rounded">
+                  <div className="text-slate-500">Cav</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.cavalry}</div>
+                </div>
               </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-slate-400 flex items-center gap-1"><Pickaxe size={10} /> Materials</span>
-                <span className="text-blue-400">+{gameState.provinces[hoveredProvinceId].materialProduction + (gameState.provinces[hoveredProvinceId].buildings.workshops * 5)}</span>
-              </div>
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-slate-400 flex items-center gap-1"><TrendingUp size={10} /> Gold</span>
-                <span className="text-yellow-400">+{gameState.provinces[hoveredProvinceId].wealth + (gameState.provinces[hoveredProvinceId].buildings.mines * 5)}</span>
+
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-400 flex items-center gap-1"><Users size={10} /> Pop</span>
+                  <span className="text-slate-200">{Math.floor(gameState.provinces[hoveredProvinceId].population)} / {gameState.provinces[hoveredProvinceId].maxPopulation}</span>
+                </div>
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-slate-400 flex items-center gap-1"><TrendingUp size={10} /> Eficiência</span>
+                  <span className="text-blue-400">{Math.floor((gameState.provinces[hoveredProvinceId].population / gameState.provinces[hoveredProvinceId].maxPopulation) * 100)}%</span>
+                </div>
               </div>
             </div>
           </motion.div>

@@ -49,13 +49,13 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ gameState, onResta
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-200">{gameState.turn}</div>
-              <div className="text-[10px] text-slate-500 uppercase">Turns Passed</div>
+              <div className="text-xs text-slate-500 uppercase">Turns Passed</div>
             </div>
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-200" style={{ color: winner.color }}>
                 {winner.name}
               </div>
-              <div className="text-[10px] text-slate-500 uppercase">Dominant Realm</div>
+              <div className="text-xs text-slate-500 uppercase">Dominant Realm</div>
             </div>
           </div>
         </div>

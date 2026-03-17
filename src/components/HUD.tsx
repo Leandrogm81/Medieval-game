@@ -1,14 +1,18 @@
 import React, { useState } from 'react';
-import { GameState, Province, Realm, ActionType } from '../types';
-import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info } from 'lucide-react';
+import { GameState, Province, Realm, ActionType, UnitType, ViewMode } from '../types';
+import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save } from 'lucide-react';
+import { UNIT_STATS, ACTION_COSTS } from '../gameLogic';
 
 interface HUDProps {
   gameState: GameState;
   selectedProvinceId: string | null;
   actionState: ActionType;
   actionSourceId: string | null;
-  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance', amount?: number) => void;
+  viewMode: ViewMode;
+  onViewModeChange: (mode: ViewMode) => void;
+  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage', unitType?: UnitType, amount?: number) => void;
   onEndTurn: () => void;
+  onSave: () => void;
   onCancelAction: () => void;
 }
 
@@ -17,41 +21,69 @@ export const HUD: React.FC<HUDProps> = ({
   selectedProvinceId,
   actionState,
   actionSourceId,
+  viewMode,
+  onViewModeChange,
   onAction,
   onEndTurn,
+  onSave,
   onCancelAction
 }) => {
-  const [recruitAmount, setRecruitAmount] = useState(100);
+  const [recruitAmount, setRecruitAmount] = useState(10);
   const [isRecruiting, setIsRecruiting] = useState(false);
+  const [selectedUnitType, setSelectedUnitType] = useState<UnitType>('infantry');
   const [activeTab, setActiveTab] = useState<'province' | 'market' | 'diplomacy'>('province');
 
   const playerRealm = gameState.realms[gameState.playerRealmId];
   const selectedProv = selectedProvinceId ? gameState.provinces[selectedProvinceId] : null;
   
-  const totalTroops = (Object.values(gameState.provinces) as Province[])
-    .filter(p => p.ownerId === playerRealm.id)
-    .reduce((sum, p) => sum + p.troops, 0);
+  const playerProvinces = (Object.values(gameState.provinces) as Province[]).filter(p => p.ownerId === playerRealm.id);
+  
+  const totalTroops = playerProvinces.reduce((sum, p) => sum + p.troops, 0);
     
-  const goldIncome = (Object.values(gameState.provinces) as Province[])
-    .filter(p => p.ownerId === playerRealm.id)
-    .reduce((sum, p) => sum + p.wealth + (p.buildings.mines * 5), 0);
+  const baseGoldIncome = playerProvinces.reduce((sum, p) => {
+    const efficiency = p.population / p.maxPopulation;
+    return sum + (p.wealth + (p.buildings.mines * 5)) * efficiency;
+  }, 0);
     
-  const foodIncome = (Object.values(gameState.provinces) as Province[])
-    .filter(p => p.ownerId === playerRealm.id)
-    .reduce((sum, p) => sum + p.foodProduction + (p.buildings.farms * 10), 0);
+  const baseFoodIncome = playerProvinces.reduce((sum, p) => {
+    const efficiency = p.population / p.maxPopulation;
+    return sum + (p.foodProduction + (p.buildings.farms * 10)) * efficiency;
+  }, 0);
 
-  const goldMaintenance = Math.floor(totalTroops / 20);
-  const foodMaintenance = Math.floor(totalTroops / 10);
+  const oePenalty = playerRealm.overextension > 20 ? (playerRealm.overextension - 20) / 100 : 0;
+  const goldIncome = Math.floor(baseGoldIncome * (1 - oePenalty));
+  const foodIncome = Math.floor(baseFoodIncome * (1 - oePenalty));
+
+  const goldMaintenance = Math.floor(totalTroops / 15);
+  const foodMaintenance = Math.floor(totalTroops / 8);
   
   const netGold = goldIncome - goldMaintenance;
   const netFood = foodIncome - foodMaintenance;
 
-  const maxRecruit = Math.floor(playerRealm.gold / 0.1); // 1 gold = 10 troops -> 0.1 gold = 1 troop
-
   const handleRecruitConfirm = () => {
-    onAction('recruit', recruitAmount);
+    onAction('recruit', selectedUnitType, recruitAmount);
     setIsRecruiting(false);
-    setRecruitAmount(100);
+    setRecruitAmount(10);
+  };
+
+  const getResourceIcon = (resource?: string) => {
+    switch (resource) {
+      case 'iron': return <Pickaxe size={14} className="text-slate-400" />;
+      case 'wood': return <TreePine size={14} className="text-green-600" />;
+      case 'horse': return <Activity size={14} className="text-amber-600" />;
+      case 'stone': return <Mountain size={14} className="text-slate-500" />;
+      default: return null;
+    }
+  };
+
+  const getResourceName = (resource?: string) => {
+    switch (resource) {
+      case 'iron': return 'Ferro';
+      case 'wood': return 'Madeira';
+      case 'horse': return 'Cavalo';
+      case 'stone': return 'Pedra';
+      default: return resource;
+    }
   };
 
   return (
@@ -67,7 +99,7 @@ export const HUD: React.FC<HUDProps> = ({
             {gameState.currentEvent.type === 'positive' ? <TrendingUp size={16} className="text-green-400" /> : 
              gameState.currentEvent.type === 'negative' ? <AlertTriangle size={16} className="text-red-400" /> : 
              <Info size={16} className="text-slate-400" />}
-            <span className={`text-[10px] font-bold uppercase tracking-widest ${
+            <span className={`text-xs font-bold uppercase tracking-widest ${
               gameState.currentEvent.type === 'positive' ? 'text-green-400' : 
               gameState.currentEvent.type === 'negative' ? 'text-red-400' : 
               'text-slate-400'
@@ -75,53 +107,113 @@ export const HUD: React.FC<HUDProps> = ({
               {gameState.currentEvent.name}
             </span>
           </div>
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-sm text-slate-300 leading-relaxed">
             {gameState.currentEvent.description}
           </p>
         </div>
       )}
 
       {/* Top Bar Info */}
-      <div className="p-4 border-b border-slate-700 bg-slate-800">
-        <h1 className="text-2xl font-serif font-bold text-amber-500 mb-2">{playerRealm.name}</h1>
-        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+      <div className="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur">
+        <div className="flex justify-between items-start mb-2">
+          <h1 className="text-2xl font-serif font-bold text-amber-500 medieval-title drop-shadow-md">{playerRealm.name}</h1>
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1 text-xs font-bold text-blue-400">
+              <Zap size={14} /> {playerRealm.actionPoints}/{playerRealm.maxActionPoints} AP
+            </div>
+            {playerRealm.overextension > 0 && (
+              <div className={`text-[10px] font-bold uppercase ${playerRealm.overextension > 50 ? 'text-red-500' : 'text-amber-500'}`}>
+                OE: {playerRealm.overextension}%
+              </div>
+            )}
+          </div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base medieval-text">
           <div className="flex items-center gap-2">
-            <Coins size={16} className="text-yellow-400" />
-            <span title="Gold">{playerRealm.gold} <span className={netGold >= 0 ? 'text-green-400' : 'text-red-400'}>({netGold >= 0 ? '+' : ''}{netGold})</span></span>
+            <Coins size={20} className="text-yellow-400" />
+            <span title="Ouro" className="font-bold">{playerRealm.gold} <span className={`text-sm ${netGold >= 0 ? 'text-green-400' : 'text-red-400'}`}>({netGold >= 0 ? '+' : ''}{netGold})</span></span>
           </div>
           <div className="flex items-center gap-2">
-            <Wheat size={16} className="text-green-400" />
-            <span title="Food">{playerRealm.food} <span className={netFood >= 0 ? 'text-green-400' : 'text-red-400'}>({netFood >= 0 ? '+' : ''}{netFood})</span></span>
+            <Wheat size={20} className="text-green-400" />
+            <span title="Comida" className="font-bold">{playerRealm.food} <span className={`text-sm ${netFood >= 0 ? 'text-green-400' : 'text-red-400'}`}>({netFood >= 0 ? '+' : ''}{netFood})</span></span>
           </div>
           <div className="flex items-center gap-2">
-            <Hammer size={16} className="text-slate-400" />
-            <span title="Materials">{playerRealm.materials}</span>
+            <Hammer size={20} className="text-slate-400" />
+            <span title="Materiais" className="font-bold">{playerRealm.materials}</span>
           </div>
           <div className="flex items-center gap-2">
-            <Users size={16} className="text-blue-400" />
-            <span title="Total Troops">{totalTroops}</span>
+            <Users size={20} className="text-blue-400" />
+            <span title="Total de Tropas" className="font-bold">{totalTroops}</span>
           </div>
+        </div>
+
+        {/* View Mode Overlays */}
+        <div className="grid grid-cols-5 gap-1 mt-4">
+          <button 
+            onClick={() => onViewModeChange('political')}
+            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'political' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
+            title="Visão Política"
+          >
+            <Globe2 size={18} />
+            <span className="text-[10px] font-bold uppercase">Pol</span>
+          </button>
+          <button 
+            onClick={() => onViewModeChange('economic')}
+            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'economic' ? 'bg-green-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
+            title="Visão Econômica"
+          >
+            <BarChart3 size={18} />
+            <span className="text-[10px] font-bold uppercase">Eco</span>
+          </button>
+          <button 
+            onClick={() => onViewModeChange('military')}
+            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'military' ? 'bg-red-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
+            title="Visão Militar"
+          >
+            <Crosshair size={18} />
+            <span className="text-[10px] font-bold uppercase">Mil</span>
+          </button>
+          <button 
+            onClick={() => onViewModeChange('diplomatic')}
+            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'diplomatic' ? 'bg-purple-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
+            title="Visão Diplomática"
+          >
+            <Handshake size={18} />
+            <span className="text-[10px] font-bold uppercase">Dip</span>
+          </button>
+          <button 
+            onClick={() => onViewModeChange('resources')}
+            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'resources' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
+            title="Visão de Recursos"
+          >
+            <Gem size={18} />
+            <span className="text-[10px] font-bold uppercase">Rec</span>
+          </button>
         </div>
         
         {/* Tabs */}
         <div className="flex mt-4 bg-slate-900 rounded-lg p-1 border border-slate-700">
           <button 
+            id="tab-province"
             onClick={() => setActiveTab('province')}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-xs font-bold transition-all ${activeTab === 'province' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'province' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <MapIcon size={14} /> Province
+            <MapIcon size={16} /> Província
           </button>
           <button 
+            id="tab-market"
             onClick={() => setActiveTab('market')}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-xs font-bold transition-all ${activeTab === 'market' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'market' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <ShoppingCart size={14} /> Market
+            <ShoppingCart size={16} /> Mercado
           </button>
           <button 
+            id="tab-diplomacy"
             onClick={() => setActiveTab('diplomacy')}
-            className={`flex-1 flex items-center justify-center gap-2 py-1.5 rounded text-xs font-bold transition-all ${activeTab === 'diplomacy' ? 'bg-slate-700 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'diplomacy' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
           >
-            <Handshake size={14} /> Diplomacy
+            <Handshake size={16} /> Diplomacia
           </button>
         </div>
       </div>
@@ -131,74 +223,57 @@ export const HUD: React.FC<HUDProps> = ({
         {activeTab === 'market' ? (
           <div className="space-y-6">
             <h2 className="text-xl font-serif font-bold text-slate-100 border-b border-slate-700 pb-2 flex items-center gap-2">
-              <ShoppingCart size={20} className="text-amber-500" /> Global Market
+              <ShoppingCart size={20} className="text-amber-500" /> Mercado Global
             </h2>
             
             <div className="space-y-4">
               <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="flex items-center gap-2 font-bold text-green-400"><Wheat size={18} /> Food</span>
-                  <span className="text-xs text-slate-500">Stock: {playerRealm.food}</span>
+                  <span className="flex items-center gap-2 font-bold text-green-400"><Wheat size={18} /> Comida</span>
+                  <span className="text-xs text-slate-500">Estoque: {playerRealm.food}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button 
                     onClick={() => onAction('buy_food')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Buy 50 (20G)
+                    Comprar 50 (20O)
                   </button>
                   <button 
                     onClick={() => onAction('sell_food')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Sell 50 (10G)
+                    Vender 50 (10O)
                   </button>
                 </div>
               </div>
 
               <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="flex items-center gap-2 font-bold text-slate-300"><Hammer size={18} /> Materials</span>
-                  <span className="text-xs text-slate-500">Stock: {playerRealm.materials}</span>
+                  <span className="flex items-center gap-2 font-bold text-slate-300"><Hammer size={18} /> Materiais</span>
+                  <span className="text-xs text-slate-500">Estoque: {playerRealm.materials}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button 
                     onClick={() => onAction('buy_materials')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Buy 25 (30G)
+                    Comprar 25 (30O)
                   </button>
                   <button 
                     onClick={() => onAction('sell_materials')}
                     className="py-2 bg-slate-700 hover:bg-slate-600 rounded text-xs font-bold transition-colors"
                   >
-                    Sell 25 (15G)
+                    Vender 25 (15O)
                   </button>
                 </div>
               </div>
-            </div>
-
-            <div className="pt-4 border-t border-slate-800">
-              <h3 className="text-sm font-bold text-slate-400 mb-2 uppercase tracking-wider">Active Trade Routes</h3>
-              {playerRealm.tradeRoutes.length > 0 ? (
-                <div className="space-y-2">
-                  {playerRealm.tradeRoutes.map((route, i) => (
-                    <div key={i} className="bg-slate-800/50 p-2 rounded text-xs flex justify-between items-center border border-slate-700/50">
-                      <span className="text-slate-300">{gameState.provinces[route.from].name}</span>
-                      <TrendingUp size={12} className="text-amber-500" />
-                      <span className="text-slate-300">{gameState.provinces[route.to].name}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-slate-600 italic">No active trade routes. Establish them via province actions.</p>
-              )}
             </div>
           </div>
         ) : activeTab === 'diplomacy' ? (
           <div className="space-y-6">
             <h2 className="text-xl font-serif font-bold text-slate-100 border-b border-slate-700 pb-2 flex items-center gap-2">
-              <Handshake size={20} className="text-purple-500" /> Diplomacy
+              <Handshake size={20} className="text-purple-500" /> Diplomacia
             </h2>
             
             <div className="space-y-3">
@@ -206,20 +281,50 @@ export const HUD: React.FC<HUDProps> = ({
                 const relations = playerRealm.relations[realm.id] || 0;
                 const isAlly = playerRealm.alliances.includes(realm.id);
                 const hasPact = playerRealm.pacts.includes(realm.id);
+                const isVassal = realm.vassalOf === playerRealm.id;
+                const isOurSuzerain = playerRealm.vassalOf === realm.id;
                 
+                const personalityNames = {
+                  expansionist: 'Expansionista',
+                  defensive: 'Defensivo',
+                  diplomatic: 'Diplomático',
+                  opportunistic: 'Oportunista',
+                  commercial: 'Comercial'
+                };
+
+                const objectiveNames = {
+                  regional_dominance: 'Domínio Regional',
+                  destroy_rival: 'Destruir Rival',
+                  wealth: 'Acumular Riqueza',
+                  resource_control: 'Controle de Recursos',
+                  defensive_block: 'Bloco Defensivo'
+                };
+
                 return (
                   <div key={realm.id} className="bg-slate-800 p-3 rounded-lg border border-slate-700">
                     <div className="flex justify-between items-center mb-2">
                       <span className="font-bold" style={{ color: realm.color }}>{realm.name}</span>
-                      <div className="flex gap-1">
-                        {isAlly && <span className="text-[10px] bg-purple-900 text-purple-200 px-1.5 py-0.5 rounded uppercase font-bold">Ally</span>}
-                        {hasPact && <span className="text-[10px] bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded uppercase font-bold">Pact</span>}
+                      <div className="flex flex-wrap gap-1 justify-end">
+                        {isAlly && <span className="text-xs bg-purple-900 text-purple-200 px-1.5 py-0.5 rounded uppercase font-bold">Aliado</span>}
+                        {hasPact && <span className="text-xs bg-blue-900 text-blue-200 px-1.5 py-0.5 rounded uppercase font-bold">Pacto</span>}
+                        {isVassal && <span className="text-xs bg-amber-900 text-amber-200 px-1.5 py-0.5 rounded uppercase font-bold">Vassalo</span>}
+                        {isOurSuzerain && <span className="text-xs bg-red-900 text-red-200 px-1.5 py-0.5 rounded uppercase font-bold">Suserano</span>}
+                        {realm.isCoalitionMember && <span className="text-xs bg-orange-900 text-orange-200 px-1.5 py-0.5 rounded uppercase font-bold">Coalizão</span>}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 mb-3">
+                      <div className="text-xs text-slate-400">
+                        Perfil: <span className="text-slate-200">{personalityNames[realm.personality]}</span>
+                      </div>
+                      <div className="text-xs text-slate-400">
+                        Objetivo: <span className="text-slate-200">{objectiveNames[realm.objective]}</span>
                       </div>
                     </div>
                     
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs mb-1">
-                        <span className="text-slate-400">Relations</span>
+                        <span className="text-slate-400">Relações</span>
                         <span className={relations > 0 ? 'text-green-400' : relations < 0 ? 'text-red-400' : 'text-slate-400'}>
                           {relations}
                         </span>
@@ -230,7 +335,6 @@ export const HUD: React.FC<HUDProps> = ({
                           style={{ 
                             width: `${Math.abs(relations)}%`,
                             marginLeft: relations >= 0 ? '50%' : `${50 - Math.abs(relations)}%`,
-                            transform: relations >= 0 ? 'none' : 'none'
                           }}
                         />
                       </div>
@@ -242,64 +346,83 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         ) : selectedProv ? (
           <div className="space-y-4">
-            <h2 className="text-xl font-serif font-bold text-slate-100 border-b border-slate-700 pb-2">
-              {selectedProv.name}
-            </h2>
+            <div className="flex justify-between items-center border-b border-slate-700 pb-2">
+              <h2 className="text-xl font-serif font-bold text-slate-100">
+                {selectedProv.name}
+              </h2>
+              {selectedProv.strategicResource && (
+                <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-800 rounded border border-slate-700 text-[10px] font-bold uppercase text-slate-300">
+                  {getResourceIcon(selectedProv.strategicResource)}
+                  {getResourceName(selectedProv.strategicResource)}
+                </div>
+              )}
+            </div>
             
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-slate-400">Owner</span>
+                <span className="text-slate-400">Dono</span>
                 <span className="font-bold" style={{ color: gameState.realms[selectedProv.ownerId].color }}>
                   {gameState.realms[selectedProv.ownerId].name}
                 </span>
               </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1"><Users size={14} /> Troops</span>
-                <span className="font-bold">{selectedProv.troops}</span>
-              </div>
-              
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1"><Coins size={14} /> Gold Prod.</span>
-                <span className="font-bold text-yellow-400">+{selectedProv.wealth + (selectedProv.buildings.mines * 5)}</span>
-              </div>
 
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1"><Wheat size={14} /> Food Prod.</span>
-                <span className="font-bold text-green-400">+{selectedProv.foodProduction + (selectedProv.buildings.farms * 10)}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1"><Hammer size={14} /> Mat. Prod.</span>
-                <span className="font-bold text-slate-300">+{selectedProv.materialProduction + (selectedProv.buildings.workshops * 5)}</span>
+                <span className="text-slate-400 flex items-center gap-1"><Users size={14} /> População</span>
+                <span className="font-bold">{Math.floor(selectedProv.population)} / {selectedProv.maxPopulation}</span>
               </div>
               
               <div className="pt-2 border-t border-slate-800">
-                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Buildings</span>
+                <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Composição do Exército</span>
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <Tractor size={16} className="mx-auto text-green-500 mb-1" />
-                    <span className="text-xs block">Farms</span>
-                    <span className="font-bold">{selectedProv.buildings.farms}</span>
+                    <span className="text-xs block text-slate-400">Infantaria</span>
+                    <span className="font-bold text-base">{selectedProv.army.infantry}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <Pickaxe size={16} className="mx-auto text-yellow-500 mb-1" />
-                    <span className="text-xs block">Mines</span>
-                    <span className="font-bold">{selectedProv.buildings.mines}</span>
+                    <span className="text-xs block text-slate-400">Arqueiros</span>
+                    <span className="font-bold text-base">{selectedProv.army.archers}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <Factory size={16} className="mx-auto text-slate-400 mb-1" />
-                    <span className="text-xs block">Workshops</span>
-                    <span className="font-bold">{selectedProv.buildings.workshops}</span>
+                    <span className="text-xs block text-slate-400">Cavalaria</span>
+                    <span className="font-bold text-base">{selectedProv.army.cavalry}</span>
                   </div>
                 </div>
               </div>
               
-              <div className="space-y-1 pt-2">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-400 flex items-center gap-1"><Shield size={14} /> Defense</span>
-                  <span className="font-bold">+{selectedProv.defense * 10}%</span>
+                  <span className="text-slate-400 flex items-center gap-1 text-xs"><Coins size={12} /> Ouro</span>
+                  <span className="font-bold text-yellow-400 text-xs">+{Math.floor((selectedProv.wealth + (selectedProv.buildings.mines * 5)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
                 </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-slate-400 flex items-center gap-1 text-xs"><Wheat size={12} /> Comida</span>
+                  <span className="font-bold text-green-400 text-xs">+{Math.floor((selectedProv.foodProduction + (selectedProv.buildings.farms * 10)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
+                </div>
+              </div>
+              
+              <div className="pt-2 border-t border-slate-800">
+                <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Construções</span>
+                <div className="grid grid-cols-3 gap-2 mt-1">
+                  <div className="bg-slate-800 p-2 rounded text-center">
+                    <Tractor size={20} className="mx-auto text-green-500 mb-1" />
+                    <span className="text-xs block">Fazendas</span>
+                    <span className="font-bold text-base">{selectedProv.buildings.farms}</span>
+                  </div>
+                  <div className="bg-slate-800 p-2 rounded text-center">
+                    <Pickaxe size={20} className="mx-auto text-yellow-500 mb-1" />
+                    <span className="text-xs block">Minas</span>
+                    <span className="font-bold text-base">{selectedProv.buildings.mines}</span>
+                  </div>
+                  <div className="bg-slate-800 p-2 rounded text-center">
+                    <Factory size={20} className="mx-auto text-slate-400 mb-1" />
+                    <span className="text-xs block">Oficinas</span>
+                    <span className="font-bold text-base">{selectedProv.buildings.workshops}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                <span className="text-slate-400 flex items-center gap-1"><Shield size={14} /> Defesa</span>
                 <div className="flex gap-1">
                   {[...Array(5)].map((_, i) => (
                     <Shield 
@@ -312,13 +435,12 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
               
               <div className="flex justify-between items-center">
-                <span className="text-slate-400 flex items-center gap-1">
-                  {selectedProv.terrain === 'plains' && <MapIcon size={14} />}
-                  {selectedProv.terrain === 'forest' && <TreePine size={14} />}
-                  {selectedProv.terrain === 'mountain' && <Mountain size={14} />}
-                  Terrain
+                <span className="text-slate-400 flex items-center gap-1 text-xs capitalize">
+                  {selectedProv.terrain === 'plains' && <MapIcon size={12} />}
+                  {selectedProv.terrain === 'forest' && <TreePine size={12} />}
+                  {selectedProv.terrain === 'mountain' && <Mountain size={12} />}
+                  Terreno: {selectedProv.terrain === 'plains' ? 'Planícies' : selectedProv.terrain === 'forest' ? 'Floresta' : 'Montanha'}
                 </span>
-                <span className="font-bold capitalize">{selectedProv.terrain}</span>
               </div>
             </div>
 
@@ -327,13 +449,13 @@ export const HUD: React.FC<HUDProps> = ({
               {actionState !== 'idle' ? (
                 <div className="bg-slate-800 p-3 rounded-lg border border-amber-500/50">
                   <p className="text-sm text-amber-400 mb-2 font-medium">
-                    {actionState === 'moving' ? 'Select target province to move to...' : 'Select adjacent province to trade with...'}
+                    {actionState === 'moving' ? 'Selecione a província alvo para mover...' : 'Selecione a província adjacente para negociar...'}
                   </p>
                   <button 
                     onClick={onCancelAction}
                     className="w-full py-2 bg-slate-700 hover:bg-slate-600 rounded text-sm transition-colors"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               ) : (
@@ -343,108 +465,116 @@ export const HUD: React.FC<HUDProps> = ({
                       {isRecruiting ? (
                         <div className="bg-slate-800 p-3 rounded-lg border border-blue-500/50 space-y-3">
                           <div className="flex justify-between items-center">
-                            <span className="text-sm font-medium text-blue-400">Recruit Troops</span>
+                            <span className="text-sm font-medium text-blue-400">Recrutar Unidades</span>
                             <button onClick={() => setIsRecruiting(false)} className="text-slate-500 hover:text-white">
                               <X size={16} />
                             </button>
                           </div>
                           
+                          <div className="grid grid-cols-3 gap-1">
+                            {(['infantry', 'archers', 'cavalry'] as UnitType[]).map(type => (
+                              <button
+                                key={type}
+                                onClick={() => setSelectedUnitType(type)}
+                                className={`py-1 text-[10px] font-bold uppercase rounded border transition-all ${
+                                  selectedUnitType === type 
+                                    ? 'bg-blue-600 border-blue-400 text-white' 
+                                    : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-slate-200'
+                                }`}
+                              >
+                                {type === 'infantry' ? 'Infantaria' : type === 'archers' ? 'Arqueiros' : 'Cavalaria'}
+                              </button>
+                            ))}
+                          </div>
+
                           <div className="space-y-2">
                             <div className="flex justify-between items-end">
                               <div className="flex flex-col gap-1">
-                                <span className="text-xs text-slate-400">Amount</span>
+                                <span className="text-[10px] text-slate-400">Quantidade</span>
                                 <input 
                                   type="number"
-                                  min="0"
-                                  max={maxRecruit}
+                                  min="1"
                                   value={recruitAmount}
-                                  onChange={(e) => {
-                                    const val = parseInt(e.target.value) || 0;
-                                    setRecruitAmount(Math.min(val, maxRecruit));
-                                  }}
-                                  className="w-24 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm font-bold text-white focus:outline-none focus:border-blue-500"
+                                  onChange={(e) => setRecruitAmount(parseInt(e.target.value) || 0)}
+                                  className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-blue-500"
                                 />
                               </div>
-                              <div className="text-right">
-                                <span className="text-xs text-slate-400 block">Cost</span>
-                                <span className="text-yellow-400 font-bold">{Math.ceil(recruitAmount / 10)} Gold</span>
+                              <div className="text-right text-[10px] space-y-0.5">
+                                <div className="text-yellow-400 font-bold">{UNIT_STATS[selectedUnitType].cost.gold * recruitAmount} Ouro</div>
+                                <div className="text-green-400 font-bold">{UNIT_STATS[selectedUnitType].cost.food * recruitAmount} Comida</div>
+                                <div className="text-slate-300 font-bold">{UNIT_STATS[selectedUnitType].cost.materials * recruitAmount} Materiais</div>
+                                <div className="text-blue-400 font-bold">{UNIT_STATS[selectedUnitType].cost.pop * recruitAmount} Pop</div>
                               </div>
                             </div>
-                            <input 
-                              type="range" 
-                              min="0" 
-                              max={Math.max(10, maxRecruit)} 
-                              step="10"
-                              value={recruitAmount}
-                              onChange={(e) => setRecruitAmount(parseInt(e.target.value))}
-                              className="w-full h-1.5 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
-                            />
+                            
+                            {(() => {
+                              const stats = UNIT_STATS[selectedUnitType] as any;
+                              if (!stats.requires) return null;
+                              const hasResource = (Object.values(gameState.provinces) as Province[]).some(p => p.ownerId === playerRealm.id && p.strategicResource === stats.requires);
+                              return (
+                                <div className={`text-[10px] p-1.5 rounded border ${hasResource ? 'bg-green-900/20 border-green-500/30 text-green-400' : 'bg-red-900/20 border-red-500/30 text-red-400'}`}>
+                                  Requer recurso: <span className="font-bold uppercase">{stats.requires}</span>
+                                  {!hasResource && " (Não disponível no seu reino)"}
+                                  {hasResource && selectedProv.strategicResource !== stats.requires && " (Disponível no reino)"}
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           <button 
                             onClick={handleRecruitConfirm}
-                            disabled={recruitAmount <= 0 || Math.ceil(recruitAmount / 10) > playerRealm.gold}
-                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 disabled:text-slate-500 rounded text-sm font-bold transition-colors"
+                            disabled={(() => {
+                              const stats = UNIT_STATS[selectedUnitType] as any;
+                              if (!stats.requires) return false;
+                              return !(Object.values(gameState.provinces) as Province[]).some(p => p.ownerId === playerRealm.id && p.strategicResource === stats.requires);
+                            })()}
+                            className={`w-full py-2 rounded text-xs font-bold transition-colors ${
+                              (() => {
+                                const stats = UNIT_STATS[selectedUnitType] as any;
+                                if (!stats.requires) return false;
+                                return !(Object.values(gameState.provinces) as Province[]).some(p => p.ownerId === playerRealm.id && p.strategicResource === stats.requires);
+                              })()
+                                ? 'bg-slate-700 text-slate-500 cursor-not-allowed'
+                                : 'bg-blue-600 hover:bg-blue-500 text-white'
+                            }`}
                           >
-                            Confirm Recruitment
+                            Recrutar (Custo: {ACTION_COSTS.recruit} AP)
                           </button>
                         </div>
                       ) : (
                         <button 
                           onClick={() => setIsRecruiting(true)}
-                          className="w-full flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors"
+                          className="w-full flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-sm"
                         >
-                          <PlusCircle size={16} /> Recruit Troops
+                          <PlusCircle size={16} /> Recrutar Unidades
                         </button>
                       )}
                       
                       <div className="pt-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Construction</span>
-                        <div className="grid grid-cols-1 gap-2 mt-1">
-                          <button 
-                            onClick={() => onAction('build_farm')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2"><Tractor size={14} className="text-green-500" /> Farm</span>
-                            <span className="text-xs text-slate-400">100G, 50M</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Construção ({ACTION_COSTS.build} AP)</span>
+                        <div className="grid grid-cols-1 gap-1 mt-1">
+                          <button onClick={() => onAction('build_farm')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                            <span className="flex items-center gap-2"><Tractor size={12} className="text-green-500" /> Fazenda</span>
+                            <span className="text-[10px] text-slate-400">100O, 50M</span>
                           </button>
-                          <button 
-                            onClick={() => onAction('build_mine')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2"><Pickaxe size={14} className="text-yellow-500" /> Mine</span>
-                            <span className="text-xs text-slate-400">150G, 75M</span>
+                          <button onClick={() => onAction('build_mine')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                            <span className="flex items-center gap-2"><Pickaxe size={12} className="text-yellow-500" /> Mina</span>
+                            <span className="text-[10px] text-slate-400">150O, 75M</span>
                           </button>
-                          <button 
-                            onClick={() => onAction('build_workshop')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2"><Factory size={14} className="text-slate-400" /> Workshop</span>
-                            <span className="text-xs text-slate-400">120G, 60M</span>
+                          <button onClick={() => onAction('build_workshop')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                            <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
+                            <span className="text-[10px] text-slate-400">120O, 60M</span>
                           </button>
                         </div>
                       </div>
                       
                       <div className="pt-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Military & Trade</span>
-                        <div className="space-y-2 mt-1">
-                          <button 
-                            onClick={() => onAction('move')}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors"
-                          >
-                            <ArrowRight size={16} /> Move Troops
+                        <div className="grid grid-cols-2 gap-2">
+                          <button onClick={() => onAction('move')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
+                            <ArrowRight size={14} /> Mover ({ACTION_COSTS.move} AP)
                           </button>
-                          <button 
-                            onClick={() => onAction('trade_route')}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors"
-                          >
-                            <TrendingUp size={16} /> Establish Trade Route (50G)
-                          </button>
-                          <button 
-                            onClick={() => onAction('fortify')}
-                            className="w-full flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors"
-                          >
-                            <Shield size={16} /> Fortify (75 Gold)
+                          <button onClick={() => onAction('fortify')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
+                            <Shield size={14} /> Fortificar ({ACTION_COSTS.build} AP)
                           </button>
                         </div>
                       </div>
@@ -453,42 +583,51 @@ export const HUD: React.FC<HUDProps> = ({
                     <>
                       <button 
                         onClick={() => onAction('attack')}
-                        className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-500 rounded font-medium transition-colors"
+                        className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-500 rounded font-medium transition-colors text-sm"
                       >
-                        <Swords size={16} /> Attack
+                        <Swords size={16} /> Atacar ({ACTION_COSTS.attack} AP)
                       </button>
-                      <button 
-                        onClick={() => onAction('diplomacy')}
-                        className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors"
-                      >
-                        <Handshake size={16} /> Diplomacy
-                      </button>
+                      
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button 
+                          onClick={() => onAction('send_gift')}
+                          className="flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-xs"
+                        >
+                          <Handshake size={14} /> Presente
+                        </button>
+                        <button 
+                          onClick={() => onAction('propose_pact')}
+                          className="flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-xs"
+                        >
+                          <Shield size={14} /> Pacto
+                        </button>
+                        <button 
+                          onClick={() => onAction('propose_alliance')}
+                          className="flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium transition-colors text-xs"
+                        >
+                          <Zap size={14} /> Aliança
+                        </button>
+                        <button 
+                          onClick={() => onAction('trade_route')}
+                          className="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-medium transition-colors text-xs"
+                        >
+                          <TrendingUp size={14} /> Rota Com.
+                        </button>
+                      </div>
 
-                      <div className="pt-2">
-                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider text-center block">Diplomatic Actions</span>
-                        <div className="grid grid-cols-1 gap-2 mt-1">
-                          <button 
-                            onClick={() => onAction('send_gift')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2 text-yellow-500">Send Gift</span>
-                            <span className="text-xs text-slate-400">100G (+25 Rel)</span>
-                          </button>
-                          <button 
-                            onClick={() => onAction('propose_pact')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2 text-blue-400">Propose Pact</span>
-                            <span className="text-xs text-slate-400">Req: 20 Rel</span>
-                          </button>
-                          <button 
-                            onClick={() => onAction('propose_alliance')}
-                            className="flex items-center justify-between px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700"
-                          >
-                            <span className="flex items-center gap-2 text-purple-400">Propose Alliance</span>
-                            <span className="text-xs text-slate-400">Req: 60 Rel</span>
-                          </button>
-                        </div>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        <button 
+                          onClick={() => onAction('demand_tribute')}
+                          className="flex items-center justify-center gap-2 py-2 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors text-xs"
+                        >
+                          <Coins size={14} /> Tributo
+                        </button>
+                        <button 
+                          onClick={() => onAction('demand_vassalage')}
+                          className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs"
+                        >
+                          <Gem size={14} /> Vassalagem
+                        </button>
                       </div>
                     </>
                   )}
@@ -499,18 +638,24 @@ export const HUD: React.FC<HUDProps> = ({
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-slate-500 text-center">
             <MapIcon size={48} className="mb-4 opacity-50" />
-            <p>Select a province on the map to view details and take actions.</p>
+            <p>Selecione uma província no mapa para ver detalhes e realizar ações.</p>
           </div>
         )}
       </div>
 
       {/* End Turn Button */}
-      <div className="p-4 border-t border-slate-700 bg-slate-800">
+      <div className="p-4 border-t border-slate-700 bg-slate-800 flex gap-2">
+        <button 
+          onClick={onSave}
+          className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+        >
+          <Save size={18} /> Salvar
+        </button>
         <button 
           onClick={onEndTurn}
-          className="w-full py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95"
+          className="flex-[2] py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95"
         >
-          End Turn
+          Finalizar Turno
         </button>
       </div>
     </div>
