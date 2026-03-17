@@ -69,43 +69,72 @@ const SECTIONS = [
     icon: Swords,
     content: (
       <div className="space-y-4">
+        <p className="opacity-80 leading-relaxed text-sm">
+          Recrute tropas para proteger suas fronteiras. Tropas são recrutadas em <span className="text-amber-400 font-bold">levas de 10 unidades</span>.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-xs">
             <thead>
               <tr className="border-b border-white/10 text-[#d4af37]">
                 <th className="text-left py-2">Unidade</th>
-                <th className="text-center py-2">Custo (O/C/M/Pop)</th>
-                <th className="text-center py-2">Manutenção</th>
+                <th className="text-center py-2">Custo Leva (10x)</th>
+                <th className="text-center py-2">Maint./Turno</th>
                 <th className="text-center py-2">ATK / DEF</th>
                 <th className="text-center py-2">Requisito</th>
               </tr>
             </thead>
             <tbody className="opacity-80">
               <tr className="border-b border-white/5">
-                <td className="py-2 font-bold">Infantaria</td>
-                <td className="text-center">{UNIT_STATS.infantry.cost.gold}/{UNIT_STATS.infantry.cost.food}/{UNIT_STATS.infantry.cost.materials}/{UNIT_STATS.infantry.cost.pop}</td>
-                <td className="text-center">{UNIT_STATS.infantry.maintenance.gold}O, {UNIT_STATS.infantry.maintenance.food}C</td>
-                <td className="text-center">{UNIT_STATS.infantry.attack}/{UNIT_STATS.infantry.defense}</td>
+                <td className="py-2 font-bold flex items-center gap-1"><Shield size={12} /> Infantaria</td>
+                <td className="text-center text-green-300">{UNIT_STATS.infantry.cost.food * 10}C, {UNIT_STATS.infantry.cost.materials * 10}M</td>
+                <td className="text-center">{UNIT_STATS.infantry.maintenance.gold * 10}O, {UNIT_STATS.infantry.maintenance.food * 10}C</td>
+                <td className="text-center font-mono">1.0 / 1.5</td>
                 <td className="text-center text-slate-500">—</td>
               </tr>
               <tr className="border-b border-white/5">
-                <td className="py-2 font-bold">Arqueiros</td>
-                <td className="text-center">{UNIT_STATS.archers.cost.gold}/{UNIT_STATS.archers.cost.food}/{UNIT_STATS.archers.cost.materials}/{UNIT_STATS.archers.cost.pop}</td>
-                <td className="text-center">{UNIT_STATS.archers.maintenance.gold}O, {UNIT_STATS.archers.maintenance.food}C</td>
-                <td className="text-center">{UNIT_STATS.archers.attack}/{UNIT_STATS.archers.defense}</td>
+                <td className="py-2 font-bold flex items-center gap-1"><Activity size={12} /> Arqueiros</td>
+                <td className="text-center text-green-300">{UNIT_STATS.archers.cost.food * 10}C, {UNIT_STATS.archers.cost.materials * 10}M</td>
+                <td className="text-center">{UNIT_STATS.archers.maintenance.gold * 10}O, {UNIT_STATS.archers.maintenance.food * 10}C</td>
+                <td className="text-center font-mono">1.2 / 1.2</td>
                 <td className="text-center text-green-400">Madeira</td>
               </tr>
               <tr>
-                <td className="py-2 font-bold">Cavalaria</td>
-                <td className="text-center">{UNIT_STATS.cavalry.cost.gold}/{UNIT_STATS.cavalry.cost.food}/{UNIT_STATS.cavalry.cost.materials}/{UNIT_STATS.cavalry.cost.pop}</td>
-                <td className="text-center">{UNIT_STATS.cavalry.maintenance.gold}O, {UNIT_STATS.cavalry.maintenance.food}C</td>
-                <td className="text-center">{UNIT_STATS.cavalry.attack}/{UNIT_STATS.cavalry.defense}</td>
+                <td className="py-2 font-bold flex items-center gap-1"><Zap size={12} /> Cavalaria</td>
+                <td className="text-center text-green-300">{UNIT_STATS.cavalry.cost.food * 10}C, {UNIT_STATS.cavalry.cost.materials * 10}M</td>
+                <td className="text-center">{UNIT_STATS.cavalry.maintenance.gold * 10}O, {UNIT_STATS.cavalry.maintenance.food * 10}C</td>
+                <td className="text-center font-mono">2.0 / 1.0</td>
                 <td className="text-center text-amber-400">Cavalo</td>
               </tr>
             </tbody>
           </table>
         </div>
-        <p className="text-xs opacity-60">Custo = Ouro / Comida / Materiais / População consumida. Manutenção é cobrada por turno, por unidade.</p>
+        <div className="bg-red-900/20 p-2 rounded border border-red-500/20 text-[10px] italic text-red-200">
+          Nota: Recrutamento agora custa <span className="font-bold underline">ZERO ouros</span>. O ouro é focado apenas na manutenção (salários) e infraestrutura.
+        </div>
+      </div>
+    )
+  },
+  {
+    title: 'Sistema de Combate',
+    icon: Activity,
+    content: (
+      <div className="space-y-4">
+        <p className="opacity-80 leading-relaxed text-sm">
+          As batalhas são resolvidas em <span className="text-amber-400 font-bold">múltiplas rodadas</span> simuladas. O terreno e a composição do exército são cruciais.
+        </p>
+        <div className="grid grid-cols-1 gap-2 text-sm">
+          {[
+            { name: 'Vantagem Tática', desc: 'Cavalaria > Arqueiros, Arqueiros > Infantaria, Infantaria > Cavalaria.' },
+            { name: 'Bonificações de Terreno', desc: 'Montanhas dão +50% DEF. Florestas dão +20% DEF e bônus para Arqueiros. Planícies favorecem Cavalaria.' },
+            { name: 'Cercos e Fortes', desc: 'Cada nível de Forte dá +20% DEF. Ataques falhos em províncias fortificadas causam dano ao cerco, facilitando invasões futuras.' },
+            { name: 'Retirada e Aniquilação', desc: 'Tropas sobreviventes de uma defesa falha tentam recuar para províncias vizinhas aliadas.' },
+          ].map(c => (
+            <div key={c.name} className="bg-black/30 p-2 rounded border border-white/5">
+              <span className="font-bold text-[#d4af37] text-xs block">{c.name}</span>
+              <p className="opacity-70 text-[11px] mt-0.5">{c.desc}</p>
+            </div>
+          ))}
+        </div>
       </div>
     )
   },

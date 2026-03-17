@@ -1,15 +1,17 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData } from './types';
-import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from './gameLogic';
+import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData, TurnSummaryData } from './types';
+import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION, BattleResult } from './gameLogic';
 import { persistence } from './persistence';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
+import { ChroniclesModal } from './components/ChroniclesModal';
 import { Minimap } from './components/Minimap';
 import { GameOverModal } from './components/GameOverModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { InstructionsModal } from './components/InstructionsModal';
-import { TurnSummaryModal, TurnSummaryData } from './components/TurnSummaryModal';
+import { TurnSummaryModal } from './components/TurnSummaryModal';
 import { CombatPreviewModal } from './components/CombatPreviewModal';
+import { BattleResultModal } from './components/BattleResultModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save } from 'lucide-react';
 
@@ -33,6 +35,9 @@ export default function App() {
   const [combatAttackerProvId, setCombatAttackerProvId] = useState<string | null>(null);
   const [combatDefenderProvId, setCombatDefenderProvId] = useState<string | null>(null);
   const [combatAttackingArmy, setCombatAttackingArmy] = useState<Army | null>(null);
+  const [showBattleResult, setShowBattleResult] = useState<boolean>(false);
+  const [battleResultData, setBattleResultData] = useState<BattleResult | null>(null);
+  const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean } | null>(null);
   const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     numProvinces: 25,
@@ -42,12 +47,16 @@ export default function App() {
     victoryCondition: 'conquest'
   });
   const [scale, setScale] = useState(1);
+  const [zoom, setZoom] = useState(1);
+  const [showChronicles, setShowChronicles] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
-      const wRatio = window.innerWidth / 1450;
-      const hRatio = window.innerHeight / 880;
-      setScale(Math.min(1, Math.min(wRatio, hRatio) * 0.98));
+      const wRatio = window.innerWidth / 1420;
+      const hRatio = window.innerHeight / 850;
+      // Base scale to fit window, then modified by user zoom
+      const baseScale = Math.min(wRatio, hRatio) * 0.99;
+      setScale(baseScale);
     };
     handleResize();
     window.addEventListener('resize', handleResize);
@@ -175,14 +184,14 @@ export default function App() {
           // Move troops
           setGameState(prev => {
             if (!prev) return prev;
-            const next = { ...prev };
+            const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
             const s = next.provinces[actionSourceId];
             const t = next.provinces[id];
             
-            // Move half of each type
-            const moveInf = Math.floor(s.army.infantry / 2);
-            const moveArc = Math.floor(s.army.archers / 2);
-            const moveCav = Math.floor(s.army.cavalry / 2);
+            // Move 80% (more intuitive)
+            const moveInf = Math.floor(s.army.infantry * 0.8);
+            const moveArc = Math.floor(s.army.archers * 0.8);
+            const moveCav = Math.floor(s.army.cavalry * 0.8);
 
             s.army.infantry -= moveInf;
             s.army.archers -= moveArc;
@@ -197,6 +206,7 @@ export default function App() {
             next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
             return next;
           });
+          addVisualEffect('conquest', target.center[0], target.center[1]);
           addLog(`Tropas movidas de ${source.name} para ${target.name}.`);
         } else {
           addLog("Alvo de movimento inválido. Deve ser uma província adjacente de sua propriedade.");
@@ -285,20 +295,95 @@ export default function App() {
   const confirmAttack = () => {
     if (!gameState || !combatAttackerProvId || !combatDefenderProvId || !combatAttackingArmy) return;
     playSound('combat');
+
+    const source = gameState.provinces[combatAttackerProvId];
     const target = gameState.provinces[combatDefenderProvId];
+    const playerRealm = gameState.realms[gameState.playerRealmId];
+    const defenderRealm = gameState.realms[target.ownerId];
+
     addVisualEffect('battle', target.center[0], target.center[1]);
+
+    // Resolve combat manually to capture result
+    const effectiveDefense = Math.max(0, target.defense - (target.siegeDamage || 0));
+    const result = resolveCombat(combatAttackingArmy, target.army, target.terrain, effectiveDefense);
+
+    // Show battle result modal
+    setBattleResultData(result);
+    setBattleResultMeta({
+      attackerName: playerRealm.name,
+      defenderName: defenderRealm?.name || 'Desconhecido',
+      provinceName: target.name,
+      conquered: result.won,
+    });
+    setShowBattleResult(true);
+
+    // Apply results to game state
     setGameState(prev => {
       if (!prev) return prev;
-      const next = { ...prev };
+      const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
       const s = next.provinces[combatAttackerProvId];
       const t = next.provinces[combatDefenderProvId];
       const r = next.realms[prev.playerRealmId];
+
+      // Remove attacking troops from source
       s.army.infantry -= combatAttackingArmy.infantry;
       s.army.archers -= combatAttackingArmy.archers;
       s.army.cavalry -= combatAttackingArmy.cavalry;
       s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
       r.actionPoints -= ACTION_COSTS.attack;
-      executeAttack(next, r, s, t);
+
+      if (result.won) {
+        const oldOwnerId = t.ownerId;
+        const oldOwner = next.realms[oldOwnerId];
+        t.ownerId = r.id;
+        t.army = result.attackerRemaining;
+        t.troops = t.army.infantry + t.army.archers + t.army.cavalry;
+        t.siegeDamage = 0;
+
+        // Retreat defenders
+        const totalDefRem = result.defenderRemaining.infantry + result.defenderRemaining.archers + result.defenderRemaining.cavalry;
+        if (totalDefRem > 0) {
+          const retreatOptions = t.neighbors.map(nId => next.provinces[nId]).filter(p => p.ownerId === oldOwnerId);
+          if (retreatOptions.length > 0) {
+            const rp = retreatOptions.sort((a, b) => b.troops - a.troops)[0];
+            rp.army.infantry += result.defenderRemaining.infantry;
+            rp.army.archers += result.defenderRemaining.archers;
+            rp.army.cavalry += result.defenderRemaining.cavalry;
+            rp.troops = rp.army.infantry + rp.army.archers + rp.army.cavalry;
+          }
+        }
+
+        next.logs.push(`CONQUISTA: ${r.name} tomou ${t.name}!`);
+        r.overextension = Math.min(100, r.overextension + 15);
+        t.recentlyConquered = 10;
+        t.loyalty = 30;
+
+        if (oldOwner && oldOwner.capitalId === t.id) {
+          const remaining = (Object.values(next.provinces) as typeof t[]).filter(p => p.ownerId === oldOwnerId && p.id !== t.id);
+          if (remaining.length > 0) {
+            oldOwner.capitalId = remaining.sort((a, b) => b.population - a.population)[0].id;
+          }
+        }
+
+        if (oldOwner && oldOwner.memory[r.id]) {
+          oldOwner.memory[r.id].aggression += 30;
+          oldOwner.memory[r.id].lastWarTurn = next.turn;
+        }
+        if (oldOwner) oldOwner.relations[r.id] -= 50;
+      } else {
+        // Defeat: return survivors to source
+        t.army = result.defenderRemaining;
+        t.troops = t.army.infantry + t.army.archers + t.army.cavalry;
+        s.army.infantry += result.attackerRemaining.infantry;
+        s.army.archers += result.attackerRemaining.archers;
+        s.army.cavalry += result.attackerRemaining.cavalry;
+        s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
+
+        if (t.defense > (t.siegeDamage || 0)) {
+          t.siegeDamage = (t.siegeDamage || 0) + 1;
+        }
+      }
+
       return next;
     });
     setShowCombatPreview(false);
@@ -307,7 +392,7 @@ export default function App() {
     setCombatAttackingArmy(null);
   };
 
-  const handleAction = (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => {
+  const handleAction = (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farms' | 'build_mines' | 'build_workshops' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => {
     if (!gameState || !selectedProvinceId) return;
     
     const prov = gameState.provinces[selectedProvinceId];
@@ -349,7 +434,7 @@ export default function App() {
 
       setGameState(prev => {
         if (!prev) return prev;
-        const next = { ...prev };
+        const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
         const p = next.provinces[selectedProvinceId];
         const r = next.realms[prev.playerRealmId];
 
@@ -363,7 +448,7 @@ export default function App() {
         return next;
       });
       addLog(`Recrutado ${recruitAmount} ${unitType === 'infantry' ? 'Infantaria' : unitType === 'archers' ? 'Arqueiros' : 'Cavalaria'} em ${prov.name}.`);
-    } else if (action === 'build_farm' || action === 'build_mine' || action === 'build_workshop' || action === 'build_courts' || action === 'fortify') {
+    } else if (action === 'build_farms' || action === 'build_mines' || action === 'build_workshops' || action === 'build_courts' || action === 'fortify') {
       playSound('build');
       if (playerRealm.actionPoints < ACTION_COSTS.build) {
         addLog(`Pontos de Ação insuficientes para ${action === 'fortify' ? 'fortificar' : 'construir'}.`);
@@ -384,7 +469,7 @@ export default function App() {
 
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold -= cost;
           next.realms[prev.playerRealmId].materials -= matCost;
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
@@ -626,7 +711,7 @@ export default function App() {
       if (myProvinces > theirProvinces * 3 && playerRealm.relations[targetId] < -20) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           if (!next.realms[prev.playerRealmId].vassals.includes(targetId)) {
             next.realms[prev.playerRealmId].vassals.push(targetId);
             next.realms[targetId].vassalOf = prev.playerRealmId;
@@ -644,7 +729,7 @@ export default function App() {
       if (playerRealm.gold >= cost) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold -= cost;
           next.realms[prev.playerRealmId].food += amount;
           return next;
@@ -659,7 +744,7 @@ export default function App() {
       if (playerRealm.food >= amount) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold += price;
           next.realms[prev.playerRealmId].food -= amount;
           return next;
@@ -674,7 +759,7 @@ export default function App() {
       if (playerRealm.gold >= cost) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold -= cost;
           next.realms[prev.playerRealmId].materials += amount;
           return next;
@@ -689,7 +774,7 @@ export default function App() {
       if (playerRealm.materials >= amount) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold += price;
           next.realms[prev.playerRealmId].materials -= amount;
           return next;
@@ -714,7 +799,7 @@ export default function App() {
       if (playerRealm.relations[targetId] > 20) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].tradeRoutes.push({ fromProvinceId: selectedProvinceId!, toProvinceId: targetId });
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
           return next;
@@ -731,7 +816,7 @@ export default function App() {
       if (playerRealm.gold >= 50) {
         setGameState(prev => {
           if (!prev) return prev;
-          const next = { ...prev };
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
           next.realms[prev.playerRealmId].gold -= 50;
           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
           next.provinces[selectedProvinceId].wealth += 1;
@@ -781,19 +866,19 @@ export default function App() {
     });
 
     const summary: TurnSummaryData = {
-      turn: nextState.turn,
       goldIncome: Math.floor(goldIncome),
       goldMaintenance: Math.floor(goldMaint),
+      goldNet: Math.floor(goldIncome - goldMaint),
       foodIncome: Math.floor(foodIncome),
       foodMaintenance: Math.floor(foodMaint),
-      materialIncome: Math.floor(materialIncome),
+      foodNet: Math.floor(foodIncome - foodMaint),
+      materialsIncome: Math.floor(materialIncome),
       provincesGained,
       provincesLost,
       newWars,
-      peaceTreaties,
-      rebellions: rebellionLogs.map(l => l.replace(/REBELIÃO:|MOTIM:/g, '').trim()),
-      lowLoyaltyProvinces: lowLoyaltyProvs,
-      event: nextState.currentEvent?.description || null,
+      newTreaties: peaceTreaties, // Simplifying for summary
+      events: nextState.currentEvent ? [nextState.currentEvent.description] : [],
+      rebellionRisk: lowLoyaltyProvs
     };
 
     persistence.autoSave(nextState);
@@ -819,7 +904,7 @@ export default function App() {
   if (showMenu) {
     return (
       <>
-        <div className="min-h-screen w-full parchment-bg flex flex-col items-center justify-center p-4 overflow-y-auto">
+        <div className="h-screen w-screen parchment-bg flex flex-col items-center justify-center overflow-hidden">
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -955,22 +1040,27 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="min-h-screen bg-[#1a1a1a] flex items-center justify-center p-4 overflow-hidden">
+    <div className="h-screen w-screen bg-[#1a1a1a] flex items-center justify-center overflow-hidden">
       <div 
-        className="relative flex gap-6 origin-center"
+        className="relative flex gap-4 origin-center transition-transform duration-300 ease-out"
         style={{ width: 1420, height: 850, transform: `scale(${scale})` }}
       >
-        <div className="flex-1 relative">
-          <Map 
-            gameState={gameState} 
-            selectedProvinceId={selectedProvinceId}
-            actionState={actionState}
-            actionSourceId={actionSourceId}
-            viewMode={viewMode}
-            onProvinceClick={handleProvinceClick}
-            width={MAP_WIDTH}
-            height={MAP_HEIGHT}
-          />
+        <div className="flex-1 relative overflow-hidden rounded-xl bg-slate-900/50 border border-white/5">
+          <div 
+            className="w-full h-full transition-transform duration-500 ease-out origin-center"
+            style={{ transform: `scale(${zoom})` }}
+          >
+            <Map 
+              gameState={gameState} 
+              selectedProvinceId={selectedProvinceId}
+              actionState={actionState}
+              actionSourceId={actionSourceId}
+              viewMode={viewMode}
+              onProvinceClick={handleProvinceClick}
+              width={MAP_WIDTH}
+              height={MAP_HEIGHT}
+            />
+          </div>
           
           <Minimap 
             gameState={gameState}
@@ -982,9 +1072,9 @@ export default function App() {
 
           {/* Logs Overlay */}
           {gameState && (
-            <div className="absolute bottom-4 right-4 w-80 max-h-48 overflow-y-auto bg-black/60 backdrop-blur border border-slate-700 rounded-lg p-3 text-[10px] text-slate-300 pointer-events-none font-serif">
-              {gameState.logs.slice(-8).map((log, i) => (
-                <div key={i} className="mb-1 border-b border-white/5 pb-1 last:border-0">{log}</div>
+            <div className="absolute bottom-4 right-4 w-64 max-h-20 overflow-y-auto bg-black/40 backdrop-blur-sm border border-slate-700/50 rounded-lg p-2 text-[9px] text-slate-400 pointer-events-none font-serif opacity-70 hover:opacity-100 transition-opacity">
+              {gameState.logs.slice(-3).map((log, i) => (
+                <div key={i} className="mb-0.5 last:mb-0 leading-tight">{log}</div>
               ))}
             </div>
           )}
@@ -1006,8 +1096,20 @@ export default function App() {
               setActionState('idle');
               setActionSourceId(null);
             }}
+            zoom={zoom}
+            onZoomChange={setZoom}
+            onOpenChronicles={() => setShowChronicles(true)}
           />
         </div>
+
+        <AnimatePresence>
+          {showChronicles && (
+            <ChroniclesModal 
+              logs={gameState.logs} 
+              onClose={() => setShowChronicles(false)} 
+            />
+          )}
+        </AnimatePresence>
       </div>
 
       <GameOverModal 
@@ -1047,6 +1149,20 @@ export default function App() {
         attackerProv={combatAttackerProvId ? gameState.provinces[combatAttackerProvId] : null}
         defenderProv={combatDefenderProvId ? gameState.provinces[combatDefenderProvId] : null}
         attackingArmy={combatAttackingArmy}
+      />
+
+      <BattleResultModal
+        isOpen={showBattleResult}
+        onClose={() => {
+          setShowBattleResult(false);
+          setBattleResultData(null);
+          setBattleResultMeta(null);
+        }}
+        result={battleResultData}
+        attackerName={battleResultMeta?.attackerName || ''}
+        defenderName={battleResultMeta?.defenderName || ''}
+        provinceName={battleResultMeta?.provinceName || ''}
+        conquered={battleResultMeta?.conquered || false}
       />
     </div>
   );

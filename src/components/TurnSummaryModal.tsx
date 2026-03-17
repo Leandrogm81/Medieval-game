@@ -1,22 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Coins, Wheat, Hammer, Swords, Handshake, AlertTriangle, TrendingUp, TrendingDown, ChevronRight, Shield, Crown } from 'lucide-react';
-
-export interface TurnSummaryData {
-  turn: number;
-  goldIncome: number;
-  goldMaintenance: number;
-  foodIncome: number;
-  foodMaintenance: number;
-  materialIncome: number;
-  provincesGained: string[];
-  provincesLost: string[];
-  newWars: string[];
-  peaceTreaties: string[];
-  rebellions: string[];
-  lowLoyaltyProvinces: string[];
-  event: string | null;
-}
+import { X, TrendingUp, TrendingDown, Swords, Handshake, AlertTriangle, Coins, Wheat, Hammer, Flag } from 'lucide-react';
+import { TurnSummaryData } from '../types';
 
 interface TurnSummaryModalProps {
   isOpen: boolean;
@@ -24,130 +9,156 @@ interface TurnSummaryModalProps {
   data: TurnSummaryData | null;
 }
 
-export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({
-  isOpen,
-  onClose,
-  data
-}) => {
+export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({ isOpen, onClose, data }) => {
   if (!isOpen || !data) return null;
-
-  const netGold = data.goldIncome - data.goldMaintenance;
-  const netFood = data.foodIncome - data.foodMaintenance;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
         <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 30 }}
-          transition={{ duration: 0.3 }}
-          className="bg-slate-900 border-2 border-amber-500/40 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl"
+          initial={{ opacity: 0, y: 50, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          exit={{ opacity: 0, y: 50, scale: 0.9 }}
+          className="bg-[#1a0f0a] border-2 border-[#d4af37]/50 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
         >
           {/* Header */}
-          <div className="p-4 bg-gradient-to-r from-amber-900/40 to-slate-900 border-b border-amber-500/20 flex items-center justify-between">
-            <h2 className="text-lg font-serif font-bold text-amber-400 flex items-center gap-2">
-              <Crown size={20} /> Resumo — Turno {data.turn}
+          <div className="p-4 border-b border-[#d4af37]/20 flex justify-between items-center bg-black/40">
+            <h2 className="text-xl font-serif font-bold text-[#d4af37] flex items-center gap-2">
+              <span className="bg-[#d4af37] text-black p-1 rounded">
+                <TrendingUp size={18} />
+              </span>
+              Resumo do Turno
             </h2>
+            <button onClick={onClose} className="text-white/40 hover:text-white transition-colors">
+              <X size={20} />
+            </button>
           </div>
 
-          <div className="p-4 space-y-4 max-h-[70vh] overflow-y-auto">
-            {/* Economy */}
-            <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Economia</h3>
-              <div className="grid grid-cols-3 gap-2 text-center text-xs">
-                <div>
-                  <Coins size={16} className="mx-auto text-yellow-400 mb-1" />
-                  <div className={`font-bold ${netGold >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {netGold >= 0 ? '+' : ''}{netGold}
+          <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
+            {/* Economy Section */}
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                <Coins size={14} /> Economia do Reino
+              </h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-yellow-400 mb-1">
+                    <Coins size={16} />
+                    <span className="text-sm font-bold">Ouro</span>
                   </div>
-                  <div className="text-slate-500">Ouro</div>
-                </div>
-                <div>
-                  <Wheat size={16} className="mx-auto text-green-400 mb-1" />
-                  <div className={`font-bold ${netFood >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                    {netFood >= 0 ? '+' : ''}{netFood}
+                  <div className="flex justify-between text-xs">
+                    <span className="opacity-60">Renda:</span>
+                    <span className="text-green-400">+{Math.floor(data.goldIncome)}</span>
                   </div>
-                  <div className="text-slate-500">Comida</div>
+                  <div className="flex justify-between text-xs">
+                    <span className="opacity-60">Manut.:</span>
+                    <span className="text-red-400">-{Math.floor(data.goldMaintenance)}</span>
+                  </div>
+                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between font-bold">
+                    <span className="text-xs">Saldo:</span>
+                    <span className={data.goldNet >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {data.goldNet >= 0 ? '+' : ''}{Math.floor(data.goldNet)}
+                    </span>
+                  </div>
                 </div>
-                <div>
-                  <Hammer size={16} className="mx-auto text-slate-300 mb-1" />
-                  <div className="font-bold text-green-400">+{data.materialIncome}</div>
-                  <div className="text-slate-500">Materiais</div>
+
+                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-green-400 mb-1">
+                    <Wheat size={16} />
+                    <span className="text-sm font-bold">Comida</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="opacity-60">Produção:</span>
+                    <span className="text-green-400">+{Math.floor(data.foodIncome)}</span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="opacity-60">Consumo:</span>
+                    <span className="text-red-400">-{Math.floor(data.foodMaintenance)}</span>
+                  </div>
+                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between font-bold">
+                    <span className="text-xs">Saldo:</span>
+                    <span className={data.foodNet >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {data.foodNet >= 0 ? '+' : ''}{Math.floor(data.foodNet)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Territory */}
-            {(data.provincesGained.length > 0 || data.provincesLost.length > 0) && (
-              <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Território</h3>
-                <div className="space-y-1 text-xs">
-                  {data.provincesGained.map((p, i) => (
-                    <div key={`g${i}`} className="flex items-center gap-2 text-green-400">
-                      <TrendingUp size={12} /> Conquistado: <span className="font-bold">{p}</span>
-                    </div>
-                  ))}
-                  {data.provincesLost.map((p, i) => (
-                    <div key={`l${i}`} className="flex items-center gap-2 text-red-400">
-                      <TrendingDown size={12} /> Perdido: <span className="font-bold">{p}</span>
-                    </div>
-                  ))}
+            {/* Territory & Diplomacy */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Territory */}
+              {(data.provincesGained.length > 0 || data.provincesLost.length > 0) && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                    <Flag size={14} /> Território
+                  </h3>
+                  <div className="space-y-1">
+                    {data.provincesGained.map(p => (
+                      <div key={p} className="text-xs flex items-center gap-2 text-green-400 bg-green-400/10 px-2 py-1 rounded">
+                        <TrendingUp size={12} /> + {p}
+                      </div>
+                    ))}
+                    {data.provincesLost.map(p => (
+                      <div key={p} className="text-xs flex items-center gap-2 text-red-400 bg-red-400/10 px-2 py-1 rounded">
+                        <TrendingDown size={12} /> - {p}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Diplomacy */}
-            {(data.newWars.length > 0 || data.peaceTreaties.length > 0) && (
-              <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Diplomacia</h3>
-                <div className="space-y-1 text-xs">
-                  {data.newWars.map((w, i) => (
-                    <div key={`w${i}`} className="flex items-center gap-2 text-red-400">
-                      <Swords size={12} /> Nova guerra: <span className="font-bold">{w}</span>
-                    </div>
-                  ))}
-                  {data.peaceTreaties.map((t, i) => (
-                    <div key={`t${i}`} className="flex items-center gap-2 text-green-400">
-                      <Handshake size={12} /> Paz com: <span className="font-bold">{t}</span>
-                    </div>
-                  ))}
+              {/* Diplomacy */}
+              {(data.newWars.length > 0 || data.newTreaties.length > 0) && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                    <Handshake size={14} /> Diplomacia
+                  </h3>
+                  <div className="space-y-1">
+                    {data.newWars.map(w => (
+                      <div key={w} className="text-xs flex items-center gap-2 text-red-500 bg-red-500/10 px-2 py-1 rounded font-bold">
+                        <Swords size={12} /> Guerra: {w}
+                      </div>
+                    ))}
+                    {data.newTreaties.map(t => (
+                      <div key={t} className="text-xs flex items-center gap-2 text-blue-400 bg-blue-400/10 px-2 py-1 rounded">
+                        <Handshake size={12} /> Acordo: {t}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            {/* Alerts */}
-            {(data.rebellions.length > 0 || data.lowLoyaltyProvinces.length > 0) && (
-              <div className="bg-red-900/20 p-3 rounded-xl border border-red-500/20">
-                <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-2 flex items-center gap-1">
-                  <AlertTriangle size={12} /> Alertas Internos
-                </h3>
-                <div className="space-y-1 text-xs">
-                  {data.rebellions.map((r, i) => (
-                    <div key={`r${i}`} className="text-red-300">🔥 Rebelião em <span className="font-bold">{r}</span></div>
-                  ))}
-                  {data.lowLoyaltyProvinces.map((p, i) => (
-                    <div key={`ll${i}`} className="text-amber-300">⚠️ Lealdade crítica em <span className="font-bold">{p}</span></div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Event */}
-            {data.event && (
-              <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-                <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Evento</h3>
-                <p className="text-xs opacity-80">{data.event}</p>
+            {/* Alerts & Events */}
+            {(data.rebellionRisk.length > 0 || data.events.length > 0) && (
+              <div className="space-y-3 pt-2 border-t border-white/5">
+                {data.rebellionRisk.length > 0 && (
+                  <div className="bg-red-500/20 border border-red-500/30 p-3 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                    <div>
+                      <p className="text-xs font-bold text-red-200">Aviso de Rebelião!</p>
+                      <p className="text-[10px] text-red-200/70">Baixa lealdade em: {data.rebellionRisk.join(', ')}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {data.events.map((e, i) => (
+                  <div key={i} className="bg-[#d4af37]/10 border border-[#d4af37]/20 p-3 rounded-xl text-xs text-[#d4af37]/90 italic">
+                    {e}
+                  </div>
+                ))}
               </div>
             )}
           </div>
 
-          <div className="p-4 border-t border-slate-700 bg-slate-800">
+          {/* Action */}
+          <div className="p-4 bg-black/40 border-t border-[#d4af37]/20">
             <button
               onClick={onClose}
-              className="w-full py-2.5 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+              className="w-full py-3 bg-[#d4af37] hover:bg-[#b8860b] text-black font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-[#d4af37]/20"
             >
-              Continuar <ChevronRight size={16} />
+              Prosseguir ao Próximo Turno
             </button>
           </div>
         </motion.div>

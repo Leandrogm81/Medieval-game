@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { GameState, Province, Realm, ActionType, UnitType, ViewMode } from '../types';
-import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown } from 'lucide-react';
+import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown, Scroll } from 'lucide-react';
 import { UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from '../gameLogic';
+import { motion, AnimatePresence } from 'motion/react';
 
 interface HUDProps {
   gameState: GameState;
@@ -10,11 +11,14 @@ interface HUDProps {
   actionSourceId: string | null;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => void;
+  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farms' | 'build_mines' | 'build_workshops' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => void;
   onEndTurn: () => void;
   onSave: () => void;
   onMenu: () => void;
   onCancelAction: () => void;
+  zoom: number;
+  onZoomChange: (newZoom: number) => void;
+  onOpenChronicles: () => void;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -28,7 +32,10 @@ export const HUD: React.FC<HUDProps> = ({
   onEndTurn,
   onSave,
   onMenu,
-  onCancelAction
+  onCancelAction,
+  zoom,
+  onZoomChange,
+  onOpenChronicles
 }) => {
   const [recruitAmount, setRecruitAmount] = useState(10);
   const [isRecruiting, setIsRecruiting] = useState(false);
@@ -56,11 +63,18 @@ export const HUD: React.FC<HUDProps> = ({
   const goldIncome = Math.floor(baseGoldIncome * (1 - oePenalty));
   const foodIncome = Math.floor(baseFoodIncome * (1 - oePenalty));
 
-  const goldMaintenance = Math.floor(totalTroops / 15);
-  const foodMaintenance = Math.floor(totalTroops / 8);
+  const goldMaintenance = playerProvinces.reduce((sum, p) => 
+    sum + p.army.infantry * UNIT_STATS.infantry.maintenance.gold + 
+    p.army.archers * UNIT_STATS.archers.maintenance.gold + 
+    p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold, 0);
+
+  const foodMaintenance = playerProvinces.reduce((sum, p) => 
+    sum + p.army.infantry * UNIT_STATS.infantry.maintenance.food + 
+    p.army.archers * UNIT_STATS.archers.maintenance.food + 
+    p.army.cavalry * UNIT_STATS.cavalry.maintenance.food, 0);
   
-  const netGold = goldIncome - goldMaintenance;
-  const netFood = foodIncome - foodMaintenance;
+  const netGold = Math.floor(goldIncome - goldMaintenance);
+  const netFood = Math.floor(foodIncome - foodMaintenance);
 
   const handleRecruitConfirm = () => {
     onAction('recruit', selectedUnitType, recruitAmount);
@@ -89,19 +103,139 @@ export const HUD: React.FC<HUDProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-200 w-80 shadow-2xl border-l border-slate-700">
-      {/* Event Banner */}
+    <div className="flex flex-col h-full bg-slate-900 text-slate-200 w-80 shadow-2xl border-l border-slate-700 overflow-hidden">
+      {/* Top Header & Stats */}
+      <div className="p-4 bg-slate-800 border-b border-slate-700 shadow-lg shrink-0">
+        <div className="flex justify-between items-center mb-4">
+          <div className="flex items-center gap-2 overflow-hidden">
+            <Crown className="text-amber-500 shrink-0" size={24} />
+            <h1 className="text-lg font-serif font-bold text-white medieval-title tracking-wider truncate py-0.5">{playerRealm.name}</h1>
+          </div>
+          <div className="flex gap-1.5 shrink-0">
+            <button 
+              onClick={onOpenChronicles}
+              className="p-2 bg-slate-900 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-amber-400 transition-all border border-slate-700/50 hover:border-amber-500/30" 
+              title="Crônicas do Reino"
+            >
+              <Scroll size={16} />
+            </button>
+            <button 
+              onClick={onMenu} 
+              className="p-2 bg-slate-900 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/50"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* Resources Grid */}
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
+            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Coins size={8} className="text-amber-600" /> Ouro</span>
+              <span className={netGold >= 0 ? 'text-green-500' : 'text-red-500'}>{netGold >= 0 ? '+' : ''}{netGold}</span>
+            </div>
+            <div className="text-lg font-black text-amber-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.gold)}</div>
+          </div>
+          <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
+            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Wheat size={8} className="text-green-600" /> Comida</span>
+              <span className={netFood >= 0 ? 'text-green-500' : 'text-red-500'}>{netFood >= 0 ? '+' : ''}{netFood}</span>
+            </div>
+            <div className="text-lg font-black text-green-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.food)}</div>
+          </div>
+          <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
+            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Hammer size={8} className="text-slate-500" /> Materiais</span>
+              <span className="text-[10px] text-slate-400 font-bold">{Math.floor(playerRealm.materials)}</span>
+            </div>
+            <div className="text-lg font-black text-slate-300 font-serif leading-none tracking-tight">{Math.floor(playerRealm.materials)}</div>
+          </div>
+          <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
+            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Zap size={8} className="text-blue-500" /> APs</span>
+              <span className="text-[10px] text-blue-400/80 font-bold">{playerRealm.actionPoints}</span>
+            </div>
+            <div className="text-lg font-black text-blue-400 font-serif leading-none tracking-tight">{playerRealm.actionPoints}/{playerRealm.maxActionPoints}</div>
+          </div>
+        </div>
+
+        {/* Action Controls: Zoom & OE */}
+        <div className="flex items-center justify-between mt-3 gap-2">
+           <div className="flex flex-col gap-0.5 min-w-[3.5rem]">
+              <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest leading-none">Mapa</span>
+              <div className="flex gap-1">
+                <button onClick={() => onZoomChange(Math.max(0.4, zoom - 0.2))} className="w-5 h-5 flex items-center justify-center bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold transition-all">-</button>
+                <button onClick={() => onZoomChange(1.0)} className="px-1.5 h-5 flex items-center justify-center bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-[9px] font-black min-w-[2.2rem]">{Math.round(zoom * 100)}%</button>
+                <button onClick={() => onZoomChange(Math.min(3.0, zoom + 0.2))} className="w-5 h-5 flex items-center justify-center bg-slate-900 hover:bg-slate-700 border border-slate-700 rounded text-xs font-bold transition-all">+</button>
+              </div>
+           </div>
+           
+           <div className="flex flex-col items-center gap-1 bg-slate-900/50 px-2 py-1 rounded border border-white/5 flex-1">
+              <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest leading-none">Tropas Reais</span>
+              <div className="flex items-center gap-1.5 font-serif font-black text-amber-100 text-xs">
+                 <Users size={10} className="text-amber-500/50" /> {totalTroops}
+              </div>
+           </div>
+
+           {playerRealm.overextension > 0 && (
+             <div className="flex flex-col items-end gap-0.5">
+                <span className="text-[7px] font-black text-slate-600 uppercase tracking-widest leading-none">Expansão</span>
+                <div className={`px-1.5 py-0.5 rounded text-[9px] font-black border ${playerRealm.overextension > 40 ? 'bg-red-900/30 text-red-400 border-red-500/30 animate-pulse' : 'bg-amber-900/20 text-amber-500 border-amber-500/20'}`}>
+                  {playerRealm.overextension}%
+                </div>
+             </div>
+           )}
+        </div>
+      </div>
+
+      {/* Main Nav (Tabs) */}
+      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700/50 shrink-0">
+        <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shadow-inner">
+          <button onClick={() => setActiveTab('province')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'province' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+            <MapIcon size={12} /> Reinos
+          </button>
+          <button onClick={() => setActiveTab('market')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'market' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+            <ShoppingCart size={12} /> Mercado
+          </button>
+          <button onClick={() => setActiveTab('diplomacy')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'diplomacy' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+            <Handshake size={12} /> Política
+          </button>
+        </div>
+      </div>
+
+      {/* Map View Modes Overlay (Compact) */}
+      <div className="px-4 py-1.5 bg-slate-900 border-b border-slate-800 shrink-0 overflow-x-auto custom-scrollbar no-scrollbar flex gap-1 items-center">
+        <span className="text-[8px] font-black text-slate-700 uppercase vertical-text tracking-tighter mr-1">Visão</span>
+        {[
+          { id: 'political', icon: <Globe2 size={12} />, color: 'blue', label: 'Pol' },
+          { id: 'economic', icon: <BarChart3 size={12} />, color: 'green', label: 'Eco' },
+          { id: 'military', icon: <Crosshair size={12} />, color: 'red', label: 'Mil' },
+          { id: 'diplomatic', icon: <Handshake size={12} />, color: 'purple', label: 'Dip' },
+          { id: 'resources', icon: <Gem size={12} />, color: 'amber', label: 'Res' },
+        ].map(mode => (
+          <button 
+            key={mode.id}
+            onClick={() => onViewModeChange(mode.id as ViewMode)}
+            className={`flex items-center gap-1.5 px-2 py-1 rounded border transition-all ${viewMode === mode.id ? `bg-${mode.color}-600/20 border-${mode.color}-500 text-${mode.color}-400 shadow-sm` : 'bg-slate-800 border-transparent text-slate-500 hover:bg-slate-700'}`}
+          >
+            {mode.icon} <span className="text-[9px] font-black uppercase">{mode.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Event Banner (Conditional) */}
       {gameState.currentEvent && (
-        <div className={`p-4 border-b ${
+        <div className={`p-3 border-b shrink-0 ${
           gameState.currentEvent.type === 'positive' ? 'bg-green-900/30 border-green-500/50' : 
           gameState.currentEvent.type === 'negative' ? 'bg-red-900/30 border-red-500/50' : 
-          'bg-slate-800 border-slate-600'
+          'bg-slate-800 border-slate-600 shadow-inner'
         }`}>
           <div className="flex items-center gap-2 mb-1">
-            {gameState.currentEvent.type === 'positive' ? <TrendingUp size={16} className="text-green-400" /> : 
-             gameState.currentEvent.type === 'negative' ? <AlertTriangle size={16} className="text-red-400" /> : 
-             <Info size={16} className="text-slate-400" />}
-            <span className={`text-xs font-bold uppercase tracking-widest ${
+            {gameState.currentEvent.type === 'positive' ? <TrendingUp size={14} className="text-green-400" /> : 
+             gameState.currentEvent.type === 'negative' ? <AlertTriangle size={14} className="text-red-400" /> : 
+             <Info size={14} className="text-slate-400" />}
+            <span className={`text-[10px] font-black uppercase tracking-widest ${
               gameState.currentEvent.type === 'positive' ? 'text-green-400' : 
               gameState.currentEvent.type === 'negative' ? 'text-red-400' : 
               'text-slate-400'
@@ -109,116 +243,11 @@ export const HUD: React.FC<HUDProps> = ({
               {gameState.currentEvent.name}
             </span>
           </div>
-          <p className="text-sm text-slate-300 leading-relaxed">
+          <p className="text-xs text-slate-300 leading-tight">
             {gameState.currentEvent.description}
           </p>
         </div>
       )}
-
-      {/* Top Bar Info */}
-      <div className="p-4 border-b border-slate-700 bg-slate-800/80 backdrop-blur">
-        <div className="flex justify-between items-start mb-2">
-          <h1 className="text-2xl font-serif font-bold text-amber-500 medieval-title drop-shadow-md">{playerRealm.name}</h1>
-          <div className="flex flex-col items-end">
-            <div className="flex items-center gap-1 text-xs font-bold text-blue-400">
-              <Zap size={14} /> {playerRealm.actionPoints}/{playerRealm.maxActionPoints} AP
-            </div>
-            {playerRealm.overextension > 0 && (
-              <div className={`text-[10px] font-bold uppercase ${playerRealm.overextension > 50 ? 'text-red-500' : 'text-amber-500'}`}>
-                OE: {playerRealm.overextension}%
-              </div>
-            )}
-          </div>
-        </div>
-        
-        <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-base medieval-text">
-          <div className="flex items-center gap-2">
-            <Coins size={20} className="text-yellow-400" />
-            <span title="Ouro" className="font-bold">{playerRealm.gold} <span className={`text-sm ${netGold >= 0 ? 'text-green-400' : 'text-red-400'}`}>({netGold >= 0 ? '+' : ''}{netGold})</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Wheat size={20} className="text-green-400" />
-            <span title="Comida" className="font-bold">{playerRealm.food} <span className={`text-sm ${netFood >= 0 ? 'text-green-400' : 'text-red-400'}`}>({netFood >= 0 ? '+' : ''}{netFood})</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Hammer size={20} className="text-slate-400" />
-            <span title="Materiais" className="font-bold">{playerRealm.materials}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Users size={20} className="text-blue-400" />
-            <span title="Total de Tropas" className="font-bold">{totalTroops}</span>
-          </div>
-        </div>
-
-        {/* View Mode Overlays */}
-        <div className="grid grid-cols-5 gap-1 mt-4">
-          <button 
-            onClick={() => onViewModeChange('political')}
-            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'political' ? 'bg-blue-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
-            title="Visão Política"
-          >
-            <Globe2 size={18} />
-            <span className="text-[10px] font-bold uppercase">Pol</span>
-          </button>
-          <button 
-            onClick={() => onViewModeChange('economic')}
-            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'economic' ? 'bg-green-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
-            title="Visão Econômica"
-          >
-            <BarChart3 size={18} />
-            <span className="text-[10px] font-bold uppercase">Eco</span>
-          </button>
-          <button 
-            onClick={() => onViewModeChange('military')}
-            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'military' ? 'bg-red-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
-            title="Visão Militar"
-          >
-            <Crosshair size={18} />
-            <span className="text-[10px] font-bold uppercase">Mil</span>
-          </button>
-          <button 
-            onClick={() => onViewModeChange('diplomatic')}
-            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'diplomatic' ? 'bg-purple-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
-            title="Visão Diplomática"
-          >
-            <Handshake size={18} />
-            <span className="text-[10px] font-bold uppercase">Dip</span>
-          </button>
-          <button 
-            onClick={() => onViewModeChange('resources')}
-            className={`p-1.5 rounded flex flex-col items-center gap-1 transition-all ${viewMode === 'resources' ? 'bg-amber-600 text-white' : 'bg-slate-900 text-slate-500 hover:text-slate-300'}`}
-            title="Visão de Recursos"
-          >
-            <Gem size={18} />
-            <span className="text-[10px] font-bold uppercase">Rec</span>
-          </button>
-        </div>
-        
-        {/* Tabs */}
-        <div className="flex mt-4 bg-slate-900 rounded-lg p-1 border border-slate-700">
-          <button 
-            id="tab-province"
-            onClick={() => setActiveTab('province')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'province' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <MapIcon size={16} /> Província
-          </button>
-          <button 
-            id="tab-market"
-            onClick={() => setActiveTab('market')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'market' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <ShoppingCart size={16} /> Mercado
-          </button>
-          <button 
-            id="tab-diplomacy"
-            onClick={() => setActiveTab('diplomacy')}
-            className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded text-sm font-bold transition-all ${activeTab === 'diplomacy' ? 'bg-amber-600 text-white shadow-lg scale-[1.02]' : 'text-slate-500 hover:text-slate-300'}`}
-          >
-            <Handshake size={16} /> Diplomacia
-          </button>
-        </div>
-      </div>
 
       {/* Smart Alerts */}
       {(() => {
@@ -256,11 +285,17 @@ export const HUD: React.FC<HUDProps> = ({
         if (alerts.length === 0) return null;
         
         return (
-          <div className="px-4 pt-2 space-y-1 max-h-24 overflow-y-auto">
-            {alerts.slice(0, 3).map((a, i) => (
-              <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg border text-[10px] font-bold ${a.color}`}>
-                {a.icon} {a.text}
-              </div>
+          <div className="px-4 pt-3 space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+            {alerts.map((a, i) => (
+              <motion.div 
+                key={i} 
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold shadow-sm ${a.color} animate-pulse-subtle`}
+              >
+                <div className="shrink-0">{a.icon}</div>
+                <span className="leading-tight">{a.text}</span>
+              </motion.div>
             ))}
           </div>
         );
@@ -628,22 +663,22 @@ export const HUD: React.FC<HUDProps> = ({
                       <div className="pt-2">
                         <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Construção ({ACTION_COSTS.build} AP)</span>
                         <div className="grid grid-cols-1 gap-1 mt-1">
-                          <button onClick={() => onAction('build_farm')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                            <span className="flex items-center gap-2"><Tractor size={12} className="text-green-500" /> Fazenda</span>
-                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.farms.gold}O, {BUILDING_STATS.farms.materials}M</span>
-                          </button>
-                          <button onClick={() => onAction('build_mine')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                            <span className="flex items-center gap-2"><Pickaxe size={12} className="text-yellow-500" /> Mina</span>
-                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.mines.gold}O, {BUILDING_STATS.mines.materials}M</span>
-                          </button>
-                          <button onClick={() => onAction('build_workshop')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                            <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
-                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.workshops.gold}O, {BUILDING_STATS.workshops.materials}M</span>
-                          </button>
-                          <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                            <span className="flex items-center gap-2"><Home size={12} className="text-blue-400" /> Tribunal</span>
-                            <span className="text-[10px] text-slate-400">{BUILDING_STATS.courts.gold}O, {BUILDING_STATS.courts.materials}M</span>
-                          </button>
+                           <button onClick={() => onAction('build_farms')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Wheat size={12} className="text-green-500" /> Fazenda</span>
+                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.farms.gold}O, {BUILDING_STATS.farms.materials}M</span>
+                           </button>
+                           <button onClick={() => onAction('build_mines')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Pickaxe size={12} className="text-yellow-500" /> Mina</span>
+                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.mines.gold}O, {BUILDING_STATS.mines.materials}M</span>
+                           </button>
+                           <button onClick={() => onAction('build_workshops')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
+                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.workshops.gold}O, {BUILDING_STATS.workshops.materials}M</span>
+                           </button>
+                           <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Home size={12} className="text-blue-400" /> Tribunal</span>
+                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.courts.gold}O, {BUILDING_STATS.courts.materials}M</span>
+                           </button>
                         </div>
                       </div>
                       

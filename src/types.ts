@@ -130,3 +130,19 @@ export interface SaveData {
 export type ActionType = 'idle' | 'moving' | 'attacking' | 'trading' | 'diplomacy' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact';
 
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources';
+
+export interface TurnSummaryData {
+  goldIncome: number;
+  goldMaintenance: number;
+  goldNet: number;
+  foodIncome: number;
+  foodMaintenance: number;
+  foodNet: number;
+  materialsIncome: number;
+  provincesGained: string[];
+  provincesLost: string[];
+  newWars: string[];
+  newTreaties: string[];
+  events: string[];
+  rebellionRisk: string[]; // Province names
+}

@@ -13,19 +13,19 @@ const STRATEGIC_RESOURCES: StrategicResource[] = ['none', 'iron', 'wood', 'horse
 
 export const UNIT_STATS = {
   infantry: { 
-    cost: { gold: 10, food: 5, materials: 2, pop: 10 }, 
-    maintenance: { gold: 1, food: 1 },
+    cost: { gold: 0, food: 3, materials: 1, pop: 10 }, 
+    maintenance: { gold: 0.1, food: 0.1 },
     attack: 1.0, defense: 1.5, speed: 1 
   },
   archers: { 
-    cost: { gold: 15, food: 5, materials: 8, pop: 10 }, 
-    maintenance: { gold: 1, food: 1 },
+    cost: { gold: 0, food: 3, materials: 5, pop: 10 }, 
+    maintenance: { gold: 0.1, food: 0.1 },
     attack: 1.2, defense: 1.2, speed: 1,
     requires: 'wood' as StrategicResource
   },
   cavalry: { 
-    cost: { gold: 30, food: 15, materials: 15, pop: 15 }, 
-    maintenance: { gold: 2, food: 1 },
+    cost: { gold: 0, food: 8, materials: 8, pop: 15 }, 
+    maintenance: { gold: 0.2, food: 0.1 },
     attack: 2.0, defense: 1.0, speed: 2,
     requires: 'horse' as StrategicResource
   }
@@ -40,18 +40,18 @@ export const ACTION_COSTS = {
 };
 
 export const BUILDING_STATS = {
-  farms: { gold: 80, materials: 40 },
-  mines: { gold: 150, materials: 60 },
-  workshops: { gold: 100, materials: 40 },
-  courts: { gold: 180, materials: 80 },
-  fortify: { gold: 75, materials: 30 }
+  farms: { gold: 25, materials: 15 },
+  mines: { gold: 40, materials: 20 },
+  workshops: { gold: 35, materials: 15 },
+  courts: { gold: 60, materials: 30 },
+  fortify: { gold: 20, materials: 10 }
 };
 
 // Production bonus per building level
 export const BUILDING_PRODUCTION = {
-  farms: 12,      // +12 food per farm
-  mines: 8,       // +8 gold per mine
-  workshops: 7,   // +7 materials per workshop
+  farms: 18,      // +18 food per farm
+  mines: 20,      // +20 gold per mine
+  workshops: 12,   // +12 materials per workshop
   courts: 10      // +10 loyalty stabilization
 };
 
@@ -97,9 +97,9 @@ export function generateInitialState(width: number, height: number, settings: Ga
         id: `realm_${i}`,
         name: REALM_NAMES[i],
         color: REALM_COLORS[i],
-        gold: 200,
-        food: 200,
-        materials: 100,
+        gold: 400,
+        food: 300,
+        materials: 150,
         isPlayer: i === 0,
         actionPoints: 10,
         maxActionPoints: 10,
@@ -308,65 +308,116 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
   return null;
 }
 
-export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: Terrain, defense: number): { attackerRemaining: Army, defenderRemaining: Army, won: boolean } {
-  const calculatePower = (army: Army, isAttacker: boolean) => {
-    let power = 0;
-    power += army.infantry * (isAttacker ? UNIT_STATS.infantry.attack : UNIT_STATS.infantry.defense);
-    power += army.archers * (isAttacker ? UNIT_STATS.archers.attack : UNIT_STATS.archers.defense);
-    power += army.cavalry * (isAttacker ? UNIT_STATS.cavalry.attack : UNIT_STATS.cavalry.defense);
-    return power;
-  };
+export interface BattleResult {
+  won: boolean;
+  attackerRemaining: Army;
+  defenderRemaining: Army;
+  attackerLosses: Army;
+  defenderLosses: Army;
+  attackerInitial: Army;
+  defenderInitial: Army;
+  terrain: Terrain;
+  defenseLevel: number;
+  rounds: number;
+}
 
-  let attackerPower = calculatePower(attackerArmy, true);
-  let defenderPower = calculatePower(defenderArmy, false);
+export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: Terrain, defense: number): BattleResult {
+  // Clone armies for simulation
+  const atk = { ...attackerArmy };
+  const def = { ...defenderArmy };
+  const atkInitial = { ...attackerArmy };
+  const defInitial = { ...defenderArmy };
 
-  // Terrain & Defense Bonuses
-  let terrainBonus = 1.0;
+  // Terrain modifiers
+  let terrainDefBonus = 1.0;
+  let cavAtkMod = 1.0;
+  let archerDefMod = 1.0;
+  
   if (terrain === 'forest') {
-    terrainBonus += 0.2;
-    // Archers get extra bonus in forest
-    defenderPower += defenderArmy.archers * 0.3;
-  }
-  if (terrain === 'mountain') {
-    terrainBonus += 0.5;
-    defenderPower += defenderArmy.archers * 0.5;
-  }
-  
-  // Cavalry penalty in mountains/forest
-  if (terrain !== 'plains') {
-    attackerPower -= attackerArmy.cavalry * 0.5;
+    terrainDefBonus = 1.2;
+    archerDefMod = 1.4;   // Archers excel defending in forest
+    cavAtkMod = 0.6;      // Cavalry hindered in forest
+  } else if (terrain === 'mountain') {
+    terrainDefBonus = 1.5;
+    archerDefMod = 1.6;   // High ground advantage for archers
+    cavAtkMod = 0.4;      // Cavalry terrible in mountains
   } else {
-    // Cavalry bonus in plains
-    attackerPower += attackerArmy.cavalry * 0.5;
+    cavAtkMod = 1.5;      // Cavalry shines in plains
   }
 
-  const defenseBonus = 1.0 + (defense * 0.15);
-  const totalDefenderPower = defenderPower * terrainBonus * defenseBonus;
-  
-  // Random variation (±15%)
-  const variation = () => 0.85 + Math.random() * 0.3;
-  const finalAttackerPower = attackerPower * variation();
-  const finalDefenderPower = totalDefenderPower * variation();
+  const fortBonus = 1.0 + (defense * 0.2); // Each fort level = 20% def bonus
 
-  if (finalAttackerPower > finalDefenderPower) {
-    // Attacker wins
-    const ratio = finalDefenderPower / finalAttackerPower;
-    const attackerRemaining: Army = {
-      infantry: Math.floor(attackerArmy.infantry * (1 - ratio * 0.8)),
-      archers: Math.floor(attackerArmy.archers * (1 - ratio * 0.6)),
-      cavalry: Math.floor(attackerArmy.cavalry * (1 - ratio * 0.7))
-    };
-    return { attackerRemaining, defenderRemaining: { infantry: 0, archers: 0, cavalry: 0 }, won: true };
-  } else {
-    // Defender wins
-    const ratio = finalAttackerPower / finalDefenderPower;
-    const defenderRemaining: Army = {
-      infantry: Math.floor(defenderArmy.infantry * (1 - ratio * 0.5)),
-      archers: Math.floor(defenderArmy.archers * (1 - ratio * 0.4)),
-      cavalry: Math.floor(defenderArmy.cavalry * (1 - ratio * 0.3))
-    };
-    return { attackerRemaining: { infantry: 0, archers: 0, cavalry: 0 }, defenderRemaining, won: false };
+  // Simulate combat in rounds (max 5)
+  let rounds = 0;
+  for (let r = 0; r < 5; r++) {
+    rounds++;
+    const atkTotal = atk.infantry + atk.archers + atk.cavalry;
+    const defTotal = def.infantry + def.archers + def.cavalry;
+    if (atkTotal <= 0 || defTotal <= 0) break;
+
+    // Calculate attack power with unit counters
+    // Cavalry > Archers, Archers > Infantry, Infantry > Cavalry
+    const atkPower = 
+      atk.infantry * 1.0 +
+      atk.archers * 1.3 +
+      atk.cavalry * 2.0 * cavAtkMod;
+
+    const defPower = (
+      def.infantry * 1.5 +
+      def.archers * 1.2 * archerDefMod +
+      def.cavalry * 1.0
+    ) * terrainDefBonus * fortBonus;
+
+    // Random variation per round (±10%)
+    const atkRoll = atkPower * (0.9 + Math.random() * 0.2);
+    const defRoll = defPower * (0.9 + Math.random() * 0.2);
+
+    // Damage ratio: stronger side deals proportionally more
+    const totalPower = atkRoll + defRoll;
+    const atkDmgRatio = defRoll / totalPower; // Damage attacker takes
+    const defDmgRatio = atkRoll / totalPower; // Damage defender takes
+
+    // Casualties per round (20-40% of losing side, 10-20% of winning)
+    const baseCasualtyRate = 0.25;
+    
+    // Attacker casualties (proportional to how strong defense is)
+    const atkCasualtyRate = baseCasualtyRate * atkDmgRatio * 2;
+    atk.infantry = Math.max(0, atk.infantry - Math.ceil(atk.infantry * atkCasualtyRate));
+    atk.archers = Math.max(0, atk.archers - Math.ceil(atk.archers * atkCasualtyRate * 0.8));
+    atk.cavalry = Math.max(0, atk.cavalry - Math.ceil(atk.cavalry * atkCasualtyRate));
+
+    // Defender casualties
+    const defCasualtyRate = baseCasualtyRate * defDmgRatio * 2;
+    def.infantry = Math.max(0, def.infantry - Math.ceil(def.infantry * defCasualtyRate));
+    def.archers = Math.max(0, def.archers - Math.ceil(def.archers * defCasualtyRate * 0.7));
+    def.cavalry = Math.max(0, def.cavalry - Math.ceil(def.cavalry * defCasualtyRate));
   }
+
+  const atkSurvivors = atk.infantry + atk.archers + atk.cavalry;
+  const defSurvivors = def.infantry + def.archers + def.cavalry;
+  
+  const won = atkSurvivors > defSurvivors;
+
+  return {
+    won,
+    attackerRemaining: atk,
+    defenderRemaining: def,
+    attackerLosses: {
+      infantry: atkInitial.infantry - atk.infantry,
+      archers: atkInitial.archers - atk.archers,
+      cavalry: atkInitial.cavalry - atk.cavalry,
+    },
+    defenderLosses: {
+      infantry: defInitial.infantry - def.infantry,
+      archers: defInitial.archers - def.archers,
+      cavalry: defInitial.cavalry - def.cavalry,
+    },
+    attackerInitial: atkInitial,
+    defenderInitial: defInitial,
+    terrain,
+    defenseLevel: defense,
+    rounds,
+  };
 }
 
 export function processAITurn(state: GameState): GameState {
@@ -487,6 +538,7 @@ function analyzeRealmStrategy(state: GameState, realm: Realm, ownedProvinces: Pr
       if (nProv && nProv.ownerId !== realm.id) {
         isBorder = true;
         const targetRealm = state.realms[nProv.ownerId];
+        if (!targetRealm) return; // Skip provinces with invalid owners
         
         const isEnemy = realm.wars.includes(targetRealm.id);
         const isAllied = realm.alliances.includes(targetRealm.id) || realm.pacts.includes(targetRealm.id);
@@ -621,14 +673,14 @@ function handleExpansionistAI(state: GameState, realm: Realm, provinces: Provinc
 
     if (targets.length > 0 && prov.troops > targets[0].troops * 1.2 && currentAp >= ACTION_COSTS.attack) {
       const targetRealmId = targets[0].ownerId;
-      if (!realm.wars.includes(targetRealmId)) {
+      if (!realm.wars.includes(targetRealmId) && state.realms[targetRealmId]) {
         realm.wars.push(targetRealmId);
         state.realms[targetRealmId].wars.push(realm.id);
         state.logs.push(`GUERRA: O reino expansionista de ${realm.name} declarou guerra a ${state.realms[targetRealmId].name}!`);
         if (realm.pacts.includes(targetRealmId)) {
            realm.pacts = realm.pacts.filter(id => id !== targetRealmId);
            state.realms[targetRealmId].pacts = state.realms[targetRealmId].pacts.filter(id => id !== realm.id);
-           state.realms[targetRealmId].memory[realm.id].betrayal += 50;
+           if (state.realms[targetRealmId].memory[realm.id]) state.realms[targetRealmId].memory[realm.id].betrayal += 50;
            realm.relations[targetRealmId] = -100;
            state.logs.push(`TRAIÇÃO: ${realm.name} quebrou covardemente o pacto de não agressão!`);
         }
@@ -758,7 +810,7 @@ function handleOpportunisticAI(state: GameState, realm: Realm, provinces: Provin
 
     if (targets.length > 0 && currentAp >= ACTION_COSTS.attack) {
       const targetRealmId = targets[0].ownerId;
-      if (!realm.wars.includes(targetRealmId)) {
+      if (!realm.wars.includes(targetRealmId) && state.realms[targetRealmId]) {
          realm.wars.push(targetRealmId);
          state.realms[targetRealmId].wars.push(realm.id);
          state.logs.push(`OPORTUNISMO: ${realm.name} atacou ${state.realms[targetRealmId].name} abruptamente aproveitando de sua fraqueza!`);
@@ -855,7 +907,8 @@ export function executeAttack(state: GameState, realm: Realm, attackerProv: Prov
 
   if (result.won) {
     const oldOwnerId = targetProv.ownerId;
-    const oldOwnerName = state.realms[oldOwnerId].name;
+    const oldOwner = state.realms[oldOwnerId];
+    const oldOwnerName = oldOwner?.name || 'Desconhecido';
     targetProv.ownerId = realm.id;
     targetProv.army = result.attackerRemaining;
     targetProv.troops = targetProv.army.infantry + targetProv.army.archers + targetProv.army.cavalry;
@@ -987,6 +1040,7 @@ export function processEndOfTurn(state: GameState): GameState {
   // Calculate income and maintenance for all realms
   (Object.values(newState.realms) as Realm[]).forEach(realm => {
     const ownedProvinces = (Object.values(newState.provinces) as Province[]).filter(p => p.ownerId === realm.id);
+    const distances = calculateAdminDistances(newState, realm.id);
     
     // Reset Action Points
     realm.actionPoints = realm.maxActionPoints;
@@ -1009,25 +1063,82 @@ export function processEndOfTurn(state: GameState): GameState {
       }
     });
 
-    // Production
+    // Production & Politics
     let goldIncome = 0;
     let foodIncome = 0;
     let materialIncome = 0;
+    let goldMaintenance = 0;
+    let foodMaintenance = 0;
 
     ownedProvinces.forEach(p => {
-      const efficiency = p.population / p.maxPopulation;
+      // 1. Update Loyalty
+      let loyaltyChange = 0;
+      if (p.loyalty > 55) loyaltyChange -= 1;
+      else if (p.loyalty < 45) loyaltyChange += 1;
+
+      const dist = distances[p.id] || 0;
+      loyaltyChange -= dist * 1.5;
+      loyaltyChange -= Math.floor(realm.overextension / 10);
+
+      if (p.id === realm.capitalId) loyaltyChange += 10;
+      loyaltyChange += p.buildings.courts * BUILDING_PRODUCTION.courts;
+      loyaltyChange += Math.floor(p.troops / 50);
+
+      if (p.recentlyConquered > 0) {
+        loyaltyChange -= 5;
+        p.recentlyConquered--;
+      }
+      if (realm.gold <= 0 || realm.food <= 0) loyaltyChange -= 10;
+
+      p.loyalty = Math.max(0, Math.min(100, p.loyalty + loyaltyChange));
+
+      // 2. Production
+      const loyaltyFactor = 0.5 + (p.loyalty / 200);
+      // Ensure even low-pop provinces produce at least 50% potential
+      const efficiency = (0.5 + (p.population / p.maxPopulation) * 0.5) * loyaltyFactor;
+      
       goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
       foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
       materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency;
 
-      if (p.strategicResource === 'iron') materialIncome += 5;
-      if (p.strategicResource === 'wood') materialIncome += 5;
-      if (p.strategicResource === 'horse') foodIncome += 5;
-      if (p.strategicResource === 'stone') materialIncome += 5;
+      // Strategic Resources
+      if (p.strategicResource === 'iron') materialIncome += 5 * efficiency;
+      if (p.strategicResource === 'wood') materialIncome += 5 * efficiency;
+      if (p.strategicResource === 'horse') foodIncome += 5 * efficiency;
+      if (p.strategicResource === 'stone') materialIncome += 5 * efficiency;
 
+      // Population Growth
       if (p.population < p.maxPopulation) {
-        const growth = Math.floor(p.population * 0.07);
+        const growth = Math.floor(p.population * 0.07 * efficiency);
         p.population = Math.min(p.maxPopulation, p.population + growth);
+      }
+
+      // 3. Maintenance
+      goldMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.gold;
+      goldMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.gold;
+      goldMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold;
+
+      foodMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.food;
+      foodMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.food;
+      foodMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.food;
+
+      // 4. Rebellion check
+      if (p.loyalty < 25 && Math.random() < 0.1) {
+        const rebelPower = Math.floor(p.population * 0.05);
+        if (rebelPower > p.troops) {
+           p.army = { infantry: 0, archers: 0, cavalry: 0 };
+           p.troops = 0;
+           p.population = Math.floor(p.population * 0.7);
+           p.loyalty = 40;
+           p.buildings.farms = Math.max(0, p.buildings.farms - 1);
+           p.recentlyConquered = 5;
+           newState.logs.push(`REBELIÃO: O povo de ${p.name} expulsou suas tropas!`);
+        } else {
+           p.population -= Math.floor(p.population * 0.05);
+           p.army.infantry = Math.max(0, p.army.infantry - Math.floor(p.army.infantry * 0.2));
+           p.troops = p.army.infantry + p.army.archers + p.army.cavalry;
+           newState.logs.push(`MOTIM: Uma revolta em ${p.name} foi reprimida.`);
+        }
       }
     });
     
@@ -1044,8 +1155,6 @@ export function processEndOfTurn(state: GameState): GameState {
     }
 
     const oePenalty = 1 - (realm.overextension / 200);
-    
-    // Difficulty scaling
     const difficulty = newState.settings.aiDifficulty;
     let difficultyMultiplier = 1;
     if (!realm.isPlayer) {
@@ -1064,29 +1173,16 @@ export function processEndOfTurn(state: GameState): GameState {
       return sum + Math.floor((p1.wealth + p2.wealth) * 0.5);
     }, 0);
 
-    let goldMaintenance = 0;
-    let foodMaintenance = 0;
-
-    ownedProvinces.forEach(p => {
-      goldMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.gold;
-      goldMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.gold;
-      goldMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold;
-
-      foodMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.food;
-      foodMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.food;
-      foodMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.food;
-    });
-    
     realm.gold += Math.floor(goldIncome + tradeIncome - goldMaintenance);
     realm.food += Math.floor(foodIncome - foodMaintenance);
     realm.materials += Math.floor(materialIncome);
 
     // Handle Deficits
     if (realm.gold < 0) {
-      handleResourceDeficit(realm, ownedProvinces, -realm.gold * 10, 'gold', newState);
+      handleResourceDeficit(realm, ownedProvinces, -Math.floor(realm.gold * 10), 'gold', newState);
     }
     if (realm.food < 0) {
-      handleResourceDeficit(realm, ownedProvinces, -realm.food * 5, 'food', newState);
+      handleResourceDeficit(realm, ownedProvinces, -Math.floor(realm.food * 5), 'food', newState);
     }
 
     // Relationship Changes
@@ -1110,70 +1206,6 @@ export function processEndOfTurn(state: GameState): GameState {
       }
 
       realm.relations[otherId] = Math.max(-100, Math.min(100, realm.relations[otherId]));
-    });
-
-    // --- INTERNAL POLITICS UPDATE ---
-    const distances = calculateAdminDistances(newState, realm.id);
-    
-    ownedProvinces.forEach(p => {
-      // 1. Update Loyalty
-      let loyaltyChange = 0;
-      
-      // Baseliner (drifts toward 50)
-      if (p.loyalty > 55) loyaltyChange -= 1;
-      else if (p.loyalty < 45) loyaltyChange += 1;
-
-      // Distância penalty
-      const dist = distances[p.id] || 0;
-      loyaltyChange -= dist * 2;
-
-      // OE penalty
-      loyaltyChange -= Math.floor(realm.overextension / 10);
-
-      // Positive factors
-      if (p.id === realm.capitalId) loyaltyChange += 10;
-      loyaltyChange += p.buildings.courts * BUILDING_PRODUCTION.courts;
-      loyaltyChange += Math.floor(p.troops / 50); // Military presence
-
-      // Negative factors
-      if (p.recentlyConquered > 0) {
-        loyaltyChange -= 5;
-        p.recentlyConquered--;
-      }
-      if (realm.gold <= 0 || realm.food <= 0) loyaltyChange -= 10;
-
-      p.loyalty = Math.max(0, Math.min(100, p.loyalty + loyaltyChange));
-
-      // 2. Production scaling by loyalty
-      const loyaltyFactor = 0.5 + (p.loyalty / 200); // 100 loyalty = 100%, 0 loyalty = 50%
-      const efficiency = (p.population / p.maxPopulation) * loyaltyFactor;
-      
-      const pGold = (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
-      const pFood = (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
-      const pMats = (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency;
-
-      goldIncome += pGold;
-      foodIncome += pFood;
-      materialIncome += pMats;
-
-      // 3. Rebellion check
-      if (p.loyalty < 25 && Math.random() < 0.1) {
-        // Organic Rebellion!
-        const rebelPower = Math.floor(p.population * 0.05);
-        if (rebelPower > p.troops) {
-           // Success! Breaking away
-           p.ownerId = 'rebel'; // Temporary label or simply go neutral
-           p.army = { infantry: Math.floor(rebelPower * 0.8), archers: Math.floor(rebelPower * 0.1), cavalry: 0 };
-           p.troops = p.army.infantry + p.army.archers + p.army.cavalry;
-           p.loyalty = 60; // Rebels are happy with independence
-           newState.logs.push(`REBELIÃO: O povo de ${p.name} derrubou o governo de ${realm.name} e declarou independência!`);
-        } else {
-           // Failed riot
-           p.population -= Math.floor(p.population * 0.05);
-           p.troops -= Math.floor(p.troops * 0.2);
-           newState.logs.push(`MOTIM: Uma revolta em ${p.name} foi reprimida com sangue pelas tropas de ${realm.name}.`);
-        }
-      }
     });
   });
 
