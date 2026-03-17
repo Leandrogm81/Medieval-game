@@ -10,6 +10,7 @@ interface SaveLoadModalProps {
   onSave: (name: string) => void;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
+  canSave?: boolean;
 }
 
 export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
@@ -18,7 +19,8 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
   saves,
   onSave,
   onLoad,
-  onDelete
+  onDelete,
+  canSave = true
 }) => {
   const [saveName, setSaveName] = React.useState('');
 
@@ -41,30 +43,32 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
           </div>
 
           <div className="p-6 max-h-[60vh] overflow-y-auto custom-scrollbar">
-            <div className="mb-8">
-              <label className="block text-[#f5f2ed]/60 text-sm mb-2 uppercase tracking-wider font-bold">Novo Registro</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={saveName}
-                  onChange={(e) => setSaveName(e.target.value)}
-                  placeholder="Nome do registro..."
-                  className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-[#d4af37]"
-                />
-                <button
-                  onClick={() => {
-                    if (saveName.trim()) {
-                      onSave(saveName);
-                      setSaveName('');
-                    }
-                  }}
-                  className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"
-                >
-                  <Save size={18} />
-                  Salvar
-                </button>
+            {canSave && (
+              <div className="mb-8">
+                <label className="block text-[#f5f2ed]/60 text-sm mb-2 uppercase tracking-wider font-bold">Novo Registro</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder="Nome do registro..."
+                    className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-[#d4af37]"
+                  />
+                  <button
+                    onClick={() => {
+                      if (saveName.trim()) {
+                        onSave(saveName);
+                        setSaveName('');
+                      }
+                    }}
+                    className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"
+                  >
+                    <Save size={18} />
+                    Salvar
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-3">
               <label className="block text-[#f5f2ed]/60 text-sm mb-2 uppercase tracking-wider font-bold">Registros Existentes</label>

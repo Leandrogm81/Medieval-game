@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState, Province, Realm, ActionType, UnitType, ViewMode } from '../types';
-import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save } from 'lucide-react';
+import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown } from 'lucide-react';
 import { UNIT_STATS, ACTION_COSTS } from '../gameLogic';
 
 interface HUDProps {
@@ -10,9 +10,10 @@ interface HUDProps {
   actionSourceId: string | null;
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
-  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage', unitType?: UnitType, amount?: number) => void;
+  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farm' | 'build_mine' | 'build_workshop' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => void;
   onEndTurn: () => void;
   onSave: () => void;
+  onMenu: () => void;
   onCancelAction: () => void;
 }
 
@@ -26,6 +27,7 @@ export const HUD: React.FC<HUDProps> = ({
   onAction,
   onEndTurn,
   onSave,
+  onMenu,
   onCancelAction
 }) => {
   const [recruitAmount, setRecruitAmount] = useState(10);
@@ -361,8 +363,20 @@ export const HUD: React.FC<HUDProps> = ({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-400">Dono</span>
-                <span className="font-bold" style={{ color: gameState.realms[selectedProv.ownerId].color }}>
+                <span className="font-bold flex items-center gap-2" style={{ color: gameState.realms[selectedProv.ownerId].color }}>
                   {gameState.realms[selectedProv.ownerId].name}
+                  {gameState.realms[selectedProv.ownerId].capitalId === selectedProv.id && (
+                    <span className="flex items-center gap-1 text-[10px] text-amber-500 font-bold uppercase">
+                       <Crown size={12} /> Sede
+                    </span>
+                  )}
+                </span>
+              </div>
+
+              <div className="flex justify-between items-center">
+                <span className="text-slate-400 flex items-center gap-1"><Home size={14} /> Lealdade</span>
+                <span className={`font-bold ${selectedProv.loyalty > 70 ? 'text-green-400' : selectedProv.loyalty > 40 ? 'text-amber-400' : 'text-red-400'}`}>
+                  {selectedProv.loyalty}%
                 </span>
               </div>
 
@@ -418,6 +432,10 @@ export const HUD: React.FC<HUDProps> = ({
                     <span className="text-xs block">Oficinas</span>
                     <span className="font-bold text-base">{selectedProv.buildings.workshops}</span>
                   </div>
+                  <div className="bg-slate-800 p-2 rounded text-center col-span-3 mt-1">
+                    <Home size={18} className="mx-auto text-blue-400 mb-1 inline" />
+                    <span className="text-xs ml-2">Tribunais: {selectedProv.buildings.courts || 0}</span>
+                  </div>
                 </div>
               </div>
               
@@ -433,6 +451,15 @@ export const HUD: React.FC<HUDProps> = ({
                   ))}
                 </div>
               </div>
+
+              {selectedProv.ownerId === playerRealm.id && (
+                 <div className="flex justify-between items-center">
+                   <span className="text-slate-400 text-xs">Distância da Capital</span>
+                   <span className="text-slate-200 font-bold text-xs">
+                     {selectedProv.id === playerRealm.capitalId ? 'Sede' : `${(Object.values(gameState.provinces) as Province[]).filter(p => p.ownerId === playerRealm.id).length > 0 ? 'Conectada' : 'Isolada'}`}
+                   </span>
+                 </div>
+              )}
               
               <div className="flex justify-between items-center">
                 <span className="text-slate-400 flex items-center gap-1 text-xs capitalize">
@@ -449,7 +476,9 @@ export const HUD: React.FC<HUDProps> = ({
               {actionState !== 'idle' ? (
                 <div className="bg-slate-800 p-3 rounded-lg border border-amber-500/50">
                   <p className="text-sm text-amber-400 mb-2 font-medium">
-                    {actionState === 'moving' ? 'Selecione a província alvo para mover...' : 'Selecione a província adjacente para negociar...'}
+                    {actionState === 'moving' ? 'Selecione a província alvo para mover...' : 
+                     actionState === 'attacking' ? 'Selecione a província inimiga alvo para atacar...' : 
+                     'Selecione a província adjacente para negociar...'}
                   </p>
                   <button 
                     onClick={onCancelAction}
@@ -565,6 +594,10 @@ export const HUD: React.FC<HUDProps> = ({
                             <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
                             <span className="text-[10px] text-slate-400">120O, 60M</span>
                           </button>
+                          <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
+                            <span className="flex items-center gap-2"><Home size={12} className="text-blue-400" /> Tribunal</span>
+                            <span className="text-[10px] text-slate-400">200O, 100M</span>
+                          </button>
                         </div>
                       </div>
                       
@@ -573,6 +606,11 @@ export const HUD: React.FC<HUDProps> = ({
                           <button onClick={() => onAction('move')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
                             <ArrowRight size={14} /> Mover ({ACTION_COSTS.move} AP)
                           </button>
+                          <button onClick={() => onAction('attack')} className="flex items-center justify-center gap-2 py-2 bg-red-700 hover:bg-red-600 rounded font-medium transition-colors text-xs">
+                            <Swords size={14} /> Atacar ({ACTION_COSTS.attack} AP)
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-1 mt-2">
                           <button onClick={() => onAction('fortify')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
                             <Shield size={14} /> Fortificar ({ACTION_COSTS.build} AP)
                           </button>
@@ -581,54 +619,73 @@ export const HUD: React.FC<HUDProps> = ({
                     </div>
                   ) : (
                     <>
-                      <button 
-                        onClick={() => onAction('attack')}
-                        className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-500 rounded font-medium transition-colors text-sm"
-                      >
-                        <Swords size={16} /> Atacar ({ACTION_COSTS.attack} AP)
-                      </button>
-                      
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button 
-                          onClick={() => onAction('send_gift')}
-                          className="flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-xs"
-                        >
-                          <Handshake size={14} /> Presente
-                        </button>
-                        <button 
-                          onClick={() => onAction('propose_pact')}
-                          className="flex items-center justify-center gap-2 py-2 bg-blue-600 hover:bg-blue-500 rounded font-medium transition-colors text-xs"
-                        >
-                          <Shield size={14} /> Pacto
-                        </button>
-                        <button 
-                          onClick={() => onAction('propose_alliance')}
-                          className="flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium transition-colors text-xs"
-                        >
-                          <Zap size={14} /> Aliança
-                        </button>
-                        <button 
-                          onClick={() => onAction('trade_route')}
-                          className="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-medium transition-colors text-xs"
-                        >
-                          <TrendingUp size={14} /> Rota Com.
-                        </button>
-                      </div>
+                      {playerRealm.wars.includes(selectedProv.ownerId) ? (
+                        <>
+                          <div className="p-2 mb-2 bg-red-900/40 border border-red-500/50 rounded-lg text-center">
+                            <span className="text-red-400 font-bold text-xs uppercase tracking-wider">Em Guerra</span>
+                          </div>
+                          <button 
+                            onClick={() => onAction('offer_peace')}
+                            className="w-full flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-sm mb-2"
+                          >
+                            <Handshake size={16} /> Oferecer Paz ({ACTION_COSTS.diplomacy} AP)
+                          </button>
+                          <p className="text-xs text-slate-400 text-center px-2 mt-2">
+                            Ataques devem ser iniciados a partir de uma província sua. Selecione sua província primeiro.
+                          </p>
+                        </>
+                      ) : (
+                        <>
+                          <button 
+                            onClick={() => onAction('declare_war')}
+                            className="w-full flex items-center justify-center gap-2 py-2 bg-red-600 hover:bg-red-500 rounded font-medium transition-colors text-sm mb-2 text-white"
+                          >
+                            <Swords size={16} /> Declarar Guerra ({ACTION_COSTS.diplomacy} AP)
+                          </button>
+                          
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <button 
+                              onClick={() => onAction('send_gift')}
+                              className="flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-xs"
+                            >
+                              <Handshake size={14} /> Presente
+                            </button>
+                            <button 
+                              onClick={playerRealm.pacts.includes(selectedProv.ownerId) ? () => onAction('break_pact') : () => onAction('propose_pact')}
+                              className={`flex items-center justify-center gap-2 py-2 rounded font-medium transition-colors text-xs ${playerRealm.pacts.includes(selectedProv.ownerId) ? 'bg-orange-700 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+                            >
+                              <Shield size={14} /> {playerRealm.pacts.includes(selectedProv.ownerId) ? 'Quebrar Pacto' : 'Pacto'}
+                            </button>
+                            <button 
+                              onClick={() => onAction('propose_alliance')}
+                              className="flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium transition-colors text-xs"
+                            >
+                              <Zap size={14} /> Aliança
+                            </button>
+                            <button 
+                              onClick={() => onAction('trade_route')}
+                              className="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-medium transition-colors text-xs"
+                            >
+                              <TrendingUp size={14} /> Rota Com.
+                            </button>
+                          </div>
 
-                      <div className="grid grid-cols-2 gap-2 mt-2">
-                        <button 
-                          onClick={() => onAction('demand_tribute')}
-                          className="flex items-center justify-center gap-2 py-2 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors text-xs"
-                        >
-                          <Coins size={14} /> Tributo
-                        </button>
-                        <button 
-                          onClick={() => onAction('demand_vassalage')}
-                          className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs"
-                        >
-                          <Gem size={14} /> Vassalagem
-                        </button>
-                      </div>
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <button 
+                              onClick={() => onAction('demand_tribute')}
+                              className="flex items-center justify-center gap-2 py-2 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors text-xs"
+                            >
+                              <Coins size={14} /> Tributo
+                            </button>
+                            <button 
+                              onClick={() => onAction('demand_vassalage')}
+                              className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs"
+                            >
+                              <Gem size={14} /> Vassalagem
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </>
                   )}
                 </>
@@ -645,6 +702,13 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* End Turn Button */}
       <div className="p-4 border-t border-slate-700 bg-slate-800 flex gap-2">
+        <button 
+          onClick={onMenu}
+          className="p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center"
+          title="Menu Principal"
+        >
+          <Home size={18} />
+        </button>
         <button 
           onClick={onSave}
           className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"

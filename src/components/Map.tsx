@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { GameState, Province, Realm, ActionType, VisualEffect, ViewMode } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { Swords, Flag, TrendingUp, Wheat, Pickaxe, Hammer, Users, Activity, Mountain, TreePine, Shield, Coins, Gem, Handshake } from 'lucide-react';
+import { Swords, Flag, TrendingUp, Wheat, Pickaxe, Hammer, Users, Activity, Mountain, TreePine, Shield, Coins, Gem, Handshake, Crown } from 'lucide-react';
 
 interface MapProps {
   gameState: GameState;
@@ -246,6 +246,16 @@ export const Map: React.FC<MapProps> = ({
                   >
                     {prov.name}
                   </text>
+                  {owner && owner.capitalId === prov.id && (
+                    <foreignObject
+                      x={prov.center[0] - 8}
+                      y={prov.center[1] - 52}
+                      width="16"
+                      height="16"
+                    >
+                      <Crown size={14} className="text-amber-600 drop-shadow-sm" />
+                    </foreignObject>
+                  )}
                 </g>
               )}
               
@@ -265,14 +275,18 @@ export const Map: React.FC<MapProps> = ({
           );
         })}
         
-        {/* Movement Arrows */}
-        {actionState === 'moving' && actionSourceId && (
+        {/* Movement and Attack Arrows */}
+        {(actionState === 'moving' || actionState === 'attacking') && actionSourceId && (
           <g pointerEvents="none">
             {gameState.provinces[actionSourceId].neighbors.map(nId => {
               const target = gameState.provinces[nId];
-              if (target.ownerId !== gameState.playerRealmId) return null;
+              
+              if (actionState === 'moving' && target.ownerId !== gameState.playerRealmId) return null;
+              if (actionState === 'attacking' && target.ownerId === gameState.playerRealmId) return null;
               
               const source = gameState.provinces[actionSourceId];
+              const arrowColor = actionState === 'attacking' ? '#ef4444' : '#3b82f6';
+              
               return (
                 <motion.line
                   key={`arrow-${nId}`}
@@ -280,19 +294,22 @@ export const Map: React.FC<MapProps> = ({
                   y1={source.center[1]}
                   x2={target.center[0]}
                   y2={target.center[1]}
-                  stroke="#3b82f6"
+                  stroke={arrowColor}
                   strokeWidth="4"
                   strokeDasharray="8 4"
                   initial={{ strokeDashoffset: 0 }}
                   animate={{ strokeDashoffset: -12 }}
                   transition={{ repeat: Infinity, duration: 0.5, ease: "linear" }}
-                  markerEnd="url(#arrowhead)"
+                  markerEnd={actionState === 'attacking' ? "url(#arrowhead_attack)" : "url(#arrowhead_move)"}
                 />
               );
             })}
             <defs>
-              <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+              <marker id="arrowhead_move" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
                 <polygon points="0 0, 10 3.5, 0 7" fill="#3b82f6" />
+              </marker>
+              <marker id="arrowhead_attack" markerWidth="10" markerHeight="7" refX="0" refY="3.5" orient="auto">
+                <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
               </marker>
             </defs>
           </g>

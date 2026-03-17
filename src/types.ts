@@ -16,6 +16,8 @@ export interface DiplomaticMemory {
   help: number; // 0-100
   aggression: number; // 0-100
   lastWarTurn: number;
+  warExhaustion: number; // 0-100, measures fatigue from losses and duration of wars
+  truces: Record<string, number>; // Maps realm ID to turn when truce expires
 }
 
 export interface Realm {
@@ -40,6 +42,7 @@ export interface Realm {
   vassalOf?: string; // Overlord ID
   vassals: string[]; // Vassal IDs
   isCoalitionMember?: string; // Target ID
+  capitalId?: string; // ID of the capital province
 }
 
 export interface Province {
@@ -63,7 +66,11 @@ export interface Province {
     farms: number;
     mines: number;
     workshops: number;
+    courts: number; // Administrative buildings
   };
+  siegeDamage: number; // Damage to defense from sieges
+  loyalty: number; // 0-100, local stability
+  recentlyConquered: number; // Number of turns remaining with conquest penalty
 }
 
 export interface GameEvent {
@@ -120,6 +127,6 @@ export interface SaveData {
   state: GameState;
 }
 
-export type ActionType = 'idle' | 'moving' | 'attacking' | 'trading' | 'diplomacy' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage';
+export type ActionType = 'idle' | 'moving' | 'attacking' | 'trading' | 'diplomacy' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact';
 
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources';

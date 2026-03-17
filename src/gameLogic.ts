@@ -39,6 +39,14 @@ export const ACTION_COSTS = {
   diplomacy: 2
 };
 
+export const BUILDING_STATS = {
+  farms: { gold: 100, materials: 50 },
+  mines: { gold: 150, materials: 75 },
+  workshops: { gold: 120, materials: 60 },
+  courts: { gold: 200, materials: 100 },
+  fortify: { gold: 75 }
+};
+
 const PERSONALITIES: PersonalityType[] = ['expansionist', 'defensive', 'diplomatic', 'opportunistic', 'commercial'];
 const OBJECTIVES: StrategicObjective[] = ['regional_dominance', 'destroy_rival', 'wealth', 'resource_control', 'defensive_block'];
 
@@ -109,7 +117,9 @@ export function generateInitialState(width: number, height: number, settings: Ga
             betrayal: 0,
             help: 0,
             aggression: 0,
-            lastWarTurn: -1
+            lastWarTurn: -1,
+            warExhaustion: 0,
+            truces: {}
           };
         }
       }
@@ -165,17 +175,35 @@ export function generateInitialState(width: number, height: number, settings: Ga
         buildings: {
           farms: 0,
           mines: 0,
-          workshops: 0
-        }
+          workshops: 0,
+          courts: 0
+        },
+        siegeDamage: 0,
+        loyalty: 100,
+        recentlyConquered: 0
       };
     }
+
+    // Assign Capitals
+    Object.values(realms).forEach(realm => {
+      const owned = Object.values(provinces).filter(p => p.ownerId === realm.id);
+      if (owned.length > 0) {
+        realm.capitalId = owned[0].id;
+        provinces[realm.capitalId].loyalty = 100;
+        provinces[realm.capitalId].buildings.courts = 1; // Start with some admin in capital
+      }
+    });
 
     const initialState: GameState = {
       turn: 1,
       realms,
       provinces,
       playerRealmId: 'realm_0',
-      logs: ["Bem-vindo ao Medieval Realms!", "Sua jornada rumo à glória começa agora."],
+      logs: [
+        "Bem-vindo ao Medieval Realms!", 
+        `Sua capital foi estabelecida em ${provinces[realms['realm_0'].capitalId!].name}.`,
+        "Sua jornada rumo à glória começa agora."
+      ],
       currentEvent: null,
       visualEffects: [],
       coalitions: [],
@@ -361,22 +389,53 @@ export function processAITurn(state: GameState): GameState {
     const totalMilitary = ownedProvinces.reduce((sum, p) => sum + p.troops, 0);
     const avgMilitaryPerProvince = totalMilitary / ownedProvinces.length;
     
+    // Evaluate Medium-Term Strategy
+    const assessment = analyzeRealmStrategy(newState, realm, ownedProvinces);
+    
+    // Periodically log strategic focus
+    if (Math.random() < 0.05 && ownedProvinces.length > 0) {
+       switch (realm.objective) {
+         case 'resource_control':
+           newState.logs.push(`RUMORES: A coroa de ${realm.name} prioriza dominar ricas províncias produtoras de minérios, madeira ou cavalos para encorpar sua reserva de Guerra.`);
+           break;
+         case 'regional_dominance':
+           newState.logs.push(`TENSÃO: O reino agressivo de ${realm.name} visa se mostrar soberano no território local, e não tolerará vizinhos fracos à beira do seu muro.`);
+           break;
+         case 'destroy_rival':
+           if (assessment.primaryTargetRealm) {
+              const rival = newState.realms[assessment.primaryTargetRealm];
+              newState.logs.push(`INTRIGAS: Espiões confirmam o inevitável, um plano de subjugar seu principal rival militar, ${rival?.name}, agora rege as leis de ${realm.name}.`);
+           }
+           break;
+         case 'wealth':
+           newState.logs.push(`CARTAS DE CORTESÃOS: Em ${realm.name}, a busca engenhosa por moedas e sólidas rotas tem moldado ministros para evitar grandes atritos e atrair a riqueza.`);
+           break;
+         case 'defensive_block':
+           newState.logs.push(`ESTRATÉGIA: ${realm.name} adota severa doutrina de escudo militar, cimentando baluartes onde a fronteira é ameaçada para firmar grandes redes da defesa conjunta.`);
+           break;
+       }
+    }
+
+    if (Math.random() < 0.03 && assessment.safeInternal.length > 0 && assessment.threatenedBorders.length > 0) {
+       newState.logs.push(`MOVIMENTO TÁTICO: Carroças de suprimento e exércitos em repouso de ${realm.name} estão massivamente se reposicionando para as fronteiras de atrito.`);
+    }
+    
     // 2. Personality-based Decision Making
     switch (realm.personality) {
       case 'expansionist':
-        handleExpansionistAI(newState, realm, ownedProvinces, availableAPs);
+        handleExpansionistAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
       case 'defensive':
-        handleDefensiveAI(newState, realm, ownedProvinces, availableAPs);
+        handleDefensiveAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
       case 'diplomatic':
-        handleDiplomaticAI(newState, realm, ownedProvinces, availableAPs);
+        handleDiplomaticAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
       case 'opportunistic':
-        handleOpportunisticAI(newState, realm, ownedProvinces, availableAPs);
+        handleOpportunisticAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
       case 'commercial':
-        handleCommercialAI(newState, realm, ownedProvinces, availableAPs);
+        handleCommercialAI(newState, realm, ownedProvinces, availableAPs, assessment);
         break;
     }
   });
@@ -384,49 +443,197 @@ export function processAITurn(state: GameState): GameState {
   return newState;
 }
 
+export interface StrategicAssessment {
+  threatenedBorders: Province[];
+  offensiveTargets: Province[];
+  safeInternal: Province[];
+  primaryTargetRealm: string | null;
+}
+
+function analyzeRealmStrategy(state: GameState, realm: Realm, ownedProvinces: Province[]): StrategicAssessment {
+  const assessment: StrategicAssessment = {
+    threatenedBorders: [],
+    offensiveTargets: [],
+    safeInternal: [],
+    primaryTargetRealm: null
+  };
+
+  if (ownedProvinces.length === 0) return assessment;
+
+  const realmTroops: Record<string, number> = {};
+  Object.values(state.realms).forEach(r => {
+     realmTroops[r.id] = Object.values(state.provinces).filter(p => p.ownerId === r.id).reduce((sum, p) => sum + p.troops, 0);
+  });
+  const myTroops = realmTroops[realm.id] || 0;
+
+  ownedProvinces.forEach(prov => {
+    let isBorder = false;
+    let isThreatened = false;
+    let isOffensiveFront = false;
+
+    prov.neighbors.forEach(nId => {
+      const nProv = state.provinces[nId];
+      if (nProv && nProv.ownerId !== realm.id) {
+        isBorder = true;
+        const targetRealm = state.realms[nProv.ownerId];
+        
+        const isEnemy = realm.wars.includes(targetRealm.id);
+        const isAllied = realm.alliances.includes(targetRealm.id) || realm.pacts.includes(targetRealm.id);
+
+        if (isEnemy) {
+          isThreatened = true;
+          isOffensiveFront = true;
+        } else if (!isAllied) {
+          if (realmTroops[targetRealm.id] > myTroops * 1.5) {
+            isThreatened = true;
+          }
+
+          if (realm.objective === 'resource_control' && nProv.strategicResource !== 'none') {
+            isOffensiveFront = true;
+          } else if (realm.objective === 'regional_dominance' && realmTroops[targetRealm.id] < myTroops * 0.8) {
+            isOffensiveFront = true;
+          } else if (realm.objective === 'destroy_rival') {
+            if (!assessment.primaryTargetRealm || realmTroops[assessment.primaryTargetRealm] < realmTroops[targetRealm.id]) {
+               assessment.primaryTargetRealm = targetRealm.id;
+            }
+            if (targetRealm.id === assessment.primaryTargetRealm) {
+               isOffensiveFront = true;
+            }
+          }
+        }
+      }
+    });
+
+    if (!isBorder) {
+      if (!assessment.safeInternal.includes(prov)) assessment.safeInternal.push(prov);
+    } else {
+      if (isThreatened && !assessment.threatenedBorders.includes(prov)) assessment.threatenedBorders.push(prov);
+      if (isOffensiveFront && !assessment.offensiveTargets.includes(prov)) assessment.offensiveTargets.push(prov);
+    }
+  });
+
+  return assessment;
+}
+
+export function executeMove(sourceProv: Province, targetProv: Province) {
+  const moveInf = Math.floor(sourceProv.army.infantry / 2);
+  const moveArc = Math.floor(sourceProv.army.archers / 2);
+  const moveCav = Math.floor(sourceProv.army.cavalry / 2);
+
+  sourceProv.army.infantry -= moveInf;
+  sourceProv.army.archers -= moveArc;
+  sourceProv.army.cavalry -= moveCav;
+  sourceProv.troops = sourceProv.army.infantry + sourceProv.army.archers + sourceProv.army.cavalry;
+
+  targetProv.army.infantry += moveInf;
+  targetProv.army.archers += moveArc;
+  targetProv.army.cavalry += moveCav;
+  targetProv.troops = targetProv.army.infantry + targetProv.army.archers + targetProv.army.cavalry;
+}
+
 function processVassalTurn(state: GameState, realm: Realm) {
-  // Vassals focus on defense and providing tribute (handled in end turn)
   const ownedProvinces = Object.values(state.provinces).filter(p => p.ownerId === realm.id);
   let availableGold = realm.gold;
   let availableAPs = realm.actionPoints;
 
-  ownedProvinces.forEach(prov => {
-    if (availableAPs >= ACTION_COSTS.recruit && availableGold >= 50) {
-      // Simple recruitment for defense
-      const amount = Math.min(Math.floor(availableGold / UNIT_STATS.infantry.cost.gold), 5);
-      if (amount > 0) {
-        prov.army.infantry += amount;
-        prov.troops += amount;
-        realm.gold -= amount * UNIT_STATS.infantry.cost.gold;
-        availableAPs -= ACTION_COSTS.recruit;
-      }
+  // Independence check
+  if (realm.vassalOf) {
+    const suzerain = state.realms[realm.vassalOf];
+    if (suzerain) {
+       const myTroops = ownedProvinces.reduce((sum, p) => sum + p.troops, 0);
+       const suzerainTroops = Object.values(state.provinces).filter(p => p.ownerId === suzerain.id).reduce((sum, p) => sum + p.troops, 0);
+
+       if (realm.relations[suzerain.id] < -50 || myTroops > suzerainTroops * 1.5) {
+         realm.vassalOf = undefined;
+         suzerain.vassals = suzerain.vassals.filter(id => id !== realm.id);
+         realm.wars.push(suzerain.id);
+         suzerain.wars.push(realm.id);
+         state.logs.push(`REBELIÃO: Os governantes de ${realm.name} cortaram seus laços com ${suzerain.name} e declararam guerra!`);
+         return;
+       }
     }
-  });
+  }
+
+  const assessment = analyzeRealmStrategy(state, realm, ownedProvinces);
+  
+  const borderProvs = assessment.threatenedBorders.length > 0 ? assessment.threatenedBorders : ownedProvinces;
+
+  for (const prov of borderProvs) {
+    if (availableAPs >= ACTION_COSTS.recruit) {
+       executeRecruitment(newState, realm, prov);
+       availableAPs -= ACTION_COSTS.recruit;
+    }
+  }
+  
   realm.actionPoints = availableAPs;
 }
 
-function handleExpansionistAI(state: GameState, realm: Realm, provinces: Province[], ap: number) {
-  // Expansionists prioritize attacking neighbors and recruiting
+function handleExpansionistAI(state: GameState, realm: Realm, provinces: Province[], ap: number, assessment: StrategicAssessment) {
   let currentAp = ap;
   
-  // Sort provinces by military strength
-  const strongProvinces = [...provinces].sort((a, b) => b.troops - a.troops);
+  if (assessment.safeInternal.length > 0 && assessment.offensiveTargets.length > 0) {
+     for (const safeProv of assessment.safeInternal) {
+        if (currentAp < ACTION_COSTS.move) break;
+        if (safeProv.troops > 20) {
+           const validNeighbors = safeProv.neighbors.filter(nId => state.provinces[nId].ownerId === realm.id);
+           const target = validNeighbors.find(nId => assessment.offensiveTargets.includes(state.provinces[nId])) || validNeighbors[0];
+           if (target) {
+              executeMove(safeProv, state.provinces[target]);
+              currentAp -= ACTION_COSTS.move;
+           }
+        }
+     }
+  }
+
+  const attackProvinces = [...assessment.offensiveTargets, ...provinces].filter((v, i, a) => a.indexOf(v) === i).sort((a, b) => b.troops - a.troops);
   
-  for (const prov of strongProvinces) {
+  for (const prov of attackProvinces) {
     if (currentAp <= 0) break;
 
-    // Look for weak neighbors
-    const targets = prov.neighbors
+    let targets = prov.neighbors
       .map(nId => state.provinces[nId])
-      .filter(n => n && n.ownerId !== realm.id && !realm.alliances.includes(n.ownerId) && !realm.pacts.includes(n.ownerId))
+      .filter(n => n && n.ownerId !== realm.id && realm.wars.includes(n.ownerId))
       .sort((a, b) => a.troops - b.troops);
 
+    if (targets.length === 0) {
+      targets = prov.neighbors
+        .map(nId => state.provinces[nId])
+        .filter(n => n && n.ownerId !== realm.id && !realm.alliances.includes(n.ownerId) && !realm.pacts.includes(n.ownerId))
+        .sort((a, b) => a.troops - b.troops);
+      
+      if (realm.objective === 'resource_control') {
+         targets = targets.filter(t => t.strategicResource !== 'none');
+      } else if (realm.objective === 'destroy_rival' && assessment.primaryTargetRealm) {
+         targets = targets.filter(t => t.ownerId === assessment.primaryTargetRealm);
+      }
+    }
+
     if (targets.length > 0 && prov.troops > targets[0].troops * 1.2 && currentAp >= ACTION_COSTS.attack) {
-      // Attack!
+      const targetRealmId = targets[0].ownerId;
+      if (!realm.wars.includes(targetRealmId)) {
+        realm.wars.push(targetRealmId);
+        state.realms[targetRealmId].wars.push(realm.id);
+        state.logs.push(`GUERRA: O reino expansionista de ${realm.name} declarou guerra a ${state.realms[targetRealmId].name}!`);
+        if (realm.pacts.includes(targetRealmId)) {
+           realm.pacts = realm.pacts.filter(id => id !== targetRealmId);
+           state.realms[targetRealmId].pacts = state.realms[targetRealmId].pacts.filter(id => id !== realm.id);
+           state.realms[targetRealmId].memory[realm.id].betrayal += 50;
+           realm.relations[targetRealmId] = -100;
+           state.logs.push(`TRAIÇÃO: ${realm.name} quebrou covardemente o pacto de não agressão!`);
+        }
+      }
       executeAttack(state, realm, prov, targets[0]);
       currentAp -= ACTION_COSTS.attack;
-    } else if (realm.gold > 100 && currentAp >= ACTION_COSTS.recruit) {
-      // Recruit
+    } 
+    
+    // Internal Politics Management for AI
+    if (prov.loyalty < 50 && currentAp >= ACTION_COSTS.build) {
+       if (executeBuilding(state, realm, prov, 'courts')) {
+          currentAp -= ACTION_COSTS.build;
+       }
+    }
+
+    if (currentAp >= ACTION_COSTS.recruit) {
       executeRecruitment(state, realm, prov);
       currentAp -= ACTION_COSTS.recruit;
     }
@@ -434,21 +641,34 @@ function handleExpansionistAI(state: GameState, realm: Realm, provinces: Provinc
   realm.actionPoints = currentAp;
 }
 
-function handleDefensiveAI(state: GameState, realm: Realm, provinces: Province[], ap: number) {
-  // Defensive AI prioritizes building defenses and keeping troops at home
+function handleDefensiveAI(state: GameState, realm: Realm, provinces: Province[], ap: number, assessment: StrategicAssessment) {
   let currentAp = ap;
   
-  for (const prov of provinces) {
+  if (assessment.safeInternal.length > 0 && assessment.threatenedBorders.length > 0) {
+     for (const safeProv of assessment.safeInternal) {
+        if (currentAp < ACTION_COSTS.move) break;
+        if (safeProv.troops > 30) {
+           const validNeighbors = safeProv.neighbors.filter(nId => state.provinces[nId].ownerId === realm.id);
+           const target = validNeighbors.find(nId => assessment.threatenedBorders.includes(state.provinces[nId])) || validNeighbors[0];
+           if (target) {
+              executeMove(safeProv, state.provinces[target]);
+              currentAp -= ACTION_COSTS.move;
+           }
+        }
+     }
+  }
+
+  const priorityProvinces = assessment.threatenedBorders.length > 0 ? assessment.threatenedBorders : provinces;
+
+  for (const prov of priorityProvinces) {
     if (currentAp <= 0) break;
 
-    const isBorder = prov.neighbors.some(nId => state.provinces[nId].ownerId !== realm.id);
-    
-    if (isBorder && prov.defense < 3 && realm.materials >= 50 && currentAp >= ACTION_COSTS.build) {
-      prov.defense += 1;
-      realm.materials -= 50;
-      currentAp -= ACTION_COSTS.build;
-      state.logs.push(`${realm.name} reforçou as defesas em ${prov.name}.`);
-    } else if (realm.gold > 150 && currentAp >= ACTION_COSTS.recruit) {
+    if (assessment.threatenedBorders.includes(prov) && prov.defense < 3 && currentAp >= ACTION_COSTS.build) {
+       if (executeBuilding(state, realm, prov, 'fortify')) {
+          currentAp -= ACTION_COSTS.build;
+          state.logs.push(`${realm.name} ergueu mais defesas em ${prov.name}.`);
+       }
+    } else if (currentAp >= ACTION_COSTS.recruit) {
       executeRecruitment(state, realm, prov);
       currentAp -= ACTION_COSTS.recruit;
     }
@@ -456,43 +676,65 @@ function handleDefensiveAI(state: GameState, realm: Realm, provinces: Province[]
   realm.actionPoints = currentAp;
 }
 
-function handleDiplomaticAI(state: GameState, realm: Realm, provinces: Province[], ap: number) {
-  // Diplomatic AI prioritizes alliances and trade
+function handleDiplomaticAI(state: GameState, realm: Realm, provinces: Province[], ap: number, assessment: StrategicAssessment) {
   let currentAp = ap;
-  
-  // Try to improve relations or form pacts
   const otherRealms = Object.values(state.realms).filter(r => r.id !== realm.id);
+  
+  for (const warEnemyId of realm.wars) {
+    if (currentAp < ACTION_COSTS.diplomacy) break;
+    const enemyMem = realm.memory[warEnemyId];
+    if (enemyMem && enemyMem.warExhaustion > 40) {
+       const enemyRealm = state.realms[warEnemyId];
+       const ourMemOfThem = enemyRealm.memory[realm.id];
+       if (!enemyRealm.isPlayer && ourMemOfThem && ourMemOfThem.warExhaustion > 30) {
+         realm.wars = realm.wars.filter(id => id !== warEnemyId);
+         enemyRealm.wars = enemyRealm.wars.filter(id => id !== realm.id);
+         realm.memory[warEnemyId].warExhaustion = 0;
+         enemyRealm.memory[realm.id].warExhaustion = 0;
+         realm.memory[warEnemyId].truces[warEnemyId] = state.turn + 10;
+         enemyRealm.memory[realm.id].truces[realm.id] = state.turn + 10;
+         state.logs.push(`PAZ: ${realm.name} e ${enemyRealm.name} sentaram à mesa e assinaram um tratado de paz.`);
+         currentAp -= ACTION_COSTS.diplomacy;
+       }
+    }
+  }
+
   for (const other of otherRealms) {
     if (currentAp < ACTION_COSTS.diplomacy) break;
+    if (realm.wars.includes(other.id)) continue;
     
     const relations = realm.relations[other.id] || 0;
     if (relations > 20 && !realm.pacts.includes(other.id)) {
       realm.pacts.push(other.id);
       other.pacts.push(realm.id);
       currentAp -= ACTION_COSTS.diplomacy;
-      state.logs.push(`${realm.name} e ${other.name} assinaram um pacto de não-agressão.`);
+      state.logs.push(`${realm.name} teceu um pacto de não agressão com ${other.name}.`);
+    } else if (relations > 50 && realm.objective === 'defensive_block' && !realm.alliances.includes(other.id)) {
+      realm.alliances.push(other.id);
+      other.alliances.push(realm.id);
+      currentAp -= ACTION_COSTS.diplomacy;
+      state.logs.push(`ALIANÇA: ${realm.name} formou uma forte aliança defensiva com ${other.name}.`);
     } else if (relations < 0 && realm.gold > 100) {
-      // Send gift
       realm.gold -= 50;
       realm.relations[other.id] += 15;
       currentAp -= ACTION_COSTS.diplomacy;
     }
   }
   
-  // Also recruit a bit for safety
-  if (currentAp >= ACTION_COSTS.recruit && provinces.length > 0) {
-    executeRecruitment(state, realm, provinces[0]);
+  if (currentAp >= ACTION_COSTS.recruit && assessment.threatenedBorders.length > 0) {
+    executeRecruitment(state, realm, assessment.threatenedBorders[0]);
     currentAp -= ACTION_COSTS.recruit;
   }
   
   realm.actionPoints = currentAp;
 }
 
-function handleOpportunisticAI(state: GameState, realm: Realm, provinces: Province[], ap: number) {
-  // Opportunistic AI attacks when neighbors are in wars or weak
+function handleOpportunisticAI(state: GameState, realm: Realm, provinces: Province[], ap: number, assessment: StrategicAssessment) {
   let currentAp = ap;
   
-  for (const prov of provinces) {
+  const borders = [...assessment.offensiveTargets, ...assessment.threatenedBorders, ...provinces].filter((v, i, a) => a.indexOf(v) === i);
+  
+  for (const prov of borders) {
     if (currentAp <= 0) break;
 
     const targets = prov.neighbors
@@ -500,11 +742,16 @@ function handleOpportunisticAI(state: GameState, realm: Realm, provinces: Provin
       .filter(n => {
         if (!n || n.ownerId === realm.id) return false;
         const targetRealm = state.realms[n.ownerId];
-        // Target is weak or already at war
         return n.troops < prov.troops * 0.7 || targetRealm.wars.length > 0;
       });
 
     if (targets.length > 0 && currentAp >= ACTION_COSTS.attack) {
+      const targetRealmId = targets[0].ownerId;
+      if (!realm.wars.includes(targetRealmId)) {
+         realm.wars.push(targetRealmId);
+         state.realms[targetRealmId].wars.push(realm.id);
+         state.logs.push(`OPORTUNISMO: ${realm.name} atacou ${state.realms[targetRealmId].name} abruptamente aproveitando de sua fraqueza!`);
+      }
       executeAttack(state, realm, prov, targets[0]);
       currentAp -= ACTION_COSTS.attack;
     }
@@ -512,40 +759,38 @@ function handleOpportunisticAI(state: GameState, realm: Realm, provinces: Provin
   realm.actionPoints = currentAp;
 }
 
-function handleCommercialAI(state: GameState, realm: Realm, provinces: Province[], ap: number) {
-  // Commercial AI prioritizes trade routes and wealth
+function handleCommercialAI(state: GameState, realm: Realm, provinces: Province[], ap: number, assessment: StrategicAssessment) {
   let currentAp = ap;
   
-  // Try to establish trade routes
   if (currentAp >= ACTION_COSTS.diplomacy && realm.gold > 100) {
     const potentialPartners = Object.values(state.realms).filter(r => r.id !== realm.id && realm.relations[r.id] > 0);
     if (potentialPartners.length > 0) {
       const partner = potentialPartners[0];
-      // Find provinces to connect
       const myProv = provinces[0];
       const theirProv = Object.values(state.provinces).find(p => p.ownerId === partner.id);
       if (myProv && theirProv) {
         realm.tradeRoutes.push({ fromProvinceId: myProv.id, toProvinceId: theirProv.id });
         currentAp -= ACTION_COSTS.diplomacy;
         realm.gold -= 50;
-        state.logs.push(`${realm.name} estabeleceu uma rota comercial com ${partner.name}.`);
+        state.logs.push(`${realm.name} expandiu comércio e ouro, traçando rotas com ${partner.name}.`);
       }
     }
   }
   
-  // Build workshops/mines
-  for (const prov of provinces) {
-    if (currentAp >= ACTION_COSTS.build && realm.materials >= 100) {
-      prov.buildings.workshops += 1;
-      realm.materials -= 100;
-      currentAp -= ACTION_COSTS.build;
+  const constructionProvs = assessment.safeInternal.length > 0 ? assessment.safeInternal : provinces;
+  for (const prov of constructionProvs) {
+    if (currentAp >= ACTION_COSTS.build) {
+      if (executeBuilding(state, realm, prov, 'workshops')) {
+         currentAp -= ACTION_COSTS.build;
+         prov.wealth += 1; // Extra economic boost for commercial
+      }
     }
   }
   
   realm.actionPoints = currentAp;
 }
 
-function executeAttack(state: GameState, realm: Realm, attackerProv: Province, targetProv: Province) {
+export function executeAttack(state: GameState, realm: Realm, attackerProv: Province, targetProv: Province) {
   const attackingArmy: Army = {
     infantry: Math.floor(attackerProv.army.infantry * 0.7),
     archers: Math.floor(attackerProv.army.archers * 0.7),
@@ -557,7 +802,8 @@ function executeAttack(state: GameState, realm: Realm, attackerProv: Province, t
   attackerProv.army.cavalry -= attackingArmy.cavalry;
   attackerProv.troops = attackerProv.army.infantry + attackerProv.army.archers + attackerProv.army.cavalry;
   
-  const result = resolveCombat(attackingArmy, targetProv.army, targetProv.terrain, targetProv.defense);
+  const effectiveDefense = Math.max(0, targetProv.defense - (targetProv.siegeDamage || 0));
+  const result = resolveCombat(attackingArmy, targetProv.army, targetProv.terrain, effectiveDefense);
   
   state.visualEffects.push({
     id: `effect_${Date.now()}_${Math.random()}`,
@@ -574,9 +820,38 @@ function executeAttack(state: GameState, realm: Realm, attackerProv: Province, t
     targetProv.ownerId = realm.id;
     targetProv.army = result.attackerRemaining;
     targetProv.troops = targetProv.army.infantry + targetProv.army.archers + targetProv.army.cavalry;
+    targetProv.siegeDamage = 0; // Reset siege damage on conquest
     
+    // Attempt to retreat surviving defenders
+    const totalDefenderRemaining = result.defenderRemaining.infantry + result.defenderRemaining.archers + result.defenderRemaining.cavalry;
+    if (totalDefenderRemaining > 0) {
+      const retreatOptions = targetProv.neighbors.map(nId => state.provinces[nId]).filter(p => p.ownerId === oldOwnerId);
+      if (retreatOptions.length > 0) {
+        // Retreat to the strongest friendly neighbor to group forces
+        const retreatProv = retreatOptions.sort((a, b) => b.troops - a.troops)[0];
+        retreatProv.army.infantry += result.defenderRemaining.infantry;
+        retreatProv.army.archers += result.defenderRemaining.archers;
+        retreatProv.army.cavalry += result.defenderRemaining.cavalry;
+        retreatProv.troops = retreatProv.army.infantry + retreatProv.army.archers + retreatProv.army.cavalry;
+        state.logs.push(`RETIRADA: Os sobreviventes de ${targetProv.name} recuaram para ${retreatProv.name}.`);
+      } else {
+        state.logs.push(`ANIQUILAÇÃO: Sem ter para onde fugir, os últimos defensores de ${targetProv.name} foram destruídos.`);
+      }
+    }
+
     state.logs.push(`CONQUISTA: ${realm.name} tomou ${targetProv.name} de ${oldOwnerName}!`);
     realm.overextension = Math.min(100, realm.overextension + 15);
+    targetProv.recentlyConquered = 10; // 10 turns of penalty
+    targetProv.loyalty = 30; // Drops significantly on conquest
+    
+    // Choose new capital if needed
+    if (state.realms[oldOwnerId].capitalId === targetProv.id) {
+       const remaining = Object.values(state.provinces).filter(p => p.ownerId === oldOwnerId && p.id !== targetProv.id);
+       if (remaining.length > 0) {
+          state.realms[oldOwnerId].capitalId = remaining.sort((a, b) => b.population - a.population)[0].id;
+          state.logs.push(`GOVERNO: ${oldOwnerName} moveu sua sede de poder para ${state.provinces[state.realms[oldOwnerId].capitalId!].name}.`);
+       }
+    }
     
     // Check for realm fall
     const oldOwnerProvinces = Object.values(state.provinces).filter(p => p.ownerId === oldOwnerId);
@@ -598,6 +873,12 @@ function executeAttack(state: GameState, realm: Realm, attackerProv: Province, t
     attackerProv.army.archers += result.attackerRemaining.archers;
     attackerProv.army.cavalry += result.attackerRemaining.cavalry;
     attackerProv.troops = attackerProv.army.infantry + attackerProv.army.archers + attackerProv.army.cavalry;
+    
+    // Apply siege damage if defense is high
+    if (targetProv.defense > (targetProv.siegeDamage || 0)) {
+       targetProv.siegeDamage = (targetProv.siegeDamage || 0) + 1;
+       state.logs.push(`CERCO: As fortificações de ${targetProv.name} sofreram danos no ataque.`);
+    }
   }
 }
 
@@ -636,6 +917,31 @@ function executeRecruitment(state: GameState, realm: Realm, prov: Province) {
   }
 }
 
+export function executeBuilding(state: GameState, realm: Realm, prov: Province, type: 'farms' | 'mines' | 'workshops' | 'courts' | 'fortify'): boolean {
+  const stats = (BUILDING_STATS as any)[type];
+  if (!stats) return false;
+
+  const goldCost = stats.gold || 0;
+  const matCost = stats.materials || 0;
+
+  if (realm.gold >= goldCost && realm.materials >= matCost) {
+    if (type === 'fortify') {
+      if (prov.defense < 5) {
+        prov.defense += 1;
+        realm.gold -= goldCost;
+        realm.materials -= matCost;
+        return true;
+      }
+    } else {
+      prov.buildings[type] += 1;
+      realm.gold -= goldCost;
+      realm.materials -= matCost;
+      return true;
+    }
+  }
+  return false;
+}
+
 export function processEndOfTurn(state: GameState): GameState {
   const newState = JSON.parse(JSON.stringify(state)) as GameState;
   
@@ -651,11 +957,17 @@ export function processEndOfTurn(state: GameState): GameState {
       realm.overextension = Math.max(0, realm.overextension - 5);
     }
 
-    // Memory decay
+    // Memory and War decay/updates
     Object.values(realm.memory).forEach(mem => {
       mem.betrayal = Math.max(0, mem.betrayal - 2);
       mem.aggression = Math.max(0, mem.aggression - 2);
       mem.help = Math.max(0, mem.help - 1);
+    });
+
+    realm.wars.forEach(enemyId => {
+      if (realm.memory[enemyId]) {
+        realm.memory[enemyId].warExhaustion = Math.min(100, (realm.memory[enemyId].warExhaustion || 0) + 2);
+      }
     });
 
     // Production
@@ -760,6 +1072,70 @@ export function processEndOfTurn(state: GameState): GameState {
 
       realm.relations[otherId] = Math.max(-100, Math.min(100, realm.relations[otherId]));
     });
+
+    // --- INTERNAL POLITICS UPDATE ---
+    const distances = calculateAdminDistances(newState, realm.id);
+    
+    ownedProvinces.forEach(p => {
+      // 1. Update Loyalty
+      let loyaltyChange = 0;
+      
+      // Baseliner (drifts toward 50)
+      if (p.loyalty > 55) loyaltyChange -= 1;
+      else if (p.loyalty < 45) loyaltyChange += 1;
+
+      // Distância penalty
+      const dist = distances[p.id] || 0;
+      loyaltyChange -= dist * 2;
+
+      // OE penalty
+      loyaltyChange -= Math.floor(realm.overextension / 10);
+
+      // Positive factors
+      if (p.id === realm.capitalId) loyaltyChange += 10;
+      loyaltyChange += p.buildings.courts * 5;
+      loyaltyChange += Math.floor(p.troops / 50); // Military presence
+
+      // Negative factors
+      if (p.recentlyConquered > 0) {
+        loyaltyChange -= 5;
+        p.recentlyConquered--;
+      }
+      if (realm.gold <= 0 || realm.food <= 0) loyaltyChange -= 10;
+
+      p.loyalty = Math.max(0, Math.min(100, p.loyalty + loyaltyChange));
+
+      // 2. Production scaling by loyalty
+      const loyaltyFactor = 0.5 + (p.loyalty / 200); // 100 loyalty = 100%, 0 loyalty = 50%
+      const efficiency = (p.population / p.maxPopulation) * loyaltyFactor;
+      
+      const pGold = (p.wealth + (p.buildings.mines * 5)) * efficiency;
+      const pFood = (p.foodProduction + (p.buildings.farms * 10)) * efficiency;
+      const pMats = (p.materialProduction + (p.buildings.workshops * 5)) * efficiency;
+
+      goldIncome += pGold;
+      foodIncome += pFood;
+      materialIncome += pMats;
+
+      // 3. Rebellion check
+      if (p.loyalty < 25 && Math.random() < 0.1) {
+        // Organic Rebellion!
+        const rebelPower = Math.floor(p.population * 0.05);
+        if (rebelPower > p.troops) {
+           // Success! Breaking away
+           p.ownerId = 'rebel'; // Temporary label or simply go neutral
+           p.army = { infantry: Math.floor(rebelPower * 0.8), archers: Math.floor(rebelPower * 0.1), cavalry: 0 };
+           p.troops = p.army.infantry + p.army.archers + p.army.cavalry;
+           p.loyalty = 60; // Rebels are happy with independence
+           newState.logs.push(`REBELIÃO: O povo de ${p.name} derrubou o governo de ${realm.name} e declarou independência!`);
+        } else {
+           // Failed riot
+           p.population -= Math.floor(p.population * 0.05);
+           p.troops -= Math.floor(p.troops * 0.2);
+           newState.logs.push(`MOTIM: Uma revolta em ${p.name} foi reprimida com sangue pelas tropas de ${realm.name}.`);
+        }
+      }
+    });
   });
 
   // Coalition Logic
@@ -830,39 +1206,81 @@ function processCoalitions(state: GameState) {
 
 function handleRandomEvents(state: GameState) {
   state.currentEvent = null;
-  if (Math.random() < 0.2) {
+  if (Math.random() < 0.25) {
     const events: GameEvent[] = [
       { name: "Colheita Farta", description: "Uma temporada de clima perfeito impulsionou a produção de alimentos.", type: 'positive' },
-      { name: "Peste", description: "Uma doença misteriosa está se espalhando.", type: 'negative' },
-      { name: "Corrida do Ouro", description: "Novos veios de ouro foram descobertos.", type: 'positive' },
-      { name: "Revolta Camponesa", description: "Impostos altos levaram camponeses a pegar em armas.", type: 'negative' },
-      { name: "Avanço Diplomático", description: "Um grande banquete melhorou as relações.", type: 'positive' }
+      { name: "Peste", description: "Uma doença misteriosa está se espalhando por regiões superpovoadas.", type: 'negative' },
+      { name: "Corrida do Ouro", description: "Novos veios de ouro foram descobertos em terras estáveis.", type: 'positive' },
+      { name: "Revolta Camponesa", description: "Impostos altos e abandono levaram camponeses a pegar em armas.", type: 'negative' },
+      { name: "Avanço Diplomático", description: "Um grande banquete melhorou as relações.", type: 'positive' },
+      { name: "Sede Administrativa", description: "A eficiência da capital inspira províncias vizinhas.", type: 'positive' }
     ];
     
-    const event = events[Math.floor(Math.random() * events.length)];
+    // Conditional Selection
+    const provIds = Object.keys(state.provinces);
+    const randomProv = state.provinces[provIds[Math.floor(Math.random() * provIds.length)]];
+    const realm = state.realms[randomProv.ownerId];
+
+    let event = events[Math.floor(Math.random() * events.length)];
+    
+    // Refining event choice based on state
+    if (event.name === "Peste" && randomProv.population < randomProv.maxPopulation * 0.7) {
+       event = events[0]; // Fallback to harvest
+    }
+    if (event.name === "Revolta Camponesa" && randomProv.loyalty > 40) {
+       event = events[4]; // Fallback to diplomatic
+    }
+    if (event.name === "Sede Administrativa" && realm.overextension > 30) {
+       event = { name: "Crise de Gestão", description: "O peso do império está esmagando a burocracia central.", type: 'negative' };
+    }
+
     state.currentEvent = event;
     state.logs.push(`EVENTO: ${event.name} - ${event.description}`);
 
     if (event.name === "Colheita Farta") {
       Object.values(state.realms).forEach(r => { r.food += 100; });
     } else if (event.name === "Peste") {
-      Object.values(state.provinces).forEach(p => {
-        if (Math.random() < 0.3) p.troops = Math.floor(p.troops * 0.8);
-      });
+       randomProv.population = Math.floor(randomProv.population * 0.7);
+       state.logs.push(`A peste atingiu severamente ${randomProv.name}.`);
     } else if (event.name === "Corrida do Ouro") {
-      Object.values(state.realms).forEach(r => { r.gold += 150; });
+      realm.gold += 200;
     } else if (event.name === "Revolta Camponesa") {
-      const provIds = Object.keys(state.provinces);
-      const randomProv = state.provinces[provIds[Math.floor(Math.random() * provIds.length)]];
-      randomProv.troops = Math.max(0, randomProv.troops - 20);
-      if (randomProv.buildings.farms > 0) randomProv.buildings.farms--;
-      state.logs.push(`Revolta em ${randomProv.name}!`);
+      randomProv.loyalty = Math.max(0, randomProv.loyalty - 30);
+      randomProv.troops = Math.max(0, randomProv.troops - 10);
+      state.logs.push(`Instabilidade cresce em ${randomProv.name}!`);
     } else if (event.name === "Avanço Diplomático") {
       Object.values(state.realms).forEach(r => {
         Object.keys(r.relations).forEach(otherId => {
           r.relations[otherId] = Math.min(100, r.relations[otherId] + 10);
         });
       });
+    } else if (event.name === "Crise de Gestão") {
+       realm.actionPoints = Math.max(0, realm.actionPoints - 5);
+       realm.gold = Math.max(0, realm.gold - 100);
     }
   }
+}
+
+export function calculateAdminDistances(state: GameState, realmId: string): Record<string, number> {
+  const distances: Record<string, number> = {};
+  const realm = state.realms[realmId];
+  if (!realm || !realm.capitalId) return distances;
+
+  const queue: { id: string, dist: number }[] = [{ id: realm.capitalId, dist: 0 }];
+  distances[realm.capitalId] = 0;
+
+  while (queue.length > 0) {
+    const { id, dist } = queue.shift()!;
+    const prov = state.provinces[id];
+    
+    prov.neighbors.forEach(nId => {
+      const neighbor = state.provinces[nId];
+      if (neighbor && neighbor.ownerId === realmId && distances[nId] === undefined) {
+        distances[nId] = dist + 1;
+        queue.push({ id: nId, dist: dist + 1 });
+      }
+    });
+  }
+
+  return distances;
 }
