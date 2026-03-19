@@ -55,15 +55,15 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
 }) => {
   if (!isOpen || !attackerProv || !defenderProv || !attackingArmy) return null;
 
-  const totalAttack = attackingArmy.infantry + attackingArmy.archers + attackingArmy.cavalry;
-  const totalDefense = defenderProv.army.infantry + defenderProv.army.archers + defenderProv.army.cavalry;
+  const totalAttack = (attackingArmy.infantry || 0) + (attackingArmy.archers || 0) + (attackingArmy.cavalry || 0);
+  const totalDefense = (defenderProv.army?.infantry || 0) + (defenderProv.army?.archers || 0) + (defenderProv.army?.cavalry || 0);
 
   const terrainBonus = getTerrainDefenseBonus(defenderProv.terrain);
-  const effectiveDefense = Math.max(0, defenderProv.defense - (defenderProv.siegeDamage || 0));
+  const effectiveDefense = Math.max(0, (defenderProv.defense || 0) - (defenderProv.siegeDamage || 0));
 
   // Improved power calculation for preview
-  const atkPower = Math.floor(attackingArmy.infantry * 1.0 + attackingArmy.archers * 1.2 + attackingArmy.cavalry * 2.5);
-  const defPower = Math.floor((defenderProv.army.infantry * 1.5 + defenderProv.army.archers * 1.2 + defenderProv.army.cavalry * 1.5) * (1 + (effectiveDefense * 0.2)));
+  const atkPower = Math.floor((attackingArmy.infantry || 0) * 1.0 + (attackingArmy.archers || 0) * 1.2 + (attackingArmy.cavalry || 0) * 2.5);
+  const defPower = Math.floor(((defenderProv.army?.infantry || 0) * 1.5 + (defenderProv.army?.archers || 0) * 1.2 + (defenderProv.army?.cavalry || 0) * 1.5) * (1 + (effectiveDefense * 0.2)));
   
   const ratio = atkPower / Math.max(1, defPower);
   let riskLevel: 'favorable' | 'balanced' | 'unfavorable';
@@ -130,9 +130,9 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
                   Defensor — {defenderProv.name}
                 </h4>
                 <div className="space-y-2 text-xs text-[#f5f2ed]">
-                  <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{defenderProv.army.infantry}</span></div>
-                  <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{defenderProv.army.archers}</span></div>
-                  <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{defenderProv.army.cavalry}</span></div>
+                  <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{defenderProv.army?.infantry ?? 0}</span></div>
+                  <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{defenderProv.army?.archers ?? 0}</span></div>
+                  <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{defenderProv.army?.cavalry ?? 0}</span></div>
                   <div className="pt-2 mt-1 border-t border-white/10 flex justify-between font-bold text-red-400">
                     <span>Total</span><span>{totalDefense}</span>
                   </div>

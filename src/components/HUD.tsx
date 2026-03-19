@@ -257,7 +257,7 @@ export const HUD: React.FC<HUDProps> = ({
         
         // Rebellion risk
         playerProvinces.filter(p => p.loyalty < 30).forEach(p => {
-          alerts.push({ icon: <AlertTriangle size={12} />, text: `${p.name} em risco de rebelião (${p.loyalty}%)`, color: 'text-red-400 bg-red-900/20 border-red-500/20' });
+          alerts.push({ icon: <AlertTriangle size={12} />, text: `${p.name || 'Província'} em risco de rebelião (${p.loyalty}%)`, color: 'text-red-400 bg-red-900/20 border-red-500/20' });
         });
         
         // Resource deficit
@@ -265,23 +265,23 @@ export const HUD: React.FC<HUDProps> = ({
         if (netFood < -10) alerts.push({ icon: <Wheat size={12} />, text: `Déficit de comida: ${netFood}/turno`, color: 'text-amber-400 bg-amber-900/20 border-amber-500/20' });
         
         // Threatened border
-        const warEnemies = playerRealm.wars;
+        const warEnemies = playerRealm.wars || [];
         if (warEnemies.length > 0) {
           const threatened = playerProvinces.filter(p => 
-            p.neighbors.some(nId => {
+            (p.neighbors || []).some(nId => {
               const n = gameState.provinces[nId];
-              return n && warEnemies.includes(n.ownerId) && n.troops > p.troops;
+              return n && warEnemies.includes(n.ownerId) && (n.troops || 0) > (p.troops || 0);
             })
           );
           threatened.slice(0, 1).forEach(p => {
-            alerts.push({ icon: <Shield size={12} />, text: `${p.name} ameaçada por inimigo superior`, color: 'text-orange-400 bg-orange-900/20 border-orange-500/20' });
+            alerts.push({ icon: <Shield size={12} />, text: `${p.name || 'Província'} ameaçada por inimigo superior`, color: 'text-orange-400 bg-orange-900/20 border-orange-500/20' });
           });
         }
         
         // Diplomatic opportunity
-        const otherRealms = (Object.values(gameState.realms) as Realm[]).filter(r => r.id !== playerRealm.id && !playerRealm.wars.includes(r.id));
-        otherRealms.filter(r => (playerRealm.relations[r.id] || 0) > 40 && !playerRealm.pacts.includes(r.id) && !playerRealm.alliances.includes(r.id)).slice(0, 1).forEach(r => {
-          alerts.push({ icon: <Handshake size={12} />, text: `${r.name} aberto a pacto (relação ${Math.floor(playerRealm.relations[r.id])})`, color: 'text-green-400 bg-green-900/20 border-green-500/20' });
+        const otherRealms = (Object.values(gameState.realms) as Realm[]).filter(r => r && r.id !== playerRealm.id && !playerRealm.wars?.includes(r.id));
+        otherRealms.filter(r => (playerRealm.relations?.[r.id] || 0) > 40 && !playerRealm.pacts?.includes(r.id) && !playerRealm.alliances?.includes(r.id)).slice(0, 1).forEach(r => {
+          alerts.push({ icon: <Handshake size={12} />, text: `${r.name || 'Reino'} aberto a pacto (relação ${Math.floor(playerRealm.relations?.[r.id] || 0)})`, color: 'text-green-400 bg-green-900/20 border-green-500/20' });
         });
 
         if (alerts.length === 0) return null;
@@ -315,7 +315,7 @@ export const HUD: React.FC<HUDProps> = ({
               <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-3">
                   <span className="flex items-center gap-2 font-bold text-green-400"><Wheat size={18} /> Comida</span>
-                  <span className="text-xs text-slate-500">Estoque: {playerRealm.food}</span>
+                  <span className="text-xs text-slate-500">Estoque: {playerRealm.food || 0}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button 
@@ -336,7 +336,7 @@ export const HUD: React.FC<HUDProps> = ({
               <div className="bg-slate-800 p-4 rounded-lg border border-slate-700">
                 <div className="flex justify-between items-center mb-3">
                   <span className="flex items-center gap-2 font-bold text-slate-300"><Hammer size={18} /> Materiais</span>
-                  <span className="text-xs text-slate-500">Estoque: {playerRealm.materials}</span>
+                  <span className="text-xs text-slate-500">Estoque: {playerRealm.materials || 0}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                   <button 
@@ -362,14 +362,14 @@ export const HUD: React.FC<HUDProps> = ({
             </h2>
             
             <div className="space-y-3">
-              {(Object.values(gameState.realms) as Realm[]).filter(r => r.id !== playerRealm.id).map(realm => {
-                const relations = playerRealm.relations[realm.id] || 0;
-                const isAlly = playerRealm.alliances.includes(realm.id);
-                const hasPact = playerRealm.pacts.includes(realm.id);
+              {(Object.values(gameState.realms) as Realm[]).filter(r => r && r.id !== playerRealm.id).map(realm => {
+                const relations = playerRealm.relations?.[realm.id] || 0;
+                const isAlly = playerRealm.alliances?.includes(realm.id);
+                const hasPact = playerRealm.pacts?.includes(realm.id);
                 const isVassal = realm.vassalOf === playerRealm.id;
                 const isOurSuzerain = playerRealm.vassalOf === realm.id;
                 
-                const personalityNames = {
+                const personalityNames: Record<string, string> = {
                   expansionist: 'Expansionista',
                   defensive: 'Defensivo',
                   diplomatic: 'Diplomático',
@@ -377,7 +377,7 @@ export const HUD: React.FC<HUDProps> = ({
                   commercial: 'Comercial'
                 };
 
-                const objectiveNames = {
+                const objectiveNames: Record<string, string> = {
                   regional_dominance: 'Domínio Regional',
                   destroy_rival: 'Destruir Rival',
                   wealth: 'Acumular Riqueza',
@@ -446,9 +446,9 @@ export const HUD: React.FC<HUDProps> = ({
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-400">Dono</span>
-                <span className="font-bold flex items-center gap-2" style={{ color: gameState.realms[selectedProv.ownerId].color }}>
-                  {gameState.realms[selectedProv.ownerId].name}
-                  {gameState.realms[selectedProv.ownerId].capitalId === selectedProv.id && (
+                <span className="font-bold flex items-center gap-2" style={{ color: gameState.realms[selectedProv.ownerId]?.color || '#ffffff' }}>
+                  {gameState.realms[selectedProv.ownerId]?.name || 'Desconhecido'}
+                  {gameState.realms[selectedProv.ownerId]?.capitalId === selectedProv.id && (
                     <span className="flex items-center gap-1 text-[10px] text-amber-500 font-bold uppercase">
                        <Crown size={12} /> Sede
                     </span>
@@ -473,15 +473,15 @@ export const HUD: React.FC<HUDProps> = ({
                 <div className="grid grid-cols-3 gap-2 mt-1">
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <span className="text-xs block text-slate-400">Infantaria</span>
-                    <span className="font-bold text-base">{selectedProv.army.infantry}</span>
+                    <span className="font-bold text-base">{selectedProv.army?.infantry ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <span className="text-xs block text-slate-400">Arqueiros</span>
-                    <span className="font-bold text-base">{selectedProv.army.archers}</span>
+                    <span className="font-bold text-base">{selectedProv.army?.archers ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <span className="text-xs block text-slate-400">Cavalaria</span>
-                    <span className="font-bold text-base">{selectedProv.army.cavalry}</span>
+                    <span className="font-bold text-base">{selectedProv.army?.cavalry ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -489,11 +489,11 @@ export const HUD: React.FC<HUDProps> = ({
               <div className="grid grid-cols-2 gap-x-4 gap-y-1 pt-2 border-t border-slate-800">
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 flex items-center gap-1 text-xs"><Coins size={12} /> Ouro</span>
-                  <span className="font-bold text-yellow-400 text-xs">+{Math.floor((selectedProv.wealth + (selectedProv.buildings.mines * BUILDING_PRODUCTION.mines)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
+                  <span className="font-bold text-yellow-400 text-xs">+{Math.floor(((selectedProv.wealth || 0) + ((selectedProv.buildings?.mines || 0) * BUILDING_PRODUCTION.mines)) * ((selectedProv.population || 0) / (selectedProv.maxPopulation || 1)))}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-slate-400 flex items-center gap-1 text-xs"><Wheat size={12} /> Comida</span>
-                  <span className="font-bold text-green-400 text-xs">+{Math.floor((selectedProv.foodProduction + (selectedProv.buildings.farms * BUILDING_PRODUCTION.farms)) * (selectedProv.population / selectedProv.maxPopulation))}</span>
+                  <span className="font-bold text-green-400 text-xs">+{Math.floor(((selectedProv.foodProduction || 0) + ((selectedProv.buildings?.farms || 0) * BUILDING_PRODUCTION.farms)) * ((selectedProv.population || 0) / (selectedProv.maxPopulation || 1)))}</span>
                 </div>
               </div>
               
@@ -503,21 +503,21 @@ export const HUD: React.FC<HUDProps> = ({
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <Tractor size={20} className="mx-auto text-green-500 mb-1" />
                     <span className="text-xs block">Fazendas</span>
-                    <span className="font-bold text-base">{selectedProv.buildings.farms}</span>
+                    <span className="font-bold text-base">{selectedProv.buildings?.farms ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <Pickaxe size={20} className="mx-auto text-yellow-500 mb-1" />
                     <span className="text-xs block">Minas</span>
-                    <span className="font-bold text-base">{selectedProv.buildings.mines}</span>
+                    <span className="font-bold text-base">{selectedProv.buildings?.mines ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
                     <Factory size={20} className="mx-auto text-slate-400 mb-1" />
                     <span className="text-xs block">Oficinas</span>
-                    <span className="font-bold text-base">{selectedProv.buildings.workshops}</span>
+                    <span className="font-bold text-base">{selectedProv.buildings?.workshops ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center col-span-3 mt-1">
                     <Home size={18} className="mx-auto text-blue-400 mb-1 inline" />
-                    <span className="text-xs ml-2">Tribunais: {selectedProv.buildings.courts || 0}</span>
+                    <span className="text-xs ml-2">Tribunais: {selectedProv.buildings?.courts ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -612,10 +612,10 @@ export const HUD: React.FC<HUDProps> = ({
                                 />
                               </div>
                               <div className="text-right text-[10px] space-y-0.5">
-                                <div className="text-yellow-400 font-bold">{UNIT_STATS[selectedUnitType].cost.gold * recruitAmount} Ouro</div>
-                                <div className="text-green-400 font-bold">{UNIT_STATS[selectedUnitType].cost.food * recruitAmount} Comida</div>
-                                <div className="text-slate-300 font-bold">{UNIT_STATS[selectedUnitType].cost.materials * recruitAmount} Materiais</div>
-                                <div className="text-blue-400 font-bold">{UNIT_STATS[selectedUnitType].cost.pop * recruitAmount} Pop</div>
+                                <div className="text-yellow-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.gold || 0) * recruitAmount} Ouro</div>
+                                <div className="text-green-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.food || 0) * recruitAmount} Comida</div>
+                                <div className="text-slate-300 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.materials || 0) * recruitAmount} Materiais</div>
+                                <div className="text-blue-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.pop || 0) * recruitAmount} Pop</div>
                               </div>
                             </div>
                             
