@@ -44,34 +44,36 @@ export const HUD: React.FC<HUDProps> = ({
 
   const playerRealm = gameState.realms[gameState.playerRealmId];
   const selectedProv = selectedProvinceId ? gameState.provinces[selectedProvinceId] : null;
+
+  if (!playerRealm) return <div className="p-4 text-red-500 font-bold bg-slate-800 h-full">Erro: Reino do jogador não encontrado.</div>;
   
   const playerProvinces = (Object.values(gameState.provinces) as Province[]).filter(p => p.ownerId === playerRealm.id);
   
-  const totalTroops = playerProvinces.reduce((sum, p) => sum + p.troops, 0);
+  const totalTroops = playerProvinces.reduce((sum, p) => sum + (p.troops ?? 0), 0);
     
   const baseGoldIncome = playerProvinces.reduce((sum, p) => {
-    const efficiency = p.population / p.maxPopulation;
-    return sum + (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
+    const efficiency = (p.population || 0) / (p.maxPopulation || 1);
+    return sum + ((p.wealth || 0) + ((p.buildings?.mines || 0) * BUILDING_PRODUCTION.mines)) * efficiency;
   }, 0);
     
   const baseFoodIncome = playerProvinces.reduce((sum, p) => {
-    const efficiency = p.population / p.maxPopulation;
-    return sum + (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
+    const efficiency = (p.population || 0) / (p.maxPopulation || 1);
+    return sum + ((p.foodProduction || 0) + ((p.buildings?.farms || 0) * BUILDING_PRODUCTION.farms)) * efficiency;
   }, 0);
 
-  const oePenalty = playerRealm.overextension > 20 ? (playerRealm.overextension - 20) / 100 : 0;
+  const oePenalty = (playerRealm.overextension || 0) > 20 ? ((playerRealm.overextension || 0) - 20) / 100 : 0;
   const goldIncome = Math.floor(baseGoldIncome * (1 - oePenalty));
   const foodIncome = Math.floor(baseFoodIncome * (1 - oePenalty));
 
   const goldMaintenance = playerProvinces.reduce((sum, p) => 
-    sum + p.army.infantry * UNIT_STATS.infantry.maintenance.gold + 
-    p.army.archers * UNIT_STATS.archers.maintenance.gold + 
-    p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold, 0);
+    sum + (p.army?.infantry || 0) * UNIT_STATS.infantry.maintenance.gold + 
+    (p.army?.archers || 0) * UNIT_STATS.archers.maintenance.gold + 
+    (p.army?.cavalry || 0) * UNIT_STATS.cavalry.maintenance.gold, 0);
 
   const foodMaintenance = playerProvinces.reduce((sum, p) => 
-    sum + p.army.infantry * UNIT_STATS.infantry.maintenance.food + 
-    p.army.archers * UNIT_STATS.archers.maintenance.food + 
-    p.army.cavalry * UNIT_STATS.cavalry.maintenance.food, 0);
+    sum + (p.army?.infantry || 0) * UNIT_STATS.infantry.maintenance.food + 
+    (p.army?.archers || 0) * UNIT_STATS.archers.maintenance.food + 
+    (p.army?.cavalry || 0) * UNIT_STATS.cavalry.maintenance.food, 0);
   
   const netGold = Math.floor(goldIncome - goldMaintenance);
   const netFood = Math.floor(foodIncome - foodMaintenance);

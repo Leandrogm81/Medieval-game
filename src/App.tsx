@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Component } from 'react';
 import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData, TurnSummaryData } from './types';
 import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION, BattleResult } from './gameLogic';
 import { persistence } from './persistence';
@@ -12,13 +12,12 @@ import { InstructionsModal } from './components/InstructionsModal';
 import { TurnSummaryModal } from './components/TurnSummaryModal';
 import { CombatPreviewModal } from './components/CombatPreviewModal';
 import { BattleResultModal } from './components/BattleResultModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save } from 'lucide-react';
 
 const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 750;
-const NUM_PROVINCES = 25;
-const NUM_REALMS = 6;
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -59,7 +58,7 @@ export default function App() {
       const wRatio = window.innerWidth / 1420;
       const hRatio = window.innerHeight / 850;
       // Base scale to fit window, then modified by user zoom
-      const baseScale = Math.min(wRatio, hRatio) * 0.99;
+      const baseScale = (Math.min(wRatio, hRatio) || 1) * 0.99;
       setScale(baseScale);
     };
     handleResize();
@@ -983,8 +982,18 @@ export default function App() {
                     <label className="block text-xs text-[#f5f2ed]/60 mb-1 uppercase">Províncias</label>
                     <input 
                       type="number" 
+                      min="5"
+                      max="100"
                       value={gameSettings.numProvinces}
-                      onChange={(e) => setGameSettings(prev => ({ ...prev, numProvinces: parseInt(e.target.value) }))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        if (!isNaN(val)) {
+                          const safeVal = Math.max(5, Math.min(100, val));
+                          setGameSettings(prev => ({ ...prev, numProvinces: safeVal }));
+                        } else {
+                          setGameSettings(prev => ({ ...prev, numProvinces: 5 }));
+                        }
+                      }}
                       className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-sm text-white"
                     />
                   </div>
@@ -992,8 +1001,18 @@ export default function App() {
                     <label className="block text-xs text-[#f5f2ed]/60 mb-1 uppercase">Reinos</label>
                     <input 
                       type="number" 
+                      min="1"
+                      max="8"
                       value={gameSettings.numRealms}
-                      onChange={(e) => setGameSettings(prev => ({ ...prev, numRealms: parseInt(e.target.value) }))}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value);
+                        setGameSettings(prev => ({ ...prev, numRealms: isNaN(val) ? 1 : val }));
+                      }}
+                      onBlur={(e) => {
+                        const val = parseInt(e.target.value);
+                        const safeVal = Math.max(1, Math.min(8, isNaN(val) ? 1 : val));
+                        setGameSettings(prev => ({ ...prev, numRealms: safeVal }));
+                      }}
                       className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-sm text-white"
                     />
                   </div>
@@ -1070,7 +1089,8 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="h-screen w-screen bg-[#1a1a1a] flex items-center justify-center overflow-hidden">
+    <ErrorBoundary>
+      <div className="h-screen w-screen bg-[#1a1a1a] flex items-center justify-center overflow-hidden">
       <div 
         className="relative flex gap-4 origin-center transition-transform duration-300 ease-out"
         style={{ width: 1420, height: 850, transform: `scale(${scale})` }}
@@ -1202,5 +1222,6 @@ export default function App() {
         conquered={battleResultMeta?.conquered || false}
       />
     </div>
+    </ErrorBoundary>
   );
 }

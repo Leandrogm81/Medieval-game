@@ -73,7 +73,9 @@ export function calculateVisibility(state: GameState): string[] {
 export function generateInitialState(width: number, height: number, settings: GameSettings): GameState {
   console.log("Generating initial state...");
   try {
-    const { numProvinces, numRealms, resourceDensity } = settings;
+    const numRealms = Math.max(1, settings.numRealms || 1);
+    const numProvinces = Math.max(numRealms, settings.numProvinces || 5);
+    const { resourceDensity } = settings;
     // Generate random points
     let points = Array.from({ length: numProvinces }, () => [Math.random() * width, Math.random() * height] as [number, number]);
 
@@ -202,14 +204,17 @@ export function generateInitialState(width: number, height: number, settings: Ga
       }
     });
 
+    const playerRealmId = 'realm_0';
     const initialState: GameState = {
       turn: 1,
       realms,
       provinces,
-      playerRealmId: 'realm_0',
+      playerRealmId,
       logs: [
         "Bem-vindo ao Medieval Realms!", 
-        `Sua capital foi estabelecida em ${provinces[realms['realm_0'].capitalId!].name}.`,
+        realms[playerRealmId]?.capitalId 
+          ? `Sua capital foi estabelecida em ${provinces[realms[playerRealmId].capitalId!].name}.`
+          : "Sua jornada começa em terras desconhecidas.",
         "Sua jornada rumo à glória começa agora."
       ],
       currentEvent: null,

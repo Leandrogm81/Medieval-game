@@ -166,7 +166,10 @@ export const Map: React.FC<MapProps> = ({
           let strokeOpacity = 0.3;
           
           // Stronger borders between realms
-          const hasDifferentOwnerNeighbor = prov.neighbors.some(nId => gameState.provinces[nId].ownerId !== prov.ownerId);
+          const hasDifferentOwnerNeighbor = prov.neighbors.some(nId => {
+            const nProv = gameState.provinces[nId];
+            return nProv && nProv.ownerId !== prov.ownerId;
+          });
           if (hasDifferentOwnerNeighbor && isVisible) {
             strokeWidth = 2;
             strokeOpacity = 0.8;
@@ -319,7 +322,7 @@ export const Map: React.FC<MapProps> = ({
 
       {/* Tooltip */}
       <AnimatePresence>
-        {hoveredProvinceId && (
+        {hoveredProvinceId && gameState.provinces[hoveredProvinceId] && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -334,13 +337,14 @@ export const Map: React.FC<MapProps> = ({
             className="bg-slate-900/95 backdrop-blur border border-slate-700 p-3 rounded-lg shadow-xl min-w-[180px]"
           >
             <div className="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
-              <span className="text-xs font-bold text-slate-100">{gameState.provinces[hoveredProvinceId].name}</span>
-              {gameState.provinces[hoveredProvinceId].strategicResource && (
+              <span className="text-xs font-bold text-slate-100">{gameState.provinces[hoveredProvinceId].name || 'Província'}</span>
+              {gameState.provinces[hoveredProvinceId].strategicResource && gameState.provinces[hoveredProvinceId].strategicResource !== 'none' && (
                 <span className="text-[8px] font-bold uppercase text-slate-400 flex items-center gap-1">
                   {getResourceIcon(gameState.provinces[hoveredProvinceId].strategicResource)}
                   {gameState.provinces[hoveredProvinceId].strategicResource === 'iron' ? 'Ferro' : 
                    gameState.provinces[hoveredProvinceId].strategicResource === 'wood' ? 'Madeira' :
-                   gameState.provinces[hoveredProvinceId].strategicResource === 'horse' ? 'Cavalo' : 'Pedra'}
+                   gameState.provinces[hoveredProvinceId].strategicResource === 'horse' ? 'Cavalo' : 
+                   gameState.provinces[hoveredProvinceId].strategicResource === 'stone' ? 'Pedra' : ''}
                 </span>
               )}
             </div>
@@ -349,15 +353,15 @@ export const Map: React.FC<MapProps> = ({
               <div className="grid grid-cols-3 gap-1 text-[9px] text-center">
                 <div className="bg-slate-800 p-1 rounded">
                   <div className="text-slate-500">Inf</div>
-                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.infantry}</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army?.infantry ?? 0}</div>
                 </div>
                 <div className="bg-slate-800 p-1 rounded">
                   <div className="text-slate-500">Arq</div>
-                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.archers}</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army?.archers ?? 0}</div>
                 </div>
                 <div className="bg-slate-800 p-1 rounded">
                   <div className="text-slate-500">Cav</div>
-                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army.cavalry}</div>
+                  <div className="font-bold">{gameState.provinces[hoveredProvinceId].army?.cavalry ?? 0}</div>
                 </div>
               </div>
 
