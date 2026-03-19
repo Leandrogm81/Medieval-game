@@ -1,7 +1,5 @@
-import React, { useState, useEffect, useCallback, Component } from 'react';
-import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData, TurnSummaryData, MarchOrder } from './types';
-import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, findPath, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION, BattleResult } from './gameLogic';
-import { persistence } from './persistence';
+import React, { useState, useEffect } from 'react';
+import { GameState, ViewMode, ActionType, UnitType } from './types';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChroniclesModal } from './components/ChroniclesModal';
@@ -16,54 +14,32 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save } from 'lucide-react';
 
+import { useUIState } from './hooks/useUIState';
+import { useGameController } from './hooks/useGameController';
+import { persistence } from './persistence';
+
 const MAP_WIDTH = 1000;
 const MAP_HEIGHT = 750;
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const [selectedProvinceId, setSelectedProvinceId] = useState<string | null>(null);
-  const [actionState, setActionState] = useState<ActionType>('idle');
-  const [actionSourceId, setActionSourceId] = useState<string | null>(null);
-  const [showMenu, setShowMenu] = useState<boolean>(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('political');
-  const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
-  const [showInstructionsModal, setShowInstructionsModal] = useState<boolean>(false);
-  const [showTurnSummary, setShowTurnSummary] = useState<boolean>(false);
-  const [turnSummaryData, setTurnSummaryData] = useState<TurnSummaryData | null>(null);
-  const [showCombatPreview, setShowCombatPreview] = useState<boolean>(false);
-  const [combatAttackerProvId, setCombatAttackerProvId] = useState<string | null>(null);
-  const [combatDefenderProvId, setCombatDefenderProvId] = useState<string | null>(null);
-  const [combatAttackingArmy, setCombatAttackingArmy] = useState<Army | null>(null);
-  const [showBattleResult, setShowBattleResult] = useState<boolean>(false);
-  const [battleResultData, setBattleResultData] = useState<BattleResult | null>(null);
-  const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean } | null>(null);
-  const [autosave, setAutosave] = useState<SaveData | null>(null);
-  const [gameSettings, setGameSettings] = useState<GameSettings>({
-    numProvinces: 25,
-    numRealms: 6,
-    aiDifficulty: 'normal',
-    resourceDensity: 'normal',
-    victoryCondition: 'conquest'
-  });
-  const [zoom, setZoom] = useState(1);
-  const [showChronicles, setShowChronicles] = useState(false);
-  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [hasDragged, setHasDragged] = useState(false);
-  const [isHudOpen, setIsHudOpen] = useState(true);
+  const ui = useUIState();
+  const ctrl = useGameController(gameState, setGameState, ui);
 
-  // ===== March / Routing State =====
-  /** Composição das tropas selecionadas para o próximo movimento */
-  const [moveComposition, setMoveComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
-  /** Caminho em construção pelo jogador no modo 'routing' */
-  const [previewPath, setPreviewPath] = useState<string[]>([]);
-  /** Indica se o jogador está configurando a composição antes de mover */
-  const [selectingMoveComposition, setSelectingMoveComposition] = useState(false);
-
+  // Persistence and Visual Effects cleanup
   useEffect(() => {
-    // Initial zoom and hud setup could go here if needed
-  }, []);
+    ui.setAutosave(persistence.loadAutoSave());
+    const timer = setInterval(() => {
+      setGameState(prev => {
+        if (!prev || prev.visualEffects.length === 0) return prev;
+        const now = Date.now();
+        const filtered = prev.visualEffects.filter(e => now - e.startTime < e.duration);
+        if (filtered.length === prev.visualEffects.length) return prev;
+        return { ...prev, visualEffects: filtered };
+      });
+    }, 100);
+    return () => clearInterval(timer);
+  }, [ui]);
 
   const toggleFullScreen = () => {
     if (!document.fullscreenElement) {
@@ -75,1050 +51,194 @@ export default function App() {
     }
   };
 
-  const playSound = (type: 'click' | 'recruit' | 'build' | 'combat' | 'conquest' | 'turn') => {
-    try {
-      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain);
-      gain.connect(ctx.destination);
-      let freq = 440;
-      let duration = 0.1;
-      switch(type) {
-        case 'click': freq = 880; duration = 0.05; break;
-        case 'recruit': freq = 440; duration = 0.2; break;
-        case 'build': freq = 220; duration = 0.3; break;
-        case 'combat': freq = 110; duration = 0.4; break;
-        case 'conquest': freq = 660; duration = 0.5; break;
-        case 'turn': freq = 330; duration = 0.3; break;
-      }
-      osc.frequency.setValueAtTime(freq, ctx.currentTime);
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + duration);
-      osc.start();
-      osc.stop(ctx.currentTime + duration);
-    } catch (e) {}
-  };
-
-  const startNewGame = useCallback(() => {
-    playSound('turn');
-    try {
-      const initialState = generateInitialState(MAP_WIDTH, MAP_HEIGHT, gameSettings);
-      setGameState(initialState);
-      setSelectedProvinceId(null);
-      setActionState('idle');
-      setActionSourceId(null);
-      setShowMenu(false);
-    } catch (error) {
-      console.error("Failed to start new game:", error);
-      addLog("Erro ao iniciar novo jogo.");
-    }
-  }, [gameSettings]);
-
-  const handleSave = (name: string) => {
-    if (!gameState) return;
-    persistence.saveGame(gameState, name);
-    addLog(`Jogo salvo: ${name}`);
-  };
-
-  const handleLoad = (id: string) => {
-    const loadedState = persistence.loadSave(id);
-    if (loadedState) {
-      setGameState(loadedState);
-      setShowMenu(false);
-      setShowSaveModal(false);
-      addLog("Jogo carregado com sucesso.");
-    }
-  };
-
-  const handleDeleteSave = (id: string) => {
-    persistence.deleteSave(id);
-  };
-
-  const addLog = (msg: string) => {
-    setGameState(prev => {
-      if (!prev) return prev;
-      return { ...prev, logs: [...prev.logs, msg] };
-    });
-  };
-
-  // Cleanup visual effects
-  useEffect(() => {
-    setAutosave(persistence.loadAutoSave());
-    const timer = setInterval(() => {
-      setGameState(prev => {
-        if (!prev || prev.visualEffects.length === 0) return prev;
-        const now = Date.now();
-        const filtered = prev.visualEffects.filter(e => now - e.startTime < e.duration);
-        if (filtered.length === prev.visualEffects.length) return prev;
-        return { ...prev, visualEffects: filtered };
-      });
-    }, 100);
-    return () => clearInterval(timer);
-  }, []);
-
-  const addVisualEffect = (type: 'battle' | 'conquest' | 'trade', x: number, y: number) => {
-    setGameState(prev => {
-      if (!prev) return prev;
-      const newEffect = {
-        id: `effect_${Date.now()}_${Math.random()}`,
-        type,
-        x,
-        y,
-        duration: 2000,
-        startTime: Date.now()
-      };
-      return { ...prev, visualEffects: [...prev.visualEffects, newEffect] };
-    });
-  };
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (e.button !== 0) return; // Only left click
-    setIsDragging(true);
-    setHasDragged(false);
-    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    
-    const newX = e.clientX - dragStart.x;
-    const newY = e.clientY - dragStart.y;
-    
-    if (Math.abs(newX - panOffset.x) > 5 || Math.abs(newY - panOffset.y) > 5) {
-      setHasDragged(true);
-    }
-    
-    setPanOffset({ x: newX, y: newY });
-  };
-
-  const handleMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleProvinceClick = (id: string) => {
-    if (!gameState) return;
-    if (hasDragged) return;
-    setSelectedProvinceId(id);
-    playSound('click');
-
-    if (actionState === 'idle') {
-      // nothing extra
-    } else if (actionState === 'moving' || actionState === 'routing') {
-      // 'moving' = imediato para prov adj; 'routing' = rota multi-passo
-      if (actionSourceId) {
-        const source = gameState.provinces[actionSourceId];
-        const target = gameState.provinces[id];
-        const playerRealm = gameState.realms[gameState.playerRealmId];
-
-        if (playerRealm.actionPoints < ACTION_COSTS.move) {
-          addLog('Pontos de Ação insuficientes para mover.');
-          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
-        }
-
-        // Find path (only through player territory for regular troops)
-        const path = findPath(gameState, actionSourceId, id, gameState.playerRealmId, false);
-
-        if (path.length === 0) {
-          addLog('Destino inalcançável pelos seus territórios. Use o modo de rota para batedores.');
-          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
-        }
-
-        const totalComp = moveComposition.infantry + moveComposition.archers + moveComposition.cavalry + moveComposition.scouts;
-        if (totalComp <= 0) {
-          addLog('Selecione a quantidade de tropas antes de mover.');
-          return;
-        }
-
-        // Validate composition against source
-        if (moveComposition.infantry > source.army.infantry ||
-            moveComposition.archers > source.army.archers ||
-            moveComposition.cavalry > source.army.cavalry ||
-            moveComposition.scouts > source.army.scouts) {
-          addLog('Tropas insuficientes para o movimento selecionado.');
-          return;
-        }
-
-        if (path.length === 1) {
-          // Adjacent — move immediately
-          setGameState(prev => {
-            if (!prev) return prev;
-            const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-            const s = next.provinces[actionSourceId];
-            const t = next.provinces[id];
-            s.army.infantry -= moveComposition.infantry;
-            s.army.archers  -= moveComposition.archers;
-            s.army.cavalry  -= moveComposition.cavalry;
-            s.army.scouts   -= moveComposition.scouts;
-            s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-            t.army.infantry += moveComposition.infantry;
-            t.army.archers  += moveComposition.archers;
-            t.army.cavalry  += moveComposition.cavalry;
-            t.army.scouts   += moveComposition.scouts;
-            t.troops = t.army.infantry + t.army.archers + t.army.cavalry + t.army.scouts;
-            next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
-            return next;
-          });
-          addVisualEffect('conquest', target.center[0], target.center[1]);
-          addLog(`Tropas movidas de ${source.name} para ${target.name}.`);
-        } else {
-          // Multi-step route — create a MarchOrder
-          const order: MarchOrder = {
-            id: `march_${Date.now()}`,
-            realmId: gameState.playerRealmId,
-            currentProvId: actionSourceId,
-            remainingPath: path,
-            troops: { ...moveComposition },
-            isScoutMission: false,
-          };
-          setGameState(prev => {
-            if (!prev) return prev;
-            const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-            const s = next.provinces[actionSourceId];
-            s.army.infantry -= moveComposition.infantry;
-            s.army.archers  -= moveComposition.archers;
-            s.army.cavalry  -= moveComposition.cavalry;
-            s.army.scouts   -= moveComposition.scouts;
-            s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-            next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
-            if (!next.marchOrders) next.marchOrders = [];
-            next.marchOrders.push(order);
-            return next;
-          });
-          addLog(`Ordem de marcha criada: ${path.length} turno(s) até ${target.name}.`);
-        }
-      }
-      setActionState('idle'); setActionSourceId(null); setPreviewPath([]);
-      setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
-      setSelectingMoveComposition(false);
-    } else if (actionState === 'dispatching_scouts') {
-      // Scouts can go to ANY province
-      if (actionSourceId) {
-        const source = gameState.provinces[actionSourceId];
-        const target = gameState.provinces[id];
-        const playerRealm = gameState.realms[gameState.playerRealmId];
-
-        if (playerRealm.actionPoints < ACTION_COSTS.move) {
-          addLog('Pontos de Ação insuficientes para despachar batedores.');
-          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
-        }
-
-        const scoutsToSend = moveComposition.scouts > 0 ? moveComposition.scouts : source.army.scouts;
-        if (scoutsToSend <= 0) {
-          addLog('Sem batedores nesta província.');
-          setActionState('idle'); setActionSourceId(null); return;
-        }
-
-        // Find path through any terrain (scouts ignore ownership)
-        const path = findPath(gameState, actionSourceId, id, gameState.playerRealmId, true);
-        if (path.length === 0) {
-          addLog('Nenhum caminho encontrado para os batedores.');
-          setActionState('idle'); setActionSourceId(null); return;
-        }
-
-        const order: MarchOrder = {
-          id: `scout_${Date.now()}`,
-          realmId: gameState.playerRealmId,
-          currentProvId: actionSourceId,
-          remainingPath: path,
-          troops: { infantry: 0, archers: 0, cavalry: 0, scouts: scoutsToSend },
-          isScoutMission: true,
-        };
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          const s = next.provinces[actionSourceId];
-          s.army.scouts -= scoutsToSend;
-          s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
-          if (!next.marchOrders) next.marchOrders = [];
-          next.marchOrders.push(order);
-          return next;
-        });
-        addLog(`${scoutsToSend} batedores despachados para ${target.name} (${path.length} turno(s)).`);
-      }
-      setActionState('idle'); setActionSourceId(null); setPreviewPath([]);
-      setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
-    } else if (actionState === 'attacking') {
-      if (actionSourceId) {
-        const source = gameState.provinces[actionSourceId];
-        const target = gameState.provinces[id];
-        const playerRealm = gameState.realms[gameState.playerRealmId];
-
-        if (playerRealm.actionPoints < ACTION_COSTS.attack) {
-          addLog("Pontos de Ação insuficientes para atacar.");
-          setActionState('idle');
-          setActionSourceId(null);
-          return;
-        }
-
-        if (source.neighbors.includes(id) && target.ownerId !== gameState.playerRealmId) {
-          if (!playerRealm.wars.includes(target.ownerId)) {
-             addLog(`Você precisa declarar guerra a ${gameState.realms[target.ownerId].name} antes de atacar!`);
-          } else {
-             const attackingArmy: Army = {
-               infantry: Math.floor(source.army.infantry * 0.8),
-               archers: Math.floor(source.army.archers * 0.8),
-               cavalry: Math.floor(source.army.cavalry * 0.8),
-               scouts: 0, // scouts don't attack
-             };
-             const totalAttacking = attackingArmy.infantry + attackingArmy.archers + attackingArmy.cavalry;
-
-             if (totalAttacking > 0) {
-               // Show combat preview instead of attacking directly
-               setCombatAttackerProvId(actionSourceId);
-               setCombatDefenderProvId(id);
-               setCombatAttackingArmy(attackingArmy);
-               setShowCombatPreview(true);
-             } else {
-               addLog("Tropas insuficientes na província de origem para atacar.");
-             }
-          }
-        } else {
-          addLog("Alvo inválido! Deve ser uma província inimiga adjacente.");
-        }
-      }
-      setActionState('idle');
-      setActionSourceId(null);
-    }
-  };
-
-  /** Cancela uma ordem de marcha e retorna as tropas à província atual */
-  const cancelMarchOrder = (orderId: string) => {
-    setGameState(prev => {
-      if (!prev) return prev;
-      const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-      const order = (next.marchOrders || []).find(o => o.id === orderId);
-      if (!order) return prev;
-      // Return troops to current province if it's still friendly
-      const prov = next.provinces[order.currentProvId];
-      if (prov && (order.isScoutMission || prov.ownerId === next.playerRealmId)) {
-        prov.army.infantry += order.troops.infantry;
-        prov.army.archers  += order.troops.archers;
-        prov.army.cavalry  += order.troops.cavalry;
-        prov.army.scouts   += order.troops.scouts;
-        prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts;
-        next.logs.push(`Ordem de marcha cancelada. Tropas retornaram a ${prov.name}.`);
-      }
-      next.marchOrders = next.marchOrders.filter(o => o.id !== orderId);
-      return next;
-    });
-  };
-
-  const confirmAttack = () => {
-    if (!gameState || !combatAttackerProvId || !combatDefenderProvId || !combatAttackingArmy) return;
-    playSound('combat');
-
-    const source = gameState.provinces[combatAttackerProvId];
-    const target = gameState.provinces[combatDefenderProvId];
-    const playerRealm = gameState.realms[gameState.playerRealmId];
-    const defenderRealm = gameState.realms[target.ownerId];
-
-    addVisualEffect('battle', target.center[0], target.center[1]);
-
-    // Resolve combat manually to capture result
-    const effectiveDefense = Math.max(0, target.defense - (target.siegeDamage || 0));
-    const result = resolveCombat(combatAttackingArmy, target.army, target.terrain, effectiveDefense);
-
-    // Show battle result modal
-    setBattleResultData(result);
-    setBattleResultMeta({
-      attackerName: playerRealm.name,
-      defenderName: defenderRealm?.name || 'Desconhecido',
-      provinceName: target.name,
-      conquered: result.won,
-    });
-    setShowBattleResult(true);
-
-    // Apply results to game state
-    setGameState(prev => {
-      if (!prev) return prev;
-      const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-      const s = next.provinces[combatAttackerProvId];
-      const t = next.provinces[combatDefenderProvId];
-      const r = next.realms[prev.playerRealmId];
-
-      // Remove attacking troops from source
-      s.army.infantry -= combatAttackingArmy.infantry;
-      s.army.archers -= combatAttackingArmy.archers;
-      s.army.cavalry -= combatAttackingArmy.cavalry;
-      s.army.scouts -= (combatAttackingArmy.scouts || 0);
-      s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-      r.actionPoints -= ACTION_COSTS.attack;
-
-      if (result.won) {
-        const oldOwnerId = t.ownerId;
-        const oldOwner = next.realms[oldOwnerId];
-        t.ownerId = r.id;
-        t.army = result.attackerRemaining;
-        t.troops = t.army.infantry + t.army.archers + t.army.cavalry + (t.army.scouts || 0);
-        t.siegeDamage = 0;
-
-        // Retreat defenders
-        const totalDefRem = result.defenderRemaining.infantry + result.defenderRemaining.archers + result.defenderRemaining.cavalry;
-        if (totalDefRem > 0) {
-          const retreatOptions = t.neighbors.map(nId => next.provinces[nId]).filter(p => p.ownerId === oldOwnerId);
-          if (retreatOptions.length > 0) {
-            const rp = retreatOptions.sort((a, b) => b.troops - a.troops)[0];
-            rp.army.infantry += result.defenderRemaining.infantry;
-            rp.army.archers += result.defenderRemaining.archers;
-            rp.army.cavalry += result.defenderRemaining.cavalry;
-            rp.army.scouts += (result.defenderRemaining.scouts || 0);
-            rp.troops = rp.army.infantry + rp.army.archers + rp.army.cavalry + rp.army.scouts;
-          }
-        }
-
-        next.logs.push(`CONQUISTA: ${r.name} tomou ${t.name}!`);
-        r.overextension = Math.min(100, r.overextension + 15);
-        t.recentlyConquered = 10;
-        t.loyalty = 30;
-
-        if (oldOwner && oldOwner.capitalId === t.id) {
-          const remaining = (Object.values(next.provinces) as typeof t[]).filter(p => p.ownerId === oldOwnerId && p.id !== t.id);
-          if (remaining.length > 0) {
-            oldOwner.capitalId = remaining.sort((a, b) => b.population - a.population)[0].id;
-          }
-        }
-
-        if (oldOwner && oldOwner.memory[r.id]) {
-          oldOwner.memory[r.id].aggression += 30;
-          oldOwner.memory[r.id].lastWarTurn = next.turn;
-        }
-        if (oldOwner) oldOwner.relations[r.id] -= 50;
-      } else {
-        // Defeat: return survivors to source
-        t.army = result.defenderRemaining;
-        t.troops = t.army.infantry + t.army.archers + t.army.cavalry + (t.army.scouts || 0);
-        s.army.infantry += result.attackerRemaining.infantry;
-        s.army.archers += result.attackerRemaining.archers;
-        s.army.cavalry += result.attackerRemaining.cavalry;
-        s.army.scouts += (result.attackerRemaining.scouts || 0);
-        s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-
-        if (t.defense > (t.siegeDamage || 0)) {
-          t.siegeDamage = (t.siegeDamage || 0) + 1;
-        }
-      }
-
-      return next;
-    });
-    setShowCombatPreview(false);
-    setCombatAttackerProvId(null);
-    setCombatDefenderProvId(null);
-    setCombatAttackingArmy(null);
-  };
-
-  const handleAction = (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farms' | 'build_mines' | 'build_workshops' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => {
-    if (!gameState || !selectedProvinceId) return;
-    
-    const prov = gameState.provinces[selectedProvinceId];
-    const playerRealm = gameState.realms[gameState.playerRealmId];
-
-    if (action === 'recruit' && unitType) {
-      playSound('recruit');
-      const recruitAmount = amount || 10;
-      const stats = UNIT_STATS[unitType];
-      const goldCost = stats.cost.gold * recruitAmount;
-      const foodCost = stats.cost.food * recruitAmount;
-      const materialsCost = stats.cost.materials * recruitAmount;
-      const popCost = stats.cost.pop * recruitAmount;
-      
-      if (playerRealm.actionPoints < ACTION_COSTS.recruit) {
-        addLog("Pontos de Ação insuficientes para recrutar.");
-        return;
-      }
-
-      if (playerRealm.gold < goldCost || playerRealm.food < foodCost || playerRealm.materials < materialsCost) {
-        addLog("Recursos insuficientes para recrutar.");
-        return;
-      }
-
-      if (prov.population < popCost) {
-        addLog("População insuficiente para recrutar.");
-        return;
-      }
-
-      // Strategic resource checks
-      const statsWithReq = stats as { requires?: StrategicResource };
-      if (statsWithReq.requires) {
-        const hasResource = (Object.values(gameState.provinces) as Province[]).some(p => p.ownerId === gameState.playerRealmId && p.strategicResource === statsWithReq.requires);
-        if (!hasResource) {
-          addLog(`Você precisa de uma província com ${statsWithReq.requires.toUpperCase()} para recrutar ${unitType === 'archers' ? 'Arqueiros' : 'Cavalaria'}.`);
-          return;
-        }
-      }
-
-      setGameState(prev => {
-        if (!prev) return prev;
-        const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-        const p = next.provinces[selectedProvinceId];
-        const r = next.realms[prev.playerRealmId];
-
-        r.gold -= goldCost;
-        r.food -= foodCost;
-        r.materials -= materialsCost;
-        r.actionPoints -= ACTION_COSTS.recruit;
-        p.population -= popCost;
-        p.army[unitType] += recruitAmount;
-        p.troops = p.army.infantry + p.army.archers + p.army.cavalry + (p.army.scouts || 0);
-        return next;
-      });
-      addLog(`Recrutado ${recruitAmount} ${unitType === 'infantry' ? 'Infantaria' : unitType === 'archers' ? 'Arqueiros' : unitType === 'cavalry' ? 'Cavalaria' : 'Batedores'} em ${prov.name}.`);
-    } else if (action === 'build_farms' || action === 'build_mines' || action === 'build_workshops' || action === 'build_courts' || action === 'fortify') {
-      playSound('build');
-      if (playerRealm.actionPoints < ACTION_COSTS.build) {
-        addLog(`Pontos de Ação insuficientes para ${action === 'fortify' ? 'fortificar' : 'construir'}.`);
-        return;
-      }
-
-      const isFortify = action === 'fortify';
-      const buildingType = isFortify ? 'fortify' : (action.replace('build_', '') as keyof typeof BUILDING_STATS);
-      const stats = BUILDING_STATS[buildingType];
-      const cost = stats.gold || 0;
-      const matCost = (stats as any).materials || 0;
-
-      if (playerRealm.gold >= cost && playerRealm.materials >= matCost) {
-        if (isFortify && prov.defense >= 5) {
-           addLog("Defesas já estão no nível máximo.");
-           return;
-        }
-
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold -= cost;
-          next.realms[prev.playerRealmId].materials -= matCost;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
-          
-          if (buildingType === 'fortify') {
-             next.provinces[selectedProvinceId].targetProvStatus = 'defend'; // irrelevant but matching logic if needed
-             next.provinces[selectedProvinceId].defense += 1;
-          } else {
-             next.provinces[selectedProvinceId].buildings[buildingType as 'farms'] += 1;
-          }
-          return next;
-        });
-        const buildingNames: any = { farms: 'Fazenda', mines: 'Mina', workshops: 'Oficina', courts: 'Tribunal', fortify: 'Fortificação' };
-        addLog(`Finalizado: ${buildingNames[buildingType] || 'Melhoria'} em ${prov.name}.`);
-      } else {
-        addLog("Recursos insuficientes.");
-      }
-    } else if (action === 'move') {
-      setActionState('moving');
-      setActionSourceId(selectedProvinceId);
-      addLog("Selecione uma província adjacente de sua propriedade para mover as tropas.");
-    } else if (action === 'attack') {
-      if (playerRealm.actionPoints < ACTION_COSTS.attack) {
-        addLog("Pontos de Ação insuficientes para atacar.");
-        return;
-      }
-      setActionState('attacking');
-      setActionSourceId(selectedProvinceId);
-      addLog("Selecione a província inimiga alvo para atacar.");
-    } else if (action === 'send_gift') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes para diplomacia.");
-        return;
-      }
-      const cost = 100;
-      if (playerRealm.gold >= cost) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          const targetRealmId = prov.ownerId;
-          next.realms[prev.playerRealmId].gold -= cost;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          next.realms[prev.playerRealmId].relations[targetRealmId] = Math.min(100, (next.realms[prev.playerRealmId].relations[targetRealmId] || 0) + 25);
-          
-          // Memory of help
-          if (next.realms[targetRealmId].memory[prev.playerRealmId]) {
-            next.realms[targetRealmId].memory[prev.playerRealmId].help += 20;
-          }
-          return next;
-        });
-        addLog(`Enviado um presente para ${gameState.realms[prov.ownerId].name}.`);
-      } else {
-        addLog("Ouro insuficiente.");
-      }
-    } else if (action === 'propose_pact') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const relations = playerRealm.relations[targetId] || 0;
-      if (relations > 10) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          if (!next.realms[prev.playerRealmId].pacts.includes(targetId)) {
-            next.realms[prev.playerRealmId].pacts.push(targetId);
-            next.realms[targetId].pacts.push(prev.playerRealmId);
-          }
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          return next;
-        });
-        addLog(`Pacto de não-agressão assinado com ${gameState.realms[targetId].name}.`);
-      } else {
-        addLog(`${gameState.realms[targetId].name} recusou o pacto.`);
-      }
-    } else if (action === 'propose_alliance') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const relations = playerRealm.relations[targetId] || 0;
-      if (relations > 50) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          if (!next.realms[prev.playerRealmId].alliances.includes(targetId)) {
-            next.realms[prev.playerRealmId].alliances.push(targetId);
-            next.realms[targetId].alliances.push(prev.playerRealmId);
-          }
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          return next;
-        });
-        addLog(`Aliança militar formada com ${gameState.realms[targetId].name}!`);
-      } else {
-        addLog(`${gameState.realms[targetId].name} recusou a aliança.`);
-      }
-    } else if (action === 'demand_tribute') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const targetRealm = gameState.realms[targetId];
-      if (playerRealm.relations[targetId] < 0) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          const tribute = Math.floor(targetRealm.gold * 0.2);
-          next.realms[targetId].gold -= tribute;
-          next.realms[prev.playerRealmId].gold += tribute;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          next.realms[targetId].relations[prev.playerRealmId] -= 30;
-          if (next.realms[targetId].memory[prev.playerRealmId]) {
-            next.realms[targetId].memory[prev.playerRealmId].betrayal += 20;
-          }
-          return next;
-        });
-        addLog(`Exigimos tributo de ${targetRealm.name}. Eles pagaram a contragosto.`);
-      } else {
-        addLog(`${targetRealm.name} riu da nossa exigência.`);
-      }
-    } else if (action === 'declare_war') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      if (playerRealm.wars.includes(targetId)) {
-        addLog("Você já está em guerra com este reino.");
-        return;
-      }
-      const truceTurn = playerRealm.memory[targetId]?.truces?.[targetId] || 0;
-      if (gameState.turn < truceTurn) {
-         addLog(`Você tem uma trégua com ${gameState.realms[targetId].name} até o turno ${truceTurn}.`);
-         return; // OR we can let them break truce with huge penalties. Let's strictly block for now to keep simple.
-      }
-      
-      setGameState(prev => {
-         if (!prev) return prev;
-         const next = { ...prev };
-         const r = next.realms[prev.playerRealmId];
-         const tr = next.realms[targetId];
-         r.actionPoints -= ACTION_COSTS.diplomacy;
-         
-         r.wars.push(targetId);
-         tr.wars.push(r.id);
-         
-         // Penalty for breaking pacts
-         if (r.pacts.includes(targetId)) {
-           r.pacts = r.pacts.filter(id => id !== targetId);
-           tr.pacts = tr.pacts.filter(id => id !== r.id);
-           tr.memory[r.id].betrayal += 50;
-           r.relations[targetId] = -100;
-           addLog(`TRAIÇÃO: Quebramos o pacto e declaramos guerra a ${tr.name}!`);
-         } else {
-           r.relations[targetId] = -100;
-           addLog(`GUERRA: Declarada guerra a ${tr.name}! As trombetas cobram sangue!`);
-         }
-         
-         // Penalty for breaking alliances
-         if (r.alliances.includes(targetId)) {
-           r.alliances = r.alliances.filter(id => id !== targetId);
-           tr.alliances = tr.alliances.filter(id => id !== r.id);
-           tr.memory[r.id].betrayal += 80;
-         }
-         return next;
-      });
-    } else if (action === 'offer_peace') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const targetRealm = gameState.realms[targetId];
-      // Check if enemy accepts peace
-      const enemyMem = targetRealm.memory[playerRealm.id];
-      if (enemyMem && enemyMem.warExhaustion > 30) {
-        // they accept
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = { ...prev };
-          const r = next.realms[prev.playerRealmId];
-          const tr = next.realms[targetId];
-          
-          r.actionPoints -= ACTION_COSTS.diplomacy;
-          r.wars = r.wars.filter(id => id !== targetId);
-          tr.wars = tr.wars.filter(id => id !== r.id);
-          
-          r.memory[targetId].warExhaustion = 0;
-          tr.memory[r.id].warExhaustion = 0;
-          
-          r.memory[targetId].truces[targetId] = next.turn + 10;
-          tr.memory[r.id].truces[r.id] = next.turn + 10;
-          
-          addLog(`PAZ NEGOCIADA: A paz foi firmada com ${tr.name}.`);
-          return next;
-        });
-      } else {
-        setGameState(prev => {
-           if (!prev) return prev;
-           const next = { ...prev };
-           next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-           return next;
-        });
-        addLog(`${targetRealm.name} recusa nossas ofertas de paz. A guerra continua!`);
-      }
-    } else if (action === 'break_pact') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      setGameState(prev => {
-         if (!prev) return prev;
-         const next = { ...prev };
-         const targetId = prov.ownerId;
-         const r = next.realms[prev.playerRealmId];
-         const tr = next.realms[targetId];
-         
-         r.pacts = r.pacts.filter(id => id !== targetId);
-         tr.pacts = tr.pacts.filter(id => id !== r.id);
-         tr.memory[r.id].betrayal += 30;
-         r.relations[targetId] -= 40;
-         r.actionPoints -= ACTION_COSTS.diplomacy;
-         addLog(`Denunciamos nosso pacto com ${tr.name}. Eles se lembrarão dessa ofensa.`);
-         return next;
-      });
-    } else if (action === 'demand_vassalage') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const targetRealm = gameState.realms[targetId];
-      const myProvinces = (Object.values(gameState.provinces) as Province[]).filter(p => p.ownerId === gameState.playerRealmId).length;
-      const theirProvinces = (Object.values(gameState.provinces) as Province[]).filter(p => p.ownerId === targetId).length;
-      
-      if (myProvinces > theirProvinces * 3 && playerRealm.relations[targetId] < -20) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          if (!next.realms[prev.playerRealmId].vassals.includes(targetId)) {
-            next.realms[prev.playerRealmId].vassals.push(targetId);
-            next.realms[targetId].vassalOf = prev.playerRealmId;
-          }
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          return next;
-        });
-        addLog(`${targetRealm.name} agora é nosso vassalo!`);
-      } else {
-        addLog(`${targetRealm.name} recusa-se a dobrar o joelho.`);
-      }
-    } else if (action === 'buy_food') {
-      const cost = 25;
-      const amount = 50;
-      if (playerRealm.gold >= cost) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold -= cost;
-          next.realms[prev.playerRealmId].food += amount;
-          return next;
-        });
-        addLog(`Comprado ${amount} de comida por ${cost} ouro.`);
-      } else {
-        addLog("Ouro insuficiente.");
-      }
-    } else if (action === 'sell_food') {
-      const price = 15;
-      const amount = 50;
-      if (playerRealm.food >= amount) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold += price;
-          next.realms[prev.playerRealmId].food -= amount;
-          return next;
-        });
-        addLog(`Vendido ${amount} de comida por ${price} ouro.`);
-      } else {
-        addLog("Comida insuficiente.");
-      }
-    } else if (action === 'buy_materials') {
-      const cost = 35;
-      const amount = 25;
-      if (playerRealm.gold >= cost) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold -= cost;
-          next.realms[prev.playerRealmId].materials += amount;
-          return next;
-        });
-        addLog(`Comprado ${amount} de materiais por ${cost} ouro.`);
-      } else {
-        addLog("Ouro insuficiente.");
-      }
-    } else if (action === 'sell_materials') {
-      const price = 20;
-      const amount = 25;
-      if (playerRealm.materials >= amount) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold += price;
-          next.realms[prev.playerRealmId].materials -= amount;
-          return next;
-        });
-        addLog(`Vendido ${amount} de materiais por ${price} ouro.`);
-      } else {
-        addLog("Materiais insuficientes.");
-      }
-    } else if (action === 'trade_route') {
-      if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-        addLog("AP insuficiente.");
-        return;
-      }
-      const targetId = prov.ownerId;
-      const existingRoute = playerRealm.tradeRoutes.find(r => (r.fromProvinceId === selectedProvinceId && r.toProvinceId === targetId) || (r.fromProvinceId === targetId && r.toProvinceId === selectedProvinceId));
-      
-      if (existingRoute) {
-        addLog("Rota comercial já existe.");
-        return;
-      }
-
-      if (playerRealm.relations[targetId] > 20) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].tradeRoutes.push({ fromProvinceId: selectedProvinceId!, toProvinceId: targetId });
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-          return next;
-        });
-        addLog(`Rota comercial estabelecida com ${gameState.realms[targetId].name}.`);
-      } else {
-        addLog(`${gameState.realms[targetId].name} não tem interesse em comércio conosco.`);
-      }
-    } else if (action === 'improve') {
-      if (playerRealm.actionPoints < ACTION_COSTS.build) {
-        addLog("Pontos de Ação insuficientes.");
-        return;
-      }
-      if (playerRealm.gold >= 50) {
-        setGameState(prev => {
-          if (!prev) return prev;
-          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
-          next.realms[prev.playerRealmId].gold -= 50;
-          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.build;
-          next.provinces[selectedProvinceId].wealth += 1;
-          return next;
-        });
-        addLog(`Economia melhorada em ${prov.name}.`);
-      }
-    }
-  };
-
-  const handleEndTurn = () => {
-    if (!gameState) return;
-    playSound('turn');
-    
-    const prevState = gameState;
-    const prevPlayerProvs = new Set((Object.values(prevState.provinces) as Province[]).filter(p => p.ownerId === prevState.playerRealmId).map(p => p.id));
-    const prevWars = new Set(prevState.realms[prevState.playerRealmId].wars);
-
-    let nextState = processAITurn(gameState);
-    nextState = processEndOfTurn(nextState);
-    
-    // Calculate turn summary
-    const playerRealm = nextState.realms[nextState.playerRealmId];
-    const nextPlayerProvs = (Object.values(nextState.provinces) as Province[]).filter(p => p.ownerId === nextState.playerRealmId);
-    const nextPlayerProvIds = new Set(nextPlayerProvs.map(p => p.id));
-
-    const provincesGained = [...nextPlayerProvIds].filter(id => !prevPlayerProvs.has(id)).map(id => nextState.provinces[id].name);
-    const provincesLost = [...prevPlayerProvs].filter(id => !nextPlayerProvIds.has(id)).map(id => nextState.provinces[id]?.name || 'Desconhecida');
-    
-    const nextWars = new Set(playerRealm.wars);
-    const newWars = ([...nextWars] as string[]).filter(id => !prevWars.has(id)).map(id => nextState.realms[id]?.name || id);
-    const peaceTreaties = ([...prevWars] as string[]).filter(id => !nextWars.has(id)).map(id => nextState.realms[id]?.name || id);
-
-    const rebellionLogs = nextState.logs.filter(l => l.includes('REBELIÃO') || l.includes('MOTIM'));
-    const lowLoyaltyProvs = nextPlayerProvs.filter(p => p.loyalty < 30).map(p => p.name);
-
-    // Calculate income/maintenance
-    let goldIncome = 0, foodIncome = 0, materialIncome = 0;
-    let goldMaint = 0, foodMaint = 0;
-    nextPlayerProvs.forEach(p => {
-      const eff = p.population / p.maxPopulation;
-      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * eff;
-      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * eff;
-      materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * eff;
-      goldMaint += p.army.infantry * UNIT_STATS.infantry.maintenance.gold + p.army.archers * UNIT_STATS.archers.maintenance.gold + p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold;
-      foodMaint += p.army.infantry * UNIT_STATS.infantry.maintenance.food + p.army.archers * UNIT_STATS.archers.maintenance.food + p.army.cavalry * UNIT_STATS.cavalry.maintenance.food;
-    });
-
-    const summary: TurnSummaryData = {
-      goldIncome: Math.floor(goldIncome),
-      goldMaintenance: Math.floor(goldMaint),
-      goldNet: Math.floor(goldIncome - goldMaint),
-      foodIncome: Math.floor(foodIncome),
-      foodMaintenance: Math.floor(foodMaint),
-      foodNet: Math.floor(foodIncome - foodMaint),
-      materialsIncome: Math.floor(materialIncome),
-      provincesGained,
-      provincesLost,
-      newWars,
-      newTreaties: peaceTreaties, // Simplifying for summary
-      events: nextState.currentEvent ? [nextState.currentEvent.description] : [],
-      rebellionRisk: lowLoyaltyProvs
-    };
-
-    persistence.autoSave(nextState);
-    setGameState(nextState);
-    setTurnSummaryData(summary);
-    setShowTurnSummary(true);
-    addLog(`--- Turno ${nextState.turn} ---`);
-    setActionState('idle');
-    setActionSourceId(null);
-  };
-
-  const handleRestart = () => {
-    setGameState(generateInitialState(MAP_WIDTH, MAP_HEIGHT, gameSettings));
-    addLog("Bem-vindo a uma nova campanha no Medieval Realms!");
-    setSelectedProvinceId(null);
-    setActionState('idle');
-    setActionSourceId(null);
-    setShowMenu(false);
-  };
-
-  if (!gameState && !showMenu) return <div className="flex items-center justify-center h-screen bg-slate-900 text-white">Carregando...</div>;
-
-  if (showMenu) {
+  if (ui.showMenu) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
-        <div className="w-full max-w-2xl bg-[#2c1810]/98 border-2 border-[#d4af37]/40 rounded-3xl p-4 md:p-8 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative my-auto">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#d4af37] px-6 py-1 rounded-full border-2 border-[#2c1810] shadow-lg whitespace-nowrap">
-            <h2 className="text-[#1a0f0a] font-serif font-black text-[10px] md:text-sm tracking-[0.2em] md:tracking-[0.3em] uppercase">Reino Medieval</h2>
-          </div>
-          
-          <div className="space-y-4 md:space-y-6 mt-4 md:mt-6 text-center">
-            <div>
-              <h1 className="text-3xl md:text-5xl font-serif font-bold text-[#d4af37] tracking-tight drop-shadow-sm leading-tight medieval-title">Medieval Realms</h1>
-              <p className="text-[#f5f2ed]/60 font-serif italic text-xs md:text-lg">Guerra, Diplomacia e Conquista</p>
+      <div className="min-h-screen bg-stone-950 text-stone-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-serif select-none"
+           style={{ backgroundImage: 'radial-gradient(circle at center, #292524 0%, #0c0a09 100%)' }}>
+        
+        {/* Decorative elements */}
+        <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none" 
+             style={{ backgroundImage: 'url("https://www.transparenttextures.com/patterns/paper-fibers.png")' }}></div>
+        
+        <motion.div 
+          initial={{ opacity: 0, y: -50 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="z-10 text-center mb-12"
+        >
+          <div className="flex justify-center mb-4">
+            <div className="relative">
+              <Shield className="w-24 h-24 text-amber-600" />
+              <Crown className="w-10 h-10 text-amber-400 absolute -top-2 -right-2 transform rotate-12" />
+              <Swords className="w-10 h-10 text-amber-500 absolute -bottom-2 -left-2 transform -rotate-12" />
             </div>
+          </div>
+          <h1 className="text-6xl font-bold tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-b from-amber-200 to-amber-600 drop-shadow-sm">
+            MEDIEVAL REALMS
+          </h1>
+          <p className="text-stone-400 italic font-serif flex items-center justify-center gap-2">
+            <Scroll className="w-4 h-4" /> Forje seu império, conquiste o destino <Scroll className="w-4 h-4" />
+          </p>
+        </motion.div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 text-left">
-              <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-[#d4af37]/20 space-y-3">
-                <h3 className="text-[#d4af37] font-bold text-[10px] md:text-xs uppercase tracking-widest flex items-center gap-2">
-                  <Settings size={12} /> Configurações
-                </h3>
-                
-                <div className="space-y-2">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Condição de Vitória</label>
-                    <select 
-                      value={gameSettings.victoryCondition}
-                      onChange={(e) => setGameSettings(prev => ({ ...prev, victoryCondition: e.target.value as VictoryCondition }))}
-                      className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white outline-none"
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full z-10">
+          <motion.div 
+            initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
+            className="bg-stone-900/80 border-2 border-amber-900/30 p-8 rounded-lg backdrop-blur-sm shadow-2xl flex flex-col items-center"
+          >
+            <h2 className="text-2xl font-bold text-amber-200 mb-6 border-b border-amber-900/50 pb-2 w-full text-center flex items-center justify-center gap-2">
+              <Play className="w-5 h-5" /> Novo Reinado
+            </h2>
+            <div className="space-y-6 w-full mb-8">
+              <div>
+                <label className="block text-sm text-stone-400 mb-2 font-bold uppercase tracking-widest">Extensão do Reino</label>
+                <input 
+                  type="range" min="15" max="40" step="1" 
+                  value={ui.gameSettings.numProvinces} 
+                  onChange={e => ui.setGameSettings({...ui.gameSettings, numProvinces: parseInt(e.target.value)})}
+                  className="w-full h-2 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600"
+                />
+                <div className="flex justify-between text-xs mt-1 text-stone-500">
+                  <span>Pequeno</span> <span>{ui.gameSettings.numProvinces} Províncias</span> <span>Vasto</span>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm text-stone-400 mb-2 font-bold uppercase tracking-widest">Reinos Rivais</label>
+                <div className="flex gap-2">
+                  {[4, 6, 8].map(n => (
+                    <button 
+                      key={n}
+                      onClick={() => ui.setGameSettings({...ui.gameSettings, numRealms: n})}
+                      className={`flex-1 py-2 rounded border transition-all ${ui.gameSettings.numRealms === n ? 'bg-amber-700 border-amber-500 text-white shadow-lg' : 'bg-stone-800 border-stone-700 text-stone-400 hover:bg-stone-700'}`}
                     >
-                      <option value="conquest">Conquista</option>
-                      <option value="economic">Econômica</option>
-                      <option value="vassalage">Vassalagem</option>
-                      <option value="sandbox">Sandbox</option>
-                    </select>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Províncias</label>
-                      <input 
-                        type="number" 
-                        min="5" max="100"
-                        value={gameSettings.numProvinces}
-                        onChange={(e) => setGameSettings(prev => ({ ...prev, numProvinces: parseInt(e.target.value) || 25 }))}
-                        className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Reinos</label>
-                      <input 
-                        type="number" 
-                        min="1" max="12"
-                        value={gameSettings.numRealms}
-                        onChange={(e) => setGameSettings(prev => ({ ...prev, numRealms: parseInt(e.target.value) || 6 }))}
-                        className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white"
-                      />
-                    </div>
-                  </div>
+                      {n}
+                    </button>
+                  ))}
                 </div>
               </div>
-
-              <div className="flex flex-col gap-2 justify-center">
-                {autosave && (
-                  <button 
-                    onClick={() => {
-                      setGameState(autosave.state);
-                      setShowMenu(false);
-                    }}
-                    className="w-full py-3 bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <Play size={18} fill="currentColor" />
-                    <div className="text-left leading-none">
-                      <div className="text-sm">Continuar</div>
-                      <div className="text-[9px] font-normal opacity-70">Turno {autosave.state?.turn}</div>
-                    </div>
-                  </button>
-                )}
-
-                <button 
-                  onClick={startNewGame}
-                  className="w-full py-3 bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] font-bold text-lg rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
-                >
-                  <Play size={20} fill="currentColor" /> Iniciar Jogo
-                </button>
-                
-                <div className="grid grid-cols-2 gap-2">
-                  <button 
-                    onClick={() => setShowSaveModal(true)}
-                    className="py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all text-[10px] flex items-center justify-center gap-1"
-                  >
-                    <Save size={14} /> Saves
-                  </button>
-                  <button 
-                    onClick={() => setShowInstructionsModal(true)}
-                    className="py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all text-[10px] flex items-center justify-center gap-1"
-                  >
-                    <Info size={14} /> Regras
-                  </button>
+              <div>
+                <label className="block text-sm text-stone-400 mb-2 font-bold uppercase tracking-widest">Dificuldade</label>
+                <div className="flex gap-2 text-xs">
+                  {['easy', 'normal', 'hard'].map(d => (
+                    <button 
+                      key={d}
+                      onClick={() => ui.setGameSettings({...ui.gameSettings, aiDifficulty: d as any})}
+                      className={`flex-1 py-2 rounded border transition-all uppercase tracking-tighter ${ui.gameSettings.aiDifficulty === d ? 'bg-amber-700 border-amber-500 text-white shadow-lg' : 'bg-stone-800 border-stone-700 text-stone-400 hover:bg-stone-700'}`}
+                    >
+                      {d === 'easy' ? 'Vassalo' : d === 'normal' ? 'Lorde' : 'Rei'}
+                    </button>
+                  ))}
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm text-stone-400 mb-2 font-bold uppercase tracking-widest">Objetivo Final</label>
+                <select 
+                  className="w-full bg-stone-800 border border-stone-700 py-2 px-3 rounded text-stone-300 text-sm outline-none focus:border-amber-600"
+                  value={ui.gameSettings.victoryCondition}
+                  onChange={e => ui.setGameSettings({...ui.gameSettings, victoryCondition: e.target.value as any})}
+                >
+                  <option value="conquest">Hegemonia (70% do Mapa)</option>
+                  <option value="economic">Riqueza (10.000 Ouro)</option>
+                  <option value="diplomatic">Poder (Vassalagem Total)</option>
+                  <option value="sandbox">Sem Condições (Sandbox)</option>
+                </select>
               </div>
             </div>
-          </div>
+            <button 
+              onClick={ctrl.startNewGame}
+              className="w-full bg-gradient-to-r from-amber-700 to-amber-600 hover:from-amber-600 hover:to-amber-500 text-stone-950 font-black py-4 rounded shadow-xl transition-all transform hover:scale-105 active:scale-95 flex items-center justify-center gap-2 group border-b-4 border-amber-900"
+            >
+              <Swords className="w-6 h-6 group-hover:rotate-12 transition-transform" />
+              INICIAR CONTRATO
+            </button>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
+            className="flex flex-col gap-4"
+          >
+            <div className="bg-stone-900/80 border-2 border-stone-800 p-8 rounded-lg flex-1 backdrop-blur-sm shadow-xl relative group">
+              <h2 className="text-xl font-bold text-stone-400 mb-6 flex items-center gap-2">
+                <Save className="w-5 h-5" /> Retomar Jornada
+              </h2>
+              {ui.autosave ? (
+                <div className="space-y-4">
+                   <div className="bg-stone-800/50 p-4 rounded border border-stone-700/50">
+                      <p className="text-sm font-bold text-amber-400 mb-1 flex items-center gap-2">
+                        <span className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></span>
+                        Auto-Save Recente
+                      </p>
+                      <p className="text-xs text-stone-500 mb-3">{ui.autosave.date}</p>
+                      <button 
+                        onClick={() => ctrl.handleLoad('autosave')}
+                        className="w-full py-2 bg-stone-700 hover:bg-amber-700 text-white rounded text-sm transition-colors flex items-center justify-center gap-2 font-bold"
+                      >
+                         DESBRAVAR AGORA
+                      </button>
+                   </div>
+                   <button 
+                    onClick={() => ui.setShowSaveModal(true)}
+                    className="w-full py-3 bg-stone-800 hover:bg-stone-700 text-stone-400 rounded text-sm transition-colors border border-stone-700 font-bold flex items-center justify-center gap-2"
+                   >
+                     VER TODOS OS REGISTROS
+                   </button>
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full text-stone-600 py-12">
+                   <Scroll className="w-12 h-12 mb-2 opacity-20" />
+                   <p className="text-sm italic">Nenhum pergaminho selado encontrado.</p>
+                   <button onClick={() => ui.setShowSaveModal(true)} className="mt-4 text-amber-700 hover:text-amber-500 text-xs font-bold underline">CONFIGURAR CARREGAMENTO</button>
+                </div>
+              )}
+            </div>
+
+            <div className="bg-stone-900/80 border-2 border-stone-800 p-6 rounded-lg flex items-center justify-between backdrop-blur-sm shadow-xl">
+               <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded bg-stone-800 flex items-center justify-center">
+                    <Info className="w-6 h-6 text-amber-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-stone-300">Primeiros Passos?</h3>
+                    <p className="text-xs text-stone-500">Leia os Pergaminhos de Instrução.</p>
+                  </div>
+               </div>
+               <button 
+                 onClick={() => ui.setShowInstructionsModal(true)}
+                 className="p-3 bg-amber-900/20 hover:bg-amber-900/40 text-amber-500 rounded-full transition-colors border border-amber-900/30"
+               >
+                 <Scroll className="w-5 h-5" />
+               </button>
+            </div>
+          </motion.div>
         </div>
+
+        {/* Footer */}
+        <div className="mt-12 text-stone-600 text-[10px] flex items-center gap-4 z-10 border-t border-stone-900 pt-4 w-full max-w-4xl justify-center font-serif uppercase tracking-widest">
+           <span>Versão 2.4 - Era da Modularização</span>
+           <span>•</span>
+           <span>Medieval Engine v4.0</span>
+           <span>•</span>
+           <button onClick={toggleFullScreen} className="hover:text-amber-500 transition-colors flex items-center gap-1">
+             <Settings className="w-3 h-3" /> Modo Fullscreen
+           </button>
+        </div>
+        
+        {ui.showSaveModal && (
+          <SaveLoadModal 
+            isOpen={ui.showSaveModal}
+            onClose={() => ui.setShowSaveModal(false)}
+            onSave={ctrl.handleSave}
+            onLoad={ctrl.handleLoad}
+            onDelete={ctrl.handleDeleteSave}
+            saves={persistence.listSaves()}
+          />
+        )}
+        
+        {ui.showInstructionsModal && (
+          <InstructionsModal 
+            isOpen={ui.showInstructionsModal}
+            onClose={() => ui.setShowInstructionsModal(false)} 
+          />
+        )}
       </div>
     );
   }
@@ -1126,154 +246,183 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <ErrorBoundary>
-      <div className="h-screen w-screen bg-[#1a1a1a] flex items-stretch overflow-hidden">
-        <div className="flex-1 relative overflow-hidden bg-slate-900 cursor-grab active:cursor-grabbing"
-             onMouseDown={handleMouseDown}
-             onMouseMove={handleMouseMove}
-             onMouseUp={handleMouseUp}
-             onMouseLeave={handleMouseUp}>
-          <div 
-            className="w-full h-full transition-transform duration-500 ease-out origin-center flex items-center justify-center"
-            style={{ 
-              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
-              transition: isDragging ? 'none' : 'transform 0.5s ease-out'
-            }}
-          >
-            <Map 
-              gameState={gameState} 
-              selectedProvinceId={selectedProvinceId}
-              actionState={actionState}
-              actionSourceId={actionSourceId}
-              viewMode={viewMode}
-              onProvinceClick={handleProvinceClick}
-              width={MAP_WIDTH}
-              height={MAP_HEIGHT}
-            />
-          </div>
-          
-          <div className="hidden lg:block">
-            <Minimap 
-              gameState={gameState}
-              width={150}
-              height={112}
-              selectedProvinceId={selectedProvinceId}
-              onProvinceClick={(id) => setSelectedProvinceId(id)}
-            />
-          </div>
+    <div className="fixed inset-0 bg-[#0f172a] text-white flex flex-col items-center justify-center p-0 md:p-4 perspective-1000 overflow-hidden font-serif">
+      <ErrorBoundary>
+        <div 
+          className="relative w-full h-full bg-[#1e293b] rounded-none md:rounded-xl shadow-2xl border-0 md:border-4 border-stone-800 overflow-hidden flex flex-col select-none"
+          onMouseDown={ctrl.handleMouseDown}
+          onMouseMove={ctrl.handleMouseMove}
+          onMouseUp={ctrl.handleMouseUp}
+          onMouseLeave={ctrl.handleMouseUp}
+        >
+          <div className="flex-1 relative overflow-hidden bg-stone-950">
+            <motion.div 
+              className="absolute inset-0 cursor-grab active:cursor-grabbing"
+              animate={{ 
+                x: ui.panOffset.x, 
+                y: ui.panOffset.y,
+                scale: ui.zoom 
+              }}
+              transition={{ type: 'spring', damping: 25, stiffness: 150, mass: 0.5 }}
+            >
+              <Map 
+                gameState={gameState}
+                onProvinceClick={id => ctrl.handleProvinceClick(id, ui.hasDragged)}
+                selectedProvinceId={ui.selectedProvinceId}
+                viewMode={ui.viewMode}
+                previewPath={ui.previewPath}
+                actionState={ui.actionState}
+                actionSourceId={ui.actionSourceId}
+              />
+            </motion.div>
 
-          {/* Logs Overlay - hidden on small devices */}
-          {gameState && (
-            <div className="absolute bottom-4 right-4 w-48 md:w-64 max-h-16 md:max-h-20 overflow-y-auto bg-black/40 backdrop-blur-sm border border-slate-700/50 rounded-lg p-2 text-[8px] md:text-[9px] text-slate-400 pointer-events-none font-serif opacity-70 hover:opacity-100 transition-opacity hidden lg:block">
-              {gameState.logs.slice(-3).map((log, i) => (
-                <div key={i} className="mb-0.5 last:mb-0 leading-tight">{log}</div>
-              ))}
+            {/* In-Game HUD & Controls */}
+            <HUD 
+              gameState={gameState}
+              selectedProvinceId={ui.selectedProvinceId}
+              onAction={ctrl.handleAction}
+              onEndTurn={ctrl.handleEndTurn}
+              onToggleMode={() => {
+                const modes: ViewMode[] = ['political', 'military', 'economic', 'diplomatic', 'resources'];
+                const next = modes[(modes.indexOf(ui.viewMode) + 1) % modes.length];
+                ui.setViewMode(next);
+              }}
+              viewMode={ui.viewMode}
+              onSave={() => ui.setShowSaveModal(true)}
+              onMenu={() => ui.setShowMenu(true)}
+              onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
+              actionState={ui.actionState}
+              onCancelAction={() => { ui.setActionState('idle'); ui.setActionSourceId(null); ui.setPreviewPath([]); }}
+              onToggleHud={() => ui.setIsHudOpen(!ui.isHudOpen)}
+              isHudOpen={ui.isHudOpen}
+              onMapAction={(type) => {
+                if (!ui.selectedProvinceId) return;
+                const prov = gameState.provinces[ui.selectedProvinceId];
+                if (prov.ownerId !== gameState.playerRealmId) return;
+                
+                if (type === 'move') {
+                   ui.setActionSourceId(ui.selectedProvinceId);
+                   ui.setActionState('moving');
+                   ui.setSelectingMoveComposition(true);
+                   ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione as tropas.`);
+                } else if (type === 'attack') {
+                   ui.setActionSourceId(ui.selectedProvinceId);
+                   ui.setActionState('attacking');
+                   ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
+                } else if (type === 'scout') {
+                   ui.setActionSourceId(ui.selectedProvinceId);
+                   ui.setActionState('dispatching_scouts');
+                   ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
+                }
+              }}
+              marchOrders={gameState.marchOrders || []}
+              onCancelMarchOrder={ctrl.cancelMarchOrder}
+              zoom={ui.zoom}
+              onZoomChange={ui.setZoom}
+              moveComposition={ui.moveComposition}
+              onMoveCompositionChange={ui.setMoveComposition}
+              onDispatchScouts={() => ui.setActionState('dispatching_scouts')}
+              onRoute={() => ui.setActionState('routing')}
+              onToggleFullScreen={toggleFullScreen}
+            />
+
+            {/* Floating Selection Details for Mobile (Top-right) */}
+            <AnimatePresence>
+                {ui.selectedProvinceId && !ui.isHudOpen && (
+                    <motion.div 
+                        initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}
+                        className="fixed top-20 right-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none"
+                    >
+                        <p className="text-xs text-amber-500 font-bold uppercase tracking-widest leading-none mb-1">
+                          {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId].name}
+                        </p>
+                        <h4 className="text-lg font-black text-stone-100 flex items-center gap-2">
+                           {gameState.provinces[ui.selectedProvinceId].name}
+                           <span className="text-[10px] bg-stone-800 px-1.5 py-0.5 rounded text-stone-400 capitalize">{gameState.provinces[ui.selectedProvinceId].terrain}</span>
+                        </h4>
+                        <div className="flex gap-4 mt-2">
+                           <div className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-stone-500" /> <span className="text-xs font-bold">{gameState.provinces[ui.selectedProvinceId].troops}</span></div>
+                           <div className="flex items-center gap-1.5"><Crown className="w-3 h-3 text-amber-600" /> <span className="text-xs font-bold text-amber-500/80">{gameState.provinces[ui.selectedProvinceId].loyalty}%</span></div>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            <Minimap 
+              gameState={gameState} 
+              width={200}
+              height={150}
+              selectedProvinceId={ui.selectedProvinceId}
+              onProvinceClick={id => ctrl.handleProvinceClick(id, false)}
+            />
+            
+            <div className="absolute bottom-4 left-4 z-30 flex flex-col gap-2">
+                <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-10 h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl">+</button>
+                <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-10 h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl">-</button>
             </div>
-          )}
+          </div>
         </div>
-        
-        <HUD 
-          gameState={gameState}
-          selectedProvinceId={selectedProvinceId}
-          actionState={actionState}
-          actionSourceId={actionSourceId}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          onAction={handleAction}
-          onEndTurn={handleEndTurn}
-          onSave={() => setShowSaveModal(true)}
-          onMenu={() => setShowMenu(true)}
-          onCancelAction={() => {
-            setActionState('idle');
-            setActionSourceId(null);
-            setPreviewPath([]);
-            setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
-          }}
-          zoom={zoom}
-          onZoomChange={setZoom}
-          onOpenChronicles={() => setShowChronicles(true)}
-          moveComposition={moveComposition}
-          onMoveCompositionChange={setMoveComposition}
-          marchOrders={(gameState.marchOrders || []).filter(o => o.realmId === gameState.playerRealmId)}
-          onCancelMarchOrder={cancelMarchOrder}
-          onDispatchScouts={() => {
-            if (!selectedProvinceId) return;
-            setActionSourceId(selectedProvinceId);
-            setActionState('dispatching_scouts');
-          }}
-          onRoute={() => {
-            if (!selectedProvinceId) return;
-            setActionSourceId(selectedProvinceId);
-            setActionState('routing');
-          }}
-          isHudOpen={isHudOpen}
-          onToggleHud={() => setIsHudOpen(!isHudOpen)}
-          onToggleFullScreen={toggleFullScreen}
-        />
 
         <AnimatePresence>
-          {showChronicles && (
+          {ui.showChronicles && (
             <ChroniclesModal 
+              isOpen={ui.showChronicles}
               logs={gameState.logs} 
-              onClose={() => setShowChronicles(false)} 
-              isOpen={showChronicles}
+              onClose={() => ui.setShowChronicles(false)} 
+            />
+          )}
+          {ui.showSaveModal && (
+            <SaveLoadModal 
+              isOpen={ui.showSaveModal}
+              onClose={() => ui.setShowSaveModal(false)}
+              onSave={ctrl.handleSave}
+              onLoad={ctrl.handleLoad}
+              onDelete={ctrl.handleDeleteSave}
+              saves={persistence.listSaves()}
+            />
+          )}
+          {ui.showInstructionsModal && (
+            <InstructionsModal 
+              isOpen={ui.showInstructionsModal}
+              onClose={() => ui.setShowInstructionsModal(false)} 
+            />
+          )}
+          {ui.showTurnSummary && ui.turnSummaryData && (
+            <TurnSummaryModal 
+              isOpen={ui.showTurnSummary}
+              data={ui.turnSummaryData} 
+              onClose={() => ui.setShowTurnSummary(false)} 
+            />
+          )}
+          {ui.showCombatPreview && ui.combatAttackerProvId && ui.combatDefenderProvId && ui.combatAttackingArmy && (
+            <CombatPreviewModal 
+              isOpen={ui.showCombatPreview}
+              attackerProv={gameState.provinces[ui.combatAttackerProvId]}
+              defenderProv={gameState.provinces[ui.combatDefenderProvId]}
+              attackingArmy={ui.combatAttackingArmy}
+              onConfirm={ctrl.confirmAttack}
+              onClose={() => ui.setShowCombatPreview(false)}
+            />
+          )}
+          {ui.showBattleResult && ui.battleResultData && ui.battleResultMeta && (
+            <BattleResultModal 
+              isOpen={ui.showBattleResult}
+              result={ui.battleResultData}
+              attackerName={ui.battleResultMeta.attackerName}
+              defenderName={ui.battleResultMeta.defenderName}
+              provinceName={ui.battleResultMeta.provinceName}
+              conquered={ui.battleResultMeta.conquered}
+              onClose={() => ui.setShowBattleResult(false)}
+            />
+          )}
+          {gameState.gameOver && (
+            <GameOverModal 
+              gameState={gameState}
+              onRestart={() => { ui.setShowMenu(true); setGameState(null); }}
             />
           )}
         </AnimatePresence>
-
-      <GameOverModal 
-        gameState={gameState}
-        onRestart={handleRestart}
-      />
-
-      <SaveLoadModal
-        isOpen={showSaveModal}
-        onClose={() => setShowSaveModal(false)}
-        saves={persistence.listSaves()}
-        onSave={handleSave}
-        onLoad={handleLoad}
-        onDelete={handleDeleteSave}
-      />
-
-      <InstructionsModal 
-        isOpen={showInstructionsModal}
-        onClose={() => setShowInstructionsModal(false)}
-      />
-
-      <TurnSummaryModal 
-        isOpen={showTurnSummary}
-        onClose={() => setShowTurnSummary(false)}
-        data={turnSummaryData}
-      />
-
-      <CombatPreviewModal
-        isOpen={showCombatPreview}
-        onClose={() => {
-          setShowCombatPreview(false);
-          setCombatAttackerProvId(null);
-          setCombatDefenderProvId(null);
-          setCombatAttackingArmy(null);
-        }}
-        onConfirm={confirmAttack}
-        attackerProv={combatAttackerProvId ? gameState.provinces[combatAttackerProvId] : null}
-        defenderProv={combatDefenderProvId ? gameState.provinces[combatDefenderProvId] : null}
-        attackingArmy={combatAttackingArmy}
-      />
-
-      <BattleResultModal
-        isOpen={showBattleResult}
-        onClose={() => {
-          setShowBattleResult(false);
-          setBattleResultData(null);
-          setBattleResultMeta(null);
-        }}
-        result={battleResultData}
-        attackerName={battleResultMeta?.attackerName || ''}
-        defenderName={battleResultMeta?.defenderName || ''}
-        provinceName={battleResultMeta?.provinceName || ''}
-        conquered={battleResultMeta?.conquered || false}
-      />
+      </ErrorBoundary>
     </div>
-    </ErrorBoundary>
   );
 }

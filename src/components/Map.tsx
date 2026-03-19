@@ -10,8 +10,9 @@ interface MapProps {
   actionSourceId: string | null;
   viewMode: ViewMode;
   onProvinceClick: (id: string) => void;
-  width: number;
-  height: number;
+  width?: number;
+  height?: number;
+  previewPath?: string[];
 }
 
 export const Map: React.FC<MapProps> = ({
@@ -21,8 +22,9 @@ export const Map: React.FC<MapProps> = ({
   actionSourceId,
   viewMode,
   onProvinceClick,
-  width,
-  height
+  width = 1000,
+  height = 750,
+  previewPath = []
 }) => {
   const [hoveredProvinceId, setHoveredProvinceId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -316,6 +318,36 @@ export const Map: React.FC<MapProps> = ({
                 <polygon points="0 0, 10 3.5, 0 7" fill="#ef4444" />
               </marker>
             </defs>
+          </g>
+        )}
+
+        {/* Path Preview (for long marches or scouts) */}
+        {previewPath.length > 0 && actionSourceId && (
+          <g pointerEvents="none">
+            {(() => {
+              const fullPath = [actionSourceId, ...previewPath];
+              const lines = [];
+              for (let i = 0; i < fullPath.length - 1; i++) {
+                const s = gameState.provinces[fullPath[i]];
+                const t = gameState.provinces[fullPath[i+1]];
+                if (s && t) {
+                  lines.push(
+                    <motion.line
+                      key={`preview-${i}`}
+                      x1={s.center[0]} y1={s.center[1]}
+                      x2={t.center[0]} y2={t.center[1]}
+                      stroke="#facc15"
+                      strokeWidth="3"
+                      strokeDasharray="4 4"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 0.6 }}
+                      strokeLinecap="round"
+                    />
+                  );
+                }
+              }
+              return lines;
+            })()}
           </g>
         )}
       </svg>

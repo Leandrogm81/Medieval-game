@@ -1,22 +1,27 @@
-import React from 'react';
+import React, { ErrorInfo, ReactNode } from 'react';
 
-export class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  public state: { hasError: boolean } = { hasError: false };
-  public props: { children: React.ReactNode } = { children: null };
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
 
-  constructor(props: { children: React.ReactNode }) {
-    super(props);
-  }
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
 
-  static getDerivedStateFromError() {
+export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(_error: Error): ErrorBoundaryState {
     return { hasError: true };
   }
 
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error("Game Crash caught by ErrorBoundary:", error, errorInfo);
   }
 
-  render() {
+  public render(): ReactNode {
     if (this.state.hasError) {
       return (
         <div className="flex flex-col items-center justify-center h-screen bg-[#1a0f0a] text-[#f5f2ed] p-10 text-center font-serif">

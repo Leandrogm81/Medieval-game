@@ -12,6 +12,39 @@ export interface Army {
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
 
+export interface BattleResult {
+  won: boolean;
+  attackerRemaining: Army;
+  defenderRemaining: Army;
+  attackerLosses: Army;
+  defenderLosses: Army;
+  attackerInitial: Army;
+  defenderInitial: Army;
+  terrain: Terrain;
+  defenseLevel: number;
+  rounds: number;
+}
+
+export interface War {
+  id: string;
+  attackerId: string;
+  defenderId: string;
+  startedAtTurn: number;
+  warScore: number; // -100 to 100 (positive favors attacker)
+  attackerExhaustion: number; // 0-100
+  defenderExhaustion: number; // 0-100
+}
+
+export interface StrategicAssessment {
+  threatenedBorders: Province[];
+  offensiveTargets: Province[];
+  wealthState: 'rich' | 'stable' | 'poor';
+  militaryState: 'strong' | 'stable' | 'weak';
+  safeInternal: Province[];
+  strategicResourceTargets: Province[];
+  rivalProvinces: Province[];
+}
+
 export interface DiplomaticMemory {
   betrayal: number; // 0-100
   help: number; // 0-100
@@ -116,6 +149,7 @@ export interface GameState {
   visibleProvinces: string[];
   settings: GameSettings;
   marchOrders: MarchOrder[];
+  activeWars: War[];
   gameOver?: {
     winnerId: string;
     reason: string;

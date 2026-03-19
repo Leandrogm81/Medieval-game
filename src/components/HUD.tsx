@@ -7,30 +7,26 @@ import { motion, AnimatePresence } from 'motion/react';
 interface HUDProps {
   gameState: GameState;
   selectedProvinceId: string | null;
-  actionState: ActionType;
-  actionSourceId: string | null;
-  viewMode: ViewMode;
-  onViewModeChange: (mode: ViewMode) => void;
-  onAction: (action: 'recruit' | 'move' | 'attack' | 'improve' | 'diplomacy' | 'fortify' | 'build_farms' | 'build_mines' | 'build_workshops' | 'build_courts' | 'buy_food' | 'sell_food' | 'buy_materials' | 'sell_materials' | 'trade_route' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact', unitType?: UnitType, amount?: number) => void;
+  onAction: (action: string, unitType?: UnitType, amount?: number) => void;
   onEndTurn: () => void;
+  onToggleMode: () => void;
+  viewMode: ViewMode;
   onSave: () => void;
   onMenu: () => void;
+  onToggleChronicles: () => void;
+  actionState: ActionType;
   onCancelAction: () => void;
-  zoom: number;
-  onZoomChange: (newZoom: number) => void;
-  onOpenChronicles: () => void;
-  /** Composição de tropas para o movimento */
-  moveComposition: Army;
-  onMoveCompositionChange: (comp: Army) => void;
-  /** Ordens de marcha ativas do jogador */
+  onToggleHud: () => void;
+  isHudOpen: boolean;
+  onMapAction: (type: 'move' | 'attack' | 'scout') => void;
   marchOrders: MarchOrder[];
   onCancelMarchOrder: (id: string) => void;
-  /** Iniciar modo de despacho de batedores */
+  zoom: number;
+  onZoomChange: (zoom: number) => void;
+  moveComposition: Army;
+  onMoveCompositionChange: (comp: Army) => void;
   onDispatchScouts: () => void;
-  /** Iniciar modo de rota */
   onRoute: () => void;
-  isHudOpen: boolean;
-  onToggleHud: () => void;
   onToggleFullScreen: () => void;
 }
 
@@ -38,26 +34,26 @@ interface HUDProps {
 export const HUD: React.FC<HUDProps> = ({
   gameState,
   selectedProvinceId,
-  actionState,
-  actionSourceId,
-  viewMode,
-  onViewModeChange,
   onAction,
   onEndTurn,
+  onToggleMode,
+  viewMode,
   onSave,
   onMenu,
+  onToggleChronicles,
+  actionState,
   onCancelAction,
-  zoom,
-  onZoomChange,
-  onOpenChronicles,
-  moveComposition,
-  onMoveCompositionChange,
+  onToggleHud,
+  isHudOpen,
+  onMapAction,
   marchOrders,
   onCancelMarchOrder,
+  zoom,
+  onZoomChange,
+  moveComposition,
+  onMoveCompositionChange,
   onDispatchScouts,
   onRoute,
-  isHudOpen,
-  onToggleHud,
   onToggleFullScreen,
 }) => {
   const [recruitAmount, setRecruitAmount] = useState(10);
@@ -170,7 +166,7 @@ export const HUD: React.FC<HUDProps> = ({
                  >
                    <Globe2 size={16} />
                  </button>
-                 <button onClick={onOpenChronicles} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors">
+                 <button onClick={onToggleChronicles} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors">
                    <Scroll size={16} />
                  </button>
                </div>
@@ -264,7 +260,7 @@ export const HUD: React.FC<HUDProps> = ({
         ].map(mode => (
           <button 
             key={mode.id}
-            onClick={() => onViewModeChange(mode.id as ViewMode)}
+            onClick={onToggleMode}
             className={`flex items-center gap-1.5 px-2 py-1 rounded border transition-all ${viewMode === mode.id ? `bg-${mode.color}-600/20 border-${mode.color}-500 text-${mode.color}-400 shadow-sm` : 'bg-slate-800 border-transparent text-slate-500 hover:bg-slate-700'}`}
           >
             {mode.icon} <span className="text-[9px] font-black uppercase">{mode.label}</span>
