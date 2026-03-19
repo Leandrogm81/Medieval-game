@@ -198,7 +198,7 @@ export const Map: React.FC<MapProps> = ({
               <path
                 d={pathData}
                 fill={getProvinceColor(prov, isVisible)}
-                fillOpacity={isVisible ? (viewMode === 'political' ? 0.6 : 0.8) : 0.9}
+                fillOpacity={isVisible ? (viewMode === 'political' ? (gameState.visibleProvinces.length > 20 ? 0.9 : 0.6) : 0.8) : 0.9}
                 stroke={strokeColor}
                 strokeWidth={strokeWidth}
                 strokeOpacity={strokeOpacity}

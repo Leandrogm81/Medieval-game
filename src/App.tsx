@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, Component } from 'react';
-import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData, TurnSummaryData } from './types';
-import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION, BattleResult } from './gameLogic';
+import { GameState, ActionType, Province, Realm, VisualEffect, Army, UnitType, StrategicResource, ViewMode, GameSettings, VictoryCondition, SaveData, TurnSummaryData, MarchOrder } from './types';
+import { generateInitialState, processAITurn, processEndOfTurn, resolveCombat, executeAttack, findPath, UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION, BattleResult } from './gameLogic';
 import { persistence } from './persistence';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
@@ -45,26 +45,35 @@ export default function App() {
     resourceDensity: 'normal',
     victoryCondition: 'conquest'
   });
-  const [scale, setScale] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [showChronicles, setShowChronicles] = useState(false);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
+  const [isHudOpen, setIsHudOpen] = useState(true);
+
+  // ===== March / Routing State =====
+  /** Composição das tropas selecionadas para o próximo movimento */
+  const [moveComposition, setMoveComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+  /** Caminho em construção pelo jogador no modo 'routing' */
+  const [previewPath, setPreviewPath] = useState<string[]>([]);
+  /** Indica se o jogador está configurando a composição antes de mover */
+  const [selectingMoveComposition, setSelectingMoveComposition] = useState(false);
 
   useEffect(() => {
-    const handleResize = () => {
-      const wRatio = window.innerWidth / 1420;
-      const hRatio = window.innerHeight / 850;
-      // Base scale to fit window, then modified by user zoom
-      const baseScale = (Math.min(wRatio, hRatio) || 1) * 0.99;
-      setScale(baseScale);
-    };
-    handleResize();
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    // Initial zoom and hud setup could go here if needed
   }, []);
+
+  const toggleFullScreen = () => {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch((err) => {
+        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
+      });
+    } else {
+      document.exitFullscreen();
+    }
+  };
 
   const playSound = (type: 'click' | 'recruit' | 'build' | 'combat' | 'conquest' | 'turn') => {
     try {
@@ -194,90 +203,142 @@ export default function App() {
     playSound('click');
 
     if (actionState === 'idle') {
-      // setSelectedProvinceId(id); // This is now handled above
-    } else if (actionState === 'moving') {
+      // nothing extra
+    } else if (actionState === 'moving' || actionState === 'routing') {
+      // 'moving' = imediato para prov adj; 'routing' = rota multi-passo
       if (actionSourceId) {
         const source = gameState.provinces[actionSourceId];
         const target = gameState.provinces[id];
         const playerRealm = gameState.realms[gameState.playerRealmId];
 
         if (playerRealm.actionPoints < ACTION_COSTS.move) {
-          addLog("Pontos de Ação insuficientes para mover.");
-          setActionState('idle');
-          setActionSourceId(null);
+          addLog('Pontos de Ação insuficientes para mover.');
+          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
+        }
+
+        // Find path (only through player territory for regular troops)
+        const path = findPath(gameState, actionSourceId, id, gameState.playerRealmId, false);
+
+        if (path.length === 0) {
+          addLog('Destino inalcançável pelos seus territórios. Use o modo de rota para batedores.');
+          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
+        }
+
+        const totalComp = moveComposition.infantry + moveComposition.archers + moveComposition.cavalry + moveComposition.scouts;
+        if (totalComp <= 0) {
+          addLog('Selecione a quantidade de tropas antes de mover.');
           return;
         }
-        
-        if (source.neighbors.includes(id) && target.ownerId === gameState.playerRealmId) {
-          playSound('click');
-          // Move troops
+
+        // Validate composition against source
+        if (moveComposition.infantry > source.army.infantry ||
+            moveComposition.archers > source.army.archers ||
+            moveComposition.cavalry > source.army.cavalry ||
+            moveComposition.scouts > source.army.scouts) {
+          addLog('Tropas insuficientes para o movimento selecionado.');
+          return;
+        }
+
+        if (path.length === 1) {
+          // Adjacent — move immediately
           setGameState(prev => {
             if (!prev) return prev;
             const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
             const s = next.provinces[actionSourceId];
             const t = next.provinces[id];
-            
-            // Move 80% (more intuitive)
-            const moveInf = Math.floor(s.army.infantry * 0.8);
-            const moveArc = Math.floor(s.army.archers * 0.8);
-            const moveCav = Math.floor(s.army.cavalry * 0.8);
-
-            s.army.infantry -= moveInf;
-            s.army.archers -= moveArc;
-            s.army.cavalry -= moveCav;
-            s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
-
-            t.army.infantry += moveInf;
-            t.army.archers += moveArc;
-            t.army.cavalry += moveCav;
-            t.troops = t.army.infantry + t.army.archers + t.army.cavalry;
-
+            s.army.infantry -= moveComposition.infantry;
+            s.army.archers  -= moveComposition.archers;
+            s.army.cavalry  -= moveComposition.cavalry;
+            s.army.scouts   -= moveComposition.scouts;
+            s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
+            t.army.infantry += moveComposition.infantry;
+            t.army.archers  += moveComposition.archers;
+            t.army.cavalry  += moveComposition.cavalry;
+            t.army.scouts   += moveComposition.scouts;
+            t.troops = t.army.infantry + t.army.archers + t.army.cavalry + t.army.scouts;
             next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
             return next;
           });
           addVisualEffect('conquest', target.center[0], target.center[1]);
           addLog(`Tropas movidas de ${source.name} para ${target.name}.`);
         } else {
-          addLog("Alvo de movimento inválido. Deve ser uma província adjacente de sua propriedade.");
+          // Multi-step route — create a MarchOrder
+          const order: MarchOrder = {
+            id: `march_${Date.now()}`,
+            realmId: gameState.playerRealmId,
+            currentProvId: actionSourceId,
+            remainingPath: path,
+            troops: { ...moveComposition },
+            isScoutMission: false,
+          };
+          setGameState(prev => {
+            if (!prev) return prev;
+            const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
+            const s = next.provinces[actionSourceId];
+            s.army.infantry -= moveComposition.infantry;
+            s.army.archers  -= moveComposition.archers;
+            s.army.cavalry  -= moveComposition.cavalry;
+            s.army.scouts   -= moveComposition.scouts;
+            s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
+            next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
+            if (!next.marchOrders) next.marchOrders = [];
+            next.marchOrders.push(order);
+            return next;
+          });
+          addLog(`Ordem de marcha criada: ${path.length} turno(s) até ${target.name}.`);
         }
       }
-      setActionState('idle');
-      setActionSourceId(null);
-    } else if (actionState === 'trading') {
+      setActionState('idle'); setActionSourceId(null); setPreviewPath([]);
+      setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+      setSelectingMoveComposition(false);
+    } else if (actionState === 'dispatching_scouts') {
+      // Scouts can go to ANY province
       if (actionSourceId) {
         const source = gameState.provinces[actionSourceId];
         const target = gameState.provinces[id];
         const playerRealm = gameState.realms[gameState.playerRealmId];
 
-        if (playerRealm.actionPoints < ACTION_COSTS.diplomacy) {
-          addLog("Pontos de Ação insuficientes para estabelecer rota comercial.");
-          setActionState('idle');
-          setActionSourceId(null);
-          return;
+        if (playerRealm.actionPoints < ACTION_COSTS.move) {
+          addLog('Pontos de Ação insuficientes para despachar batedores.');
+          setActionState('idle'); setActionSourceId(null); setPreviewPath([]); return;
         }
-        
-        if (source.neighbors.includes(id)) {
-          // Establish trade route
-          const cost = 50;
-          if (playerRealm.gold >= cost) {
-            setGameState(prev => {
-              if (!prev) return prev;
-              const next = { ...prev };
-              next.realms[prev.playerRealmId].gold -= cost;
-              next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.diplomacy;
-              next.realms[prev.playerRealmId].tradeRoutes.push({ from: actionSourceId, to: id });
-              return next;
-            });
-            addLog(`Rota comercial estabelecida entre ${source.name} e ${target.name}.`);
-          } else {
-            addLog("Ouro insuficiente para estabelecer rota comercial.");
-          }
-        } else {
-          addLog("Alvo comercial inválido. Deve ser uma província adjacente.");
+
+        const scoutsToSend = moveComposition.scouts > 0 ? moveComposition.scouts : source.army.scouts;
+        if (scoutsToSend <= 0) {
+          addLog('Sem batedores nesta província.');
+          setActionState('idle'); setActionSourceId(null); return;
         }
+
+        // Find path through any terrain (scouts ignore ownership)
+        const path = findPath(gameState, actionSourceId, id, gameState.playerRealmId, true);
+        if (path.length === 0) {
+          addLog('Nenhum caminho encontrado para os batedores.');
+          setActionState('idle'); setActionSourceId(null); return;
+        }
+
+        const order: MarchOrder = {
+          id: `scout_${Date.now()}`,
+          realmId: gameState.playerRealmId,
+          currentProvId: actionSourceId,
+          remainingPath: path,
+          troops: { infantry: 0, archers: 0, cavalry: 0, scouts: scoutsToSend },
+          isScoutMission: true,
+        };
+        setGameState(prev => {
+          if (!prev) return prev;
+          const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
+          const s = next.provinces[actionSourceId];
+          s.army.scouts -= scoutsToSend;
+          s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
+          next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
+          if (!next.marchOrders) next.marchOrders = [];
+          next.marchOrders.push(order);
+          return next;
+        });
+        addLog(`${scoutsToSend} batedores despachados para ${target.name} (${path.length} turno(s)).`);
       }
-      setActionState('idle');
-      setActionSourceId(null);
+      setActionState('idle'); setActionSourceId(null); setPreviewPath([]);
+      setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
     } else if (actionState === 'attacking') {
       if (actionSourceId) {
         const source = gameState.provinces[actionSourceId];
@@ -298,7 +359,8 @@ export default function App() {
              const attackingArmy: Army = {
                infantry: Math.floor(source.army.infantry * 0.8),
                archers: Math.floor(source.army.archers * 0.8),
-               cavalry: Math.floor(source.army.cavalry * 0.8)
+               cavalry: Math.floor(source.army.cavalry * 0.8),
+               scouts: 0, // scouts don't attack
              };
              const totalAttacking = attackingArmy.infantry + attackingArmy.archers + attackingArmy.cavalry;
 
@@ -319,6 +381,28 @@ export default function App() {
       setActionState('idle');
       setActionSourceId(null);
     }
+  };
+
+  /** Cancela uma ordem de marcha e retorna as tropas à província atual */
+  const cancelMarchOrder = (orderId: string) => {
+    setGameState(prev => {
+      if (!prev) return prev;
+      const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
+      const order = (next.marchOrders || []).find(o => o.id === orderId);
+      if (!order) return prev;
+      // Return troops to current province if it's still friendly
+      const prov = next.provinces[order.currentProvId];
+      if (prov && (order.isScoutMission || prov.ownerId === next.playerRealmId)) {
+        prov.army.infantry += order.troops.infantry;
+        prov.army.archers  += order.troops.archers;
+        prov.army.cavalry  += order.troops.cavalry;
+        prov.army.scouts   += order.troops.scouts;
+        prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts;
+        next.logs.push(`Ordem de marcha cancelada. Tropas retornaram a ${prov.name}.`);
+      }
+      next.marchOrders = next.marchOrders.filter(o => o.id !== orderId);
+      return next;
+    });
   };
 
   const confirmAttack = () => {
@@ -358,7 +442,8 @@ export default function App() {
       s.army.infantry -= combatAttackingArmy.infantry;
       s.army.archers -= combatAttackingArmy.archers;
       s.army.cavalry -= combatAttackingArmy.cavalry;
-      s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
+      s.army.scouts -= (combatAttackingArmy.scouts || 0);
+      s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
       r.actionPoints -= ACTION_COSTS.attack;
 
       if (result.won) {
@@ -366,7 +451,7 @@ export default function App() {
         const oldOwner = next.realms[oldOwnerId];
         t.ownerId = r.id;
         t.army = result.attackerRemaining;
-        t.troops = t.army.infantry + t.army.archers + t.army.cavalry;
+        t.troops = t.army.infantry + t.army.archers + t.army.cavalry + (t.army.scouts || 0);
         t.siegeDamage = 0;
 
         // Retreat defenders
@@ -378,7 +463,8 @@ export default function App() {
             rp.army.infantry += result.defenderRemaining.infantry;
             rp.army.archers += result.defenderRemaining.archers;
             rp.army.cavalry += result.defenderRemaining.cavalry;
-            rp.troops = rp.army.infantry + rp.army.archers + rp.army.cavalry;
+            rp.army.scouts += (result.defenderRemaining.scouts || 0);
+            rp.troops = rp.army.infantry + rp.army.archers + rp.army.cavalry + rp.army.scouts;
           }
         }
 
@@ -402,11 +488,12 @@ export default function App() {
       } else {
         // Defeat: return survivors to source
         t.army = result.defenderRemaining;
-        t.troops = t.army.infantry + t.army.archers + t.army.cavalry;
+        t.troops = t.army.infantry + t.army.archers + t.army.cavalry + (t.army.scouts || 0);
         s.army.infantry += result.attackerRemaining.infantry;
         s.army.archers += result.attackerRemaining.archers;
         s.army.cavalry += result.attackerRemaining.cavalry;
-        s.troops = s.army.infantry + s.army.archers + s.army.cavalry;
+        s.army.scouts += (result.attackerRemaining.scouts || 0);
+        s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
 
         if (t.defense > (t.siegeDamage || 0)) {
           t.siegeDamage = (t.siegeDamage || 0) + 1;
@@ -473,10 +560,10 @@ export default function App() {
         r.actionPoints -= ACTION_COSTS.recruit;
         p.population -= popCost;
         p.army[unitType] += recruitAmount;
-        p.troops = p.army.infantry + p.army.archers + p.army.cavalry;
+        p.troops = p.army.infantry + p.army.archers + p.army.cavalry + (p.army.scouts || 0);
         return next;
       });
-      addLog(`Recrutado ${recruitAmount} ${unitType === 'infantry' ? 'Infantaria' : unitType === 'archers' ? 'Arqueiros' : 'Cavalaria'} em ${prov.name}.`);
+      addLog(`Recrutado ${recruitAmount} ${unitType === 'infantry' ? 'Infantaria' : unitType === 'archers' ? 'Arqueiros' : unitType === 'cavalry' ? 'Cavalaria' : 'Batedores'} em ${prov.name}.`);
     } else if (action === 'build_farms' || action === 'build_mines' || action === 'build_workshops' || action === 'build_courts' || action === 'fortify') {
       playSound('build');
       if (playerRealm.actionPoints < ACTION_COSTS.build) {
@@ -932,157 +1019,107 @@ export default function App() {
 
   if (showMenu) {
     return (
-      <>
-        <div className="h-screen w-screen parchment-bg flex flex-col items-center justify-center overflow-hidden">
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="my-auto max-w-2xl w-full bg-[#2c1810]/90 backdrop-blur-md p-6 md:p-8 rounded-3xl shadow-[0_0_50px_rgba(0,0,0,0.5)] border-4 border-[#d4af37] text-center relative overflow-hidden shrink-0"
-          >
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent" />
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#d4af37] to-transparent" />
-            
-            <motion.div
-              animate={{ scale: [1, 1.02, 1] }}
-              transition={{ repeat: Infinity, duration: 4 }}
-            >
-              <Crown className="mx-auto text-[#d4af37] mb-4" size={56} />
-            </motion.div>
-            
-            <h1 className="text-4xl md:text-5xl font-serif font-bold text-[#d4af37] mb-2 medieval-title tracking-widest uppercase drop-shadow-lg">
-              Medieval Realms
-            </h1>
-            <p className="text-[#f5f2ed] text-base md:text-lg mb-6 font-serif italic opacity-80">
-              "O destino de um império é forjado no gume da espada e no selo do pergaminho."
-            </p>
-            
-            <div className="flex flex-col gap-3 max-w-xs mx-auto">
-              <div className="bg-black/40 p-4 rounded-xl border border-[#d4af37]/20 mb-2 text-left">
-                <h3 className="text-[#d4af37] font-bold mb-3 flex items-center gap-2 uppercase tracking-wider text-xs">
-                  <Settings size={14} /> Configurações
-                </h3>
-              
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-xs text-[#f5f2ed]/60 mb-1 uppercase">Vitória</label>
-                  <select 
-                    value={gameSettings.victoryCondition}
-                    onChange={(e) => setGameSettings(prev => ({ ...prev, victoryCondition: e.target.value as VictoryCondition }))}
-                    className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-sm text-white"
-                  >
-                    <option value="conquest">Conquista</option>
-                    <option value="economic">Econômica</option>
-                    <option value="vassalage">Vassalagem</option>
-                    <option value="sandbox">Sandbox</option>
-                  </select>
-                </div>
+      <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4 bg-black/95 backdrop-blur-xl overflow-y-auto">
+        <div className="w-full max-w-2xl bg-[#2c1810]/98 border-2 border-[#d4af37]/40 rounded-3xl p-4 md:p-8 shadow-[0_0_100px_rgba(0,0,0,0.8)] relative my-auto">
+          <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#d4af37] px-6 py-1 rounded-full border-2 border-[#2c1810] shadow-lg whitespace-nowrap">
+            <h2 className="text-[#1a0f0a] font-serif font-black text-[10px] md:text-sm tracking-[0.2em] md:tracking-[0.3em] uppercase">Reino Medieval</h2>
+          </div>
+          
+          <div className="space-y-4 md:space-y-6 mt-4 md:mt-6 text-center">
+            <div>
+              <h1 className="text-3xl md:text-5xl font-serif font-bold text-[#d4af37] tracking-tight drop-shadow-sm leading-tight medieval-title">Medieval Realms</h1>
+              <p className="text-[#f5f2ed]/60 font-serif italic text-xs md:text-lg">Guerra, Diplomacia e Conquista</p>
+            </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs text-[#f5f2ed]/60 mb-1 uppercase">Províncias</label>
-                    <input 
-                      type="number" 
-                      min="5"
-                      max="100"
-                      value={gameSettings.numProvinces}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        if (!isNaN(val)) {
-                          const safeVal = Math.max(5, Math.min(100, val));
-                          setGameSettings(prev => ({ ...prev, numProvinces: safeVal }));
-                        } else {
-                          setGameSettings(prev => ({ ...prev, numProvinces: 5 }));
-                        }
-                      }}
-                      className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-sm text-white"
-                    />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 text-left">
+              <div className="bg-black/40 p-3 md:p-5 rounded-xl border border-[#d4af37]/20 space-y-3">
+                <h3 className="text-[#d4af37] font-bold text-[10px] md:text-xs uppercase tracking-widest flex items-center gap-2">
+                  <Settings size={12} /> Configurações
+                </h3>
+                
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Condição de Vitória</label>
+                    <select 
+                      value={gameSettings.victoryCondition}
+                      onChange={(e) => setGameSettings(prev => ({ ...prev, victoryCondition: e.target.value as VictoryCondition }))}
+                      className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white outline-none"
+                    >
+                      <option value="conquest">Conquista</option>
+                      <option value="economic">Econômica</option>
+                      <option value="vassalage">Vassalagem</option>
+                      <option value="sandbox">Sandbox</option>
+                    </select>
                   </div>
-                  <div>
-                    <label className="block text-xs text-[#f5f2ed]/60 mb-1 uppercase">Reinos</label>
-                    <input 
-                      type="number" 
-                      min="1"
-                      max="8"
-                      value={gameSettings.numRealms}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value);
-                        setGameSettings(prev => ({ ...prev, numRealms: isNaN(val) ? 1 : val }));
-                      }}
-                      onBlur={(e) => {
-                        const val = parseInt(e.target.value);
-                        const safeVal = Math.max(1, Math.min(8, isNaN(val) ? 1 : val));
-                        setGameSettings(prev => ({ ...prev, numRealms: safeVal }));
-                      }}
-                      className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-sm text-white"
-                    />
+                  
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Províncias</label>
+                      <input 
+                        type="number" 
+                        min="5" max="100"
+                        value={gameSettings.numProvinces}
+                        onChange={(e) => setGameSettings(prev => ({ ...prev, numProvinces: parseInt(e.target.value) || 25 }))}
+                        className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-[#f5f2ed]/40 uppercase">Reinos</label>
+                      <input 
+                        type="number" 
+                        min="1" max="12"
+                        value={gameSettings.numRealms}
+                        onChange={(e) => setGameSettings(prev => ({ ...prev, numRealms: parseInt(e.target.value) || 6 }))}
+                        className="w-full bg-[#1a0f0a] border border-[#d4af37]/30 rounded-lg px-2 py-1.5 text-xs text-white"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {autosave && (
+              <div className="flex flex-col gap-2 justify-center">
+                {autosave && (
+                  <button 
+                    onClick={() => {
+                      setGameState(autosave.state);
+                      setShowMenu(false);
+                    }}
+                    className="w-full py-3 bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] font-bold rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <Play size={18} fill="currentColor" />
+                    <div className="text-left leading-none">
+                      <div className="text-sm">Continuar</div>
+                      <div className="text-[9px] font-normal opacity-70">Turno {autosave.state?.turn}</div>
+                    </div>
+                  </button>
+                )}
+
                 <button 
-                  onClick={() => {
-                    setGameState(autosave.state);
-                    setShowMenu(false);
-                  }}
-                  className="group relative bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] py-3 px-6 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-[#d4af37]/20"
+                  onClick={startNewGame}
+                  className="w-full py-3 bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] font-bold text-lg rounded-xl transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                  <Play size={20} fill="currentColor" />
-                  <div className="flex flex-col items-start leading-tight">
-                    <span>Continuar Campanha</span>
-                    <span className="text-[10px] font-normal opacity-70">Turno {autosave.state?.turn ?? 0}</span>
-                  </div>
+                  <Play size={20} fill="currentColor" /> Iniciar Jogo
                 </button>
-              )}
-
-              <button 
-                onClick={startNewGame}
-                className="group relative bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] py-3 px-6 rounded-xl font-bold text-lg transition-all flex items-center justify-center gap-3 shadow-lg hover:shadow-[#d4af37]/20"
-              >
-                <Play size={20} fill="currentColor" />
-                <span>Iniciar Conquista</span>
-              </button>
-              
-              <button 
-                onClick={() => setShowSaveModal(true)}
-                className="bg-transparent hover:bg-white/5 text-[#f5f2ed] py-2 px-6 rounded-xl font-medium transition-all flex items-center justify-center gap-3 border border-white/20 text-sm"
-              >
-                <Scroll size={18} />
-                <span>Crônicas do Reino</span>
-              </button>
-              
-              <button 
-                onClick={() => setShowInstructionsModal(true)}
-                className="bg-transparent hover:bg-white/5 text-[#f5f2ed] py-2 px-6 rounded-xl font-medium transition-all flex items-center justify-center gap-3 border border-white/20 text-sm"
-              >
-                <Info size={18} />
-                <span>Instruções</span>
-              </button>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  <button 
+                    onClick={() => setShowSaveModal(true)}
+                    className="py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all text-[10px] flex items-center justify-center gap-1"
+                  >
+                    <Save size={14} /> Saves
+                  </button>
+                  <button 
+                    onClick={() => setShowInstructionsModal(true)}
+                    className="py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg border border-white/10 transition-all text-[10px] flex items-center justify-center gap-1"
+                  >
+                    <Info size={14} /> Regras
+                  </button>
+                </div>
+              </div>
             </div>
-            
-            <div className="mt-6 pt-4 border-t border-white/10 flex justify-center gap-6 text-[#f5f2ed]/40 text-xs font-serif">
-              <div className="flex items-center gap-1"><Shield size={12} /> Estratégia</div>
-              <div className="flex items-center gap-1"><Swords size={12} /> Conquista</div>
-              <div className="flex items-center gap-1"><Handshake size={12} /> Diplomacia</div>
-            </div>
-        </motion.div>
+          </div>
+        </div>
       </div>
-
-      <SaveLoadModal
-        isOpen={showSaveModal}
-        onClose={() => setShowSaveModal(false)}
-        saves={persistence.listSaves()}
-        onSave={handleSave}
-        onLoad={handleLoad}
-        onDelete={handleDeleteSave}
-        canSave={false}
-      />
-      <InstructionsModal 
-        isOpen={showInstructionsModal}
-        onClose={() => setShowInstructionsModal(false)}
-      />
-      </>
     );
   }
 
@@ -1090,12 +1127,8 @@ export default function App() {
 
   return (
     <ErrorBoundary>
-      <div className="h-screen w-screen bg-[#1a1a1a] flex items-center justify-center overflow-hidden">
-      <div 
-        className="relative flex gap-4 origin-center transition-transform duration-300 ease-out"
-        style={{ width: 1420, height: 850, transform: `scale(${scale})` }}
-      >
-        <div className="flex-1 relative overflow-hidden rounded-xl bg-slate-900/50 border border-white/5 cursor-grab active:cursor-grabbing"
+      <div className="h-screen w-screen bg-[#1a1a1a] flex items-stretch overflow-hidden">
+        <div className="flex-1 relative overflow-hidden bg-slate-900 cursor-grab active:cursor-grabbing"
              onMouseDown={handleMouseDown}
              onMouseMove={handleMouseMove}
              onMouseUp={handleMouseUp}
@@ -1119,17 +1152,19 @@ export default function App() {
             />
           </div>
           
-          <Minimap 
-            gameState={gameState}
-            width={150}
-            height={112}
-            selectedProvinceId={selectedProvinceId}
-            onProvinceClick={(id) => setSelectedProvinceId(id)}
-          />
+          <div className="hidden lg:block">
+            <Minimap 
+              gameState={gameState}
+              width={150}
+              height={112}
+              selectedProvinceId={selectedProvinceId}
+              onProvinceClick={(id) => setSelectedProvinceId(id)}
+            />
+          </div>
 
-          {/* Logs Overlay */}
+          {/* Logs Overlay - hidden on small devices */}
           {gameState && (
-            <div className="absolute bottom-4 right-4 w-64 max-h-20 overflow-y-auto bg-black/40 backdrop-blur-sm border border-slate-700/50 rounded-lg p-2 text-[9px] text-slate-400 pointer-events-none font-serif opacity-70 hover:opacity-100 transition-opacity">
+            <div className="absolute bottom-4 right-4 w-48 md:w-64 max-h-16 md:max-h-20 overflow-y-auto bg-black/40 backdrop-blur-sm border border-slate-700/50 rounded-lg p-2 text-[8px] md:text-[9px] text-slate-400 pointer-events-none font-serif opacity-70 hover:opacity-100 transition-opacity hidden lg:block">
               {gameState.logs.slice(-3).map((log, i) => (
                 <div key={i} className="mb-0.5 last:mb-0 leading-tight">{log}</div>
               ))}
@@ -1137,37 +1172,54 @@ export default function App() {
           )}
         </div>
         
-        <div className="w-96">
-          <HUD 
-            gameState={gameState}
-            selectedProvinceId={selectedProvinceId}
-            actionState={actionState}
-            actionSourceId={actionSourceId}
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
-            onAction={handleAction}
-            onEndTurn={handleEndTurn}
-            onSave={() => setShowSaveModal(true)}
-            onMenu={() => setShowMenu(true)}
-            onCancelAction={() => {
-              setActionState('idle');
-              setActionSourceId(null);
-            }}
-            zoom={zoom}
-            onZoomChange={setZoom}
-            onOpenChronicles={() => setShowChronicles(true)}
-          />
-        </div>
+        <HUD 
+          gameState={gameState}
+          selectedProvinceId={selectedProvinceId}
+          actionState={actionState}
+          actionSourceId={actionSourceId}
+          viewMode={viewMode}
+          onViewModeChange={setViewMode}
+          onAction={handleAction}
+          onEndTurn={handleEndTurn}
+          onSave={() => setShowSaveModal(true)}
+          onMenu={() => setShowMenu(true)}
+          onCancelAction={() => {
+            setActionState('idle');
+            setActionSourceId(null);
+            setPreviewPath([]);
+            setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+          }}
+          zoom={zoom}
+          onZoomChange={setZoom}
+          onOpenChronicles={() => setShowChronicles(true)}
+          moveComposition={moveComposition}
+          onMoveCompositionChange={setMoveComposition}
+          marchOrders={(gameState.marchOrders || []).filter(o => o.realmId === gameState.playerRealmId)}
+          onCancelMarchOrder={cancelMarchOrder}
+          onDispatchScouts={() => {
+            if (!selectedProvinceId) return;
+            setActionSourceId(selectedProvinceId);
+            setActionState('dispatching_scouts');
+          }}
+          onRoute={() => {
+            if (!selectedProvinceId) return;
+            setActionSourceId(selectedProvinceId);
+            setActionState('routing');
+          }}
+          isHudOpen={isHudOpen}
+          onToggleHud={() => setIsHudOpen(!isHudOpen)}
+          onToggleFullScreen={toggleFullScreen}
+        />
 
         <AnimatePresence>
           {showChronicles && (
             <ChroniclesModal 
               logs={gameState.logs} 
               onClose={() => setShowChronicles(false)} 
+              isOpen={showChronicles}
             />
           )}
         </AnimatePresence>
-      </div>
 
       <GameOverModal 
         gameState={gameState}

@@ -1,5 +1,5 @@
 import * as d3 from 'd3';
-import { GameState, Province, Realm, Terrain, GameEvent, Army, StrategicResource, PersonalityType, StrategicObjective, DiplomaticMemory, Coalition, GameSettings, VictoryCondition, UnitType } from './types';
+import { GameState, Province, Realm, Terrain, GameEvent, Army, StrategicResource, PersonalityType, StrategicObjective, DiplomaticMemory, Coalition, GameSettings, VictoryCondition, UnitType, MarchOrder } from './types';
 
 const REALM_NAMES = ["Avalon", "Eldoria", "Thalassa", "Gondor", "Rohan", "Mercia", "Wessex", "Northumbria"];
 const REALM_COLORS = ["#ef4444", "#3b82f6", "#10b981", "#eab308", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
@@ -28,6 +28,12 @@ export const UNIT_STATS = {
     maintenance: { gold: 0.2, food: 0.1 },
     attack: 2.0, defense: 1.0, speed: 2,
     requires: 'horse' as StrategicResource
+  },
+  scouts: {
+    cost: { gold: 50, food: 5, materials: 5, pop: 5 },
+    maintenance: { gold: 0.3, food: 0.1 },
+    attack: 0.1, defense: 0.1, speed: 3,
+    vision: true // Special property for clarity
   }
 };
 
@@ -62,9 +68,29 @@ export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
   const playerProvinces = Object.values(state.provinces).filter(p => p.ownerId === state.playerRealmId);
   
+  // Check if player has any scouts in provinces
+  const hasScouts = playerProvinces.some(p => (p.army?.scouts || 0) > 0);
+  
+  // Check if player has scout march orders
+  const hasScoutOrders = (state.marchOrders || []).some(
+    o => o.realmId === state.playerRealmId && o.isScoutMission
+  );
+  
+  if (hasScouts || hasScoutOrders) {
+    // Scouts reveal everything
+    return Object.keys(state.provinces);
+  }
+  
   playerProvinces.forEach(p => {
     visible.add(p.id);
-    p.neighbors.forEach(nId => visible.add(nId));
+    (p.neighbors || []).forEach(nId => visible.add(nId));
+  });
+  
+  // Regular march orders also reveal current position
+  (state.marchOrders || []).filter(o => o.realmId === state.playerRealmId).forEach(o => {
+    visible.add(o.currentProvId);
+    const prov = state.provinces[o.currentProvId];
+    if (prov) (prov.neighbors || []).forEach(nId => visible.add(nId));
   });
   
   return Array.from(visible);
@@ -160,15 +186,16 @@ export function generateInitialState(width: number, height: number, settings: Ga
       const army: Army = {
         infantry: Math.floor(Math.random() * 30) + 20,
         archers: Math.floor(Math.random() * 15) + 5,
-        cavalry: Math.floor(Math.random() * 5)
+        cavalry: Math.floor(Math.random() * 5),
+        scouts: 0 // No scouts at start
       };
 
       provinces[`prov_${i}`] = {
         id: `prov_${i}`,
         name: PROVINCE_NAMES[i % PROVINCE_NAMES.length],
-        ownerId: `realm_${i % numRealms}`, // Distribute evenly initially
+        ownerId: 'neutral', // Initially unowned for contiguous distribution
         army,
-        troops: army.infantry + army.archers + army.cavalry,
+        troops: army.infantry + army.archers + army.cavalry + army.scouts,
         population: pop,
         maxPopulation: pop + 500,
         strategicResource: Math.random() < (resourceDensity === 'high' ? 0.6 : resourceDensity === 'low' ? 0.2 : 0.4) 
@@ -194,13 +221,66 @@ export function generateInitialState(width: number, height: number, settings: Ga
       };
     }
 
+    // Contiguous Province Distribution
+    const unassigned = new Set(Object.keys(provinces));
+    const frontier: { provinceId: string; realmId: string }[] = [];
+    
+    // Pick seeds
+    const provinceIds = Array.from(unassigned);
+    const shuffledIds = [...provinceIds].sort(() => Math.random() - 0.5);
+    
+    for (let i = 0; i < numRealms; i++) {
+        const seedId = shuffledIds[i];
+        provinces[seedId].ownerId = `realm_${i}`;
+        unassigned.delete(seedId);
+        
+        // Add neighbors of seed to frontier
+        provinces[seedId].neighbors.forEach(nId => {
+            if (unassigned.has(nId)) {
+                frontier.push({ provinceId: nId, realmId: `realm_${i}` });
+            }
+        });
+    }
+    
+    // Expand reinos
+    while (unassigned.size > 0 && frontier.length > 0) {
+        // Pick a random edge from the frontier
+        const index = Math.floor(Math.random() * frontier.length);
+        const { provinceId, realmId } = frontier.splice(index, 1)[0];
+        
+        if (unassigned.has(provinceId)) {
+            provinces[provinceId].ownerId = realmId;
+            unassigned.delete(provinceId);
+            
+            // Add new unassigned neighbors to frontier
+            provinces[provinceId].neighbors.forEach(nId => {
+                if (unassigned.has(nId)) {
+                    frontier.push({ provinceId: nId, realmId });
+                }
+            });
+        }
+    }
+    
+    // Any remaining (due to isolation) assign to neutral or random neighbor
+    unassigned.forEach(pId => {
+        const neighbors = provinces[pId].neighbors;
+        const assignedNeighbor = neighbors.find(nId => provinces[nId].ownerId !== 'neutral');
+        if (assignedNeighbor) {
+            provinces[pId].ownerId = provinces[assignedNeighbor].ownerId;
+        } else {
+            // Truly isolated? Pick random realm
+            provinces[pId].ownerId = `realm_${Math.floor(Math.random() * numRealms)}`;
+        }
+    });
+
     // Assign Capitals
     Object.values(realms).forEach(realm => {
       const owned = Object.values(provinces).filter(p => p.ownerId === realm.id);
       if (owned.length > 0) {
-        realm.capitalId = owned[0].id;
+        // Pick the most central province among owned (optional, for now just first)
+        realm.capitalId = owned[Math.floor(owned.length / 2)].id;
         provinces[realm.capitalId].loyalty = 100;
-        provinces[realm.capitalId].buildings.courts = 1; // Start with some admin in capital
+        provinces[realm.capitalId].buildings.courts = 1;
       }
     });
 
@@ -221,6 +301,7 @@ export function generateInitialState(width: number, height: number, settings: Ga
       visualEffects: [],
       coalitions: [],
       visibleProvinces: [],
+      marchOrders: [],
       settings
     };
 
@@ -327,11 +408,11 @@ export interface BattleResult {
 }
 
 export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: Terrain, defense: number): BattleResult {
-  // Clone armies for simulation
-  const atk = { ...attackerArmy };
-  const def = { ...defenderArmy };
-  const atkInitial = { ...attackerArmy };
-  const defInitial = { ...defenderArmy };
+  // Scouts don't fight — strip them from armies before combat
+  const atk = { ...attackerArmy, scouts: 0 };
+  const def = { ...defenderArmy, scouts: 0 };
+  const atkInitial = { ...atk };
+  const defInitial = { ...def };
 
   // Terrain modifiers
   let terrainDefBonus = 1.0;
@@ -352,12 +433,12 @@ export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: T
 
   const fortBonus = 1.0 + (defense * 0.2); // Each fort level = 20% def bonus
 
-  // Simulate combat in rounds (max 5)
+  // Simulate combat in rounds (max 5) - scouts excluded from calculation
   let rounds = 0;
   for (let r = 0; r < 5; r++) {
     rounds++;
-    const atkTotal = atk.infantry + atk.archers + atk.cavalry;
-    const defTotal = def.infantry + def.archers + def.cavalry;
+    const atkTotal = atk.infantry + atk.archers + atk.cavalry; // no scouts
+    const defTotal = def.infantry + def.archers + def.cavalry; // no scouts
     if (atkTotal <= 0 || defTotal <= 0) break;
 
     // Calculate attack power with unit counters
@@ -398,7 +479,7 @@ export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: T
     def.cavalry = Math.max(0, def.cavalry - Math.ceil(def.cavalry * defCasualtyRate));
   }
 
-  const atkSurvivors = atk.infantry + atk.archers + atk.cavalry;
+  const atkSurvivors = atk.infantry + atk.archers + atk.cavalry; // scouts excluded from victory check
   const defSurvivors = def.infantry + def.archers + def.cavalry;
   
   const won = atkSurvivors > defSurvivors;
@@ -411,11 +492,13 @@ export function resolveCombat(attackerArmy: Army, defenderArmy: Army, terrain: T
       infantry: atkInitial.infantry - atk.infantry,
       archers: atkInitial.archers - atk.archers,
       cavalry: atkInitial.cavalry - atk.cavalry,
+      scouts: atkInitial.scouts - atk.scouts,
     },
     defenderLosses: {
       infantry: defInitial.infantry - def.infantry,
       archers: defInitial.archers - def.archers,
       cavalry: defInitial.cavalry - def.cavalry,
+      scouts: defInitial.scouts - def.scouts,
     },
     attackerInitial: atkInitial,
     defenderInitial: defInitial,
@@ -587,16 +670,19 @@ export function executeMove(sourceProv: Province, targetProv: Province) {
   const moveInf = Math.floor(sourceProv.army.infantry / 2);
   const moveArc = Math.floor(sourceProv.army.archers / 2);
   const moveCav = Math.floor(sourceProv.army.cavalry / 2);
+  const moveSco = Math.floor(sourceProv.army.scouts / 2);
 
   sourceProv.army.infantry -= moveInf;
   sourceProv.army.archers -= moveArc;
   sourceProv.army.cavalry -= moveCav;
-  sourceProv.troops = sourceProv.army.infantry + sourceProv.army.archers + sourceProv.army.cavalry;
+  sourceProv.army.scouts -= moveSco;
+  sourceProv.troops = sourceProv.army.infantry + sourceProv.army.archers + sourceProv.army.cavalry + sourceProv.army.scouts;
 
   targetProv.army.infantry += moveInf;
   targetProv.army.archers += moveArc;
   targetProv.army.cavalry += moveCav;
-  targetProv.troops = targetProv.army.infantry + targetProv.army.archers + targetProv.army.cavalry;
+  targetProv.army.scouts += moveSco;
+  targetProv.troops = targetProv.army.infantry + targetProv.army.archers + targetProv.army.cavalry + targetProv.army.scouts;
 }
 
 function processVassalTurn(state: GameState, realm: Realm) {
@@ -890,7 +976,8 @@ export function executeAttack(state: GameState, realm: Realm, attackerProv: Prov
   const attackingArmy: Army = {
     infantry: Math.floor(attackerProv.army.infantry * 0.7),
     archers: Math.floor(attackerProv.army.archers * 0.7),
-    cavalry: Math.floor(attackerProv.army.cavalry * 0.7)
+    cavalry: Math.floor(attackerProv.army.cavalry * 0.7),
+    scouts: Math.floor(attackerProv.army.scouts * 0.7)
   };
   
   attackerProv.army.infantry -= attackingArmy.infantry;
@@ -981,7 +1068,7 @@ export function executeAttack(state: GameState, realm: Realm, attackerProv: Prov
 
 function executeRecruitment(state: GameState, realm: Realm, prov: Province) {
   // AI recruitment logic: try to balance or pick best available
-  const unitTypes: UnitType[] = ['infantry', 'archers', 'cavalry'];
+  const unitTypes: UnitType[] = ['infantry', 'archers', 'cavalry', 'scouts'];
   
   for (const type of unitTypes) {
     const stats = UNIT_STATS[type];
@@ -1122,16 +1209,18 @@ export function processEndOfTurn(state: GameState): GameState {
       goldMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.gold;
       goldMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.gold;
       goldMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.gold;
+      goldMaintenance += p.army.scouts * UNIT_STATS.scouts.maintenance.gold;
 
       foodMaintenance += p.army.infantry * UNIT_STATS.infantry.maintenance.food;
       foodMaintenance += p.army.archers * UNIT_STATS.archers.maintenance.food;
       foodMaintenance += p.army.cavalry * UNIT_STATS.cavalry.maintenance.food;
+      foodMaintenance += p.army.scouts * UNIT_STATS.scouts.maintenance.food;
 
       // 4. Rebellion check
       if (p.loyalty < 25 && Math.random() < 0.1) {
         const rebelPower = Math.floor(p.population * 0.05);
         if (rebelPower > p.troops) {
-           p.army = { infantry: 0, archers: 0, cavalry: 0 };
+           p.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
            p.troops = 0;
            p.population = Math.floor(p.population * 0.7);
            p.loyalty = 40;
@@ -1214,6 +1303,9 @@ export function processEndOfTurn(state: GameState): GameState {
     });
   });
 
+  // Process march orders — advance each by one province
+  processMarchOrders(newState);
+
   // Coalition Logic
   processCoalitions(newState);
   
@@ -1243,13 +1335,132 @@ function handleResourceDeficit(realm: Realm, provinces: Province[], troopsToLose
       prov.army.infantry -= Math.floor(prov.army.infantry * ratio);
       prov.army.archers -= Math.floor(prov.army.archers * ratio);
       prov.army.cavalry -= Math.floor(prov.army.cavalry * ratio);
-      prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry;
+      prov.army.scouts -= Math.floor(prov.army.scouts * ratio);
+      prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts;
       remainingLoss -= loss;
     }
   }
   if (realm.isPlayer) {
     state.logs.push(type === 'gold' ? `Tesouro vazio! Tropas desertaram.` : `Fome! Tropas morrendo.`);
   }
+}
+
+
+/** BFS pathfinding: find shortest path between two province IDs.
+ *  If isScout=true, traverses any province (ignores ownership).
+ *  If isScout=false, only travels through player-owned provinces (for regular movement). */
+export function findPath(
+  state: GameState,
+  fromId: string,
+  toId: string,
+  realmId: string,
+  isScout = false
+): string[] {
+  if (fromId === toId) return [];
+  const visited = new Set<string>([fromId]);
+  const queue: { id: string; path: string[] }[] = [{ id: fromId, path: [] }];
+
+  while (queue.length > 0) {
+    const { id, path } = queue.shift()!;
+    const prov = state.provinces[id];
+    if (!prov) continue;
+
+    for (const nId of prov.neighbors) {
+      if (visited.has(nId)) continue;
+      const neighbor = state.provinces[nId];
+      if (!neighbor) continue;
+
+      // Regular armies can only travel through provinces they own until reaching destination
+      // Scouts can go anywhere
+      const canTraverse = isScout || neighbor.ownerId === realmId || nId === toId;
+      if (!canTraverse) continue;
+
+      const newPath = [...path, nId];
+      if (nId === toId) return newPath;
+
+      visited.add(nId);
+      queue.push({ id: nId, path: newPath });
+    }
+  }
+
+  return []; // No path found
+}
+
+/** Avança todas as ordens de marcha em uma província por turno */
+function processMarchOrders(state: GameState) {
+  if (!state.marchOrders) { state.marchOrders = []; return; }
+
+  const toRemove: string[] = [];
+
+  state.marchOrders.forEach(order => {
+    if (order.remainingPath.length === 0) {
+      // Arrived at destination; merge troops into current province
+      const prov = state.provinces[order.currentProvId];
+      if (prov) {
+        if (!order.isScoutMission) {
+          // Regular troops: merge into province if friendly
+          if (prov.ownerId === order.realmId) {
+            prov.army.infantry += order.troops.infantry;
+            prov.army.archers += order.troops.archers;
+            prov.army.cavalry += order.troops.cavalry;
+            prov.army.scouts += order.troops.scouts;
+            prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts;
+            if (order.realmId === state.playerRealmId) {
+              state.logs.push(`Tropas chegaram em ${prov.name}.`);
+            }
+          }
+        } else {
+          // Scouts complete mission: they stay hidden, just provide vision
+          // We merge them back to closest friendly territory
+          const friendlyNeighbor = prov.neighbors
+            .map(nId => state.provinces[nId])
+            .find(n => n && n.ownerId === order.realmId);
+          const depositProv = friendlyNeighbor || prov;
+          if (depositProv.ownerId === order.realmId) {
+            depositProv.army.scouts += order.troops.scouts;
+            depositProv.troops += order.troops.scouts;
+          }
+          if (order.realmId === state.playerRealmId) {
+            state.logs.push(`Batedores completaram missão de reconhecimento.`);
+          }
+        }
+      }
+      toRemove.push(order.id);
+      return;
+    }
+
+    // Advance one step
+    const nextProvId = order.remainingPath[0];
+    const nextProv = state.provinces[nextProvId];
+
+    if (!nextProv) {
+      toRemove.push(order.id);
+      return;
+    }
+
+    // For regular armies: if the next province is enemy, cancel the march
+    if (!order.isScoutMission && nextProv.ownerId !== order.realmId && nextProv.ownerId !== 'neutral') {
+      // Return troops to current province
+      const currentProv = state.provinces[order.currentProvId];
+      if (currentProv && currentProv.ownerId === order.realmId) {
+        currentProv.army.infantry += order.troops.infantry;
+        currentProv.army.archers += order.troops.archers;
+        currentProv.army.cavalry += order.troops.cavalry;
+        currentProv.army.scouts += order.troops.scouts;
+        currentProv.troops = currentProv.army.infantry + currentProv.army.archers + currentProv.army.cavalry + currentProv.army.scouts;
+        if (order.realmId === state.playerRealmId) {
+          state.logs.push(`Marcha interrompida: território inimigo bloqueou o caminho para ${nextProv.name}. Tropas retornaram.`);
+        }
+      }
+      toRemove.push(order.id);
+      return;
+    }
+
+    order.currentProvId = nextProvId;
+    order.remainingPath = order.remainingPath.slice(1);
+  });
+
+  state.marchOrders = state.marchOrders.filter(o => !toRemove.includes(o.id));
 }
 
 function processCoalitions(state: GameState) {

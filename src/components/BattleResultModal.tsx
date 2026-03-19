@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Swords, Shield, Skull, Trophy, ChevronRight, Mountain, TreePine, Map as MapIcon } from 'lucide-react';
 import { BattleResult } from '../gameLogic';
+import { Army } from '../types';
 
 interface BattleResultModalProps {
   isOpen: boolean;
@@ -21,9 +22,9 @@ function getTerrainLabel(terrain: string) {
   }
 }
 
-function ArmyColumn({ label, initial, losses, remaining, color }: { label: string; initial: { infantry: number; archers: number; cavalry: number }; losses: { infantry: number; archers: number; cavalry: number }; remaining: { infantry: number; archers: number; cavalry: number }; color: string }) {
-  const total = initial.infantry + initial.archers + initial.cavalry;
-  const totalLost = losses.infantry + losses.archers + losses.cavalry;
+function ArmyColumn({ label, initial, losses, remaining, color }: { label: string; initial: Army; losses: Army; remaining: Army; color: string }) {
+  const total = (initial.infantry || 0) + (initial.archers || 0) + (initial.cavalry || 0) + (initial.scouts || 0);
+  const totalLost = (losses.infantry || 0) + (losses.archers || 0) + (losses.cavalry || 0) + (losses.scouts || 0);
   const pctLost = total > 0 ? Math.round((totalLost / total) * 100) : 0;
 
   return (
@@ -41,6 +42,10 @@ function ArmyColumn({ label, initial, losses, remaining, color }: { label: strin
         <div className="flex justify-between">
           <span className="text-slate-400">Cavalaria</span>
           <span>{initial.cavalry} → <span className="font-bold">{remaining.cavalry}</span> <span className="text-red-400">(-{losses.cavalry})</span></span>
+        </div>
+        <div className="flex justify-between text-blue-400/80">
+          <span className="opacity-60">Batedores</span>
+          <span>{initial.scouts} → <span className="font-bold">{remaining.scouts}</span> <span className="text-red-400">(-{losses.scouts})</span></span>
         </div>
         <div className="pt-1 border-t border-slate-700 flex justify-between font-bold text-xs">
           <span>Baixas</span>
@@ -63,8 +68,8 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
   if (!isOpen || !result) return null;
 
   const terrain = getTerrainLabel(result.terrain);
-  const totalAtkLost = result.attackerLosses.infantry + result.attackerLosses.archers + result.attackerLosses.cavalry;
-  const totalDefLost = result.defenderLosses.infantry + result.defenderLosses.archers + result.defenderLosses.cavalry;
+  const totalAtkLost = (result.attackerLosses.infantry || 0) + (result.attackerLosses.archers || 0) + (result.attackerLosses.cavalry || 0) + (result.attackerLosses.scouts || 0);
+  const totalDefLost = (result.defenderLosses.infantry || 0) + (result.defenderLosses.archers || 0) + (result.defenderLosses.cavalry || 0) + (result.defenderLosses.scouts || 0);
 
   return (
     <AnimatePresence>

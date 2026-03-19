@@ -55,8 +55,8 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
 }) => {
   if (!isOpen || !attackerProv || !defenderProv || !attackingArmy) return null;
 
-  const totalAttack = (attackingArmy.infantry || 0) + (attackingArmy.archers || 0) + (attackingArmy.cavalry || 0);
-  const totalDefense = (defenderProv.army?.infantry || 0) + (defenderProv.army?.archers || 0) + (defenderProv.army?.cavalry || 0);
+  const totalAttack = (attackingArmy.infantry || 0) + (attackingArmy.archers || 0) + (attackingArmy.cavalry || 0) + (attackingArmy.scouts || 0);
+  const totalDefense = (defenderProv.army?.infantry || 0) + (defenderProv.army?.archers || 0) + (defenderProv.army?.cavalry || 0) + (defenderProv.army?.scouts || 0);
 
   const terrainBonus = getTerrainDefenseBonus(defenderProv.terrain);
   const effectiveDefense = Math.max(0, (defenderProv.defense || 0) - (defenderProv.siegeDamage || 0));
@@ -118,6 +118,7 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
                   <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{attackingArmy.infantry}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{attackingArmy.archers}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{attackingArmy.cavalry}</span></div>
+                  <div className="flex justify-between text-blue-300"><span className="opacity-60">Batedores</span><span className="font-bold">{attackingArmy.scouts}</span></div>
                   <div className="pt-2 mt-1 border-t border-white/10 flex justify-between font-bold text-blue-400">
                     <span>Total</span><span>{totalAttack}</span>
                   </div>
@@ -133,6 +134,7 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
                   <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{defenderProv.army?.infantry ?? 0}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{defenderProv.army?.archers ?? 0}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{defenderProv.army?.cavalry ?? 0}</span></div>
+                  <div className="flex justify-between text-blue-300"><span className="opacity-60">Batedores</span><span className="font-bold">{defenderProv.army?.scouts ?? 0}</span></div>
                   <div className="pt-2 mt-1 border-t border-white/10 flex justify-between font-bold text-red-400">
                     <span>Total</span><span>{totalDefense}</span>
                   </div>

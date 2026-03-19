@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { GameState, Province, Realm, ActionType, UnitType, ViewMode } from '../types';
-import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown, Scroll } from 'lucide-react';
+import { GameState, Province, Realm, ActionType, UnitType, ViewMode, Army, MarchOrder } from '../types';
+import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown, Scroll, Navigation, Route } from 'lucide-react';
 import { UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from '../gameLogic';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -19,7 +19,21 @@ interface HUDProps {
   zoom: number;
   onZoomChange: (newZoom: number) => void;
   onOpenChronicles: () => void;
+  /** Composição de tropas para o movimento */
+  moveComposition: Army;
+  onMoveCompositionChange: (comp: Army) => void;
+  /** Ordens de marcha ativas do jogador */
+  marchOrders: MarchOrder[];
+  onCancelMarchOrder: (id: string) => void;
+  /** Iniciar modo de despacho de batedores */
+  onDispatchScouts: () => void;
+  /** Iniciar modo de rota */
+  onRoute: () => void;
+  isHudOpen: boolean;
+  onToggleHud: () => void;
+  onToggleFullScreen: () => void;
 }
+
 
 export const HUD: React.FC<HUDProps> = ({
   gameState,
@@ -35,7 +49,16 @@ export const HUD: React.FC<HUDProps> = ({
   onCancelAction,
   zoom,
   onZoomChange,
-  onOpenChronicles
+  onOpenChronicles,
+  moveComposition,
+  onMoveCompositionChange,
+  marchOrders,
+  onCancelMarchOrder,
+  onDispatchScouts,
+  onRoute,
+  isHudOpen,
+  onToggleHud,
+  onToggleFullScreen,
 }) => {
   const [recruitAmount, setRecruitAmount] = useState(10);
   const [isRecruiting, setIsRecruiting] = useState(false);
@@ -105,30 +128,53 @@ export const HUD: React.FC<HUDProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-slate-200 w-80 shadow-2xl border-l border-slate-700 overflow-hidden">
-      {/* Top Header & Stats */}
-      <div className="p-4 bg-slate-800 border-b border-slate-700 shadow-lg shrink-0">
-        <div className="flex justify-between items-center mb-4">
-          <div className="flex items-center gap-2 overflow-hidden">
-            <Crown className="text-amber-500 shrink-0" size={24} />
-            <h1 className="text-lg font-serif font-bold text-white medieval-title tracking-wider truncate py-0.5">{playerRealm.name}</h1>
-          </div>
-          <div className="flex gap-1.5 shrink-0">
-            <button 
-              onClick={onOpenChronicles}
-              className="p-2 bg-slate-900 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-amber-400 transition-all border border-slate-700/50 hover:border-amber-500/30" 
-              title="Crônicas do Reino"
-            >
-              <Scroll size={16} />
-            </button>
-            <button 
-              onClick={onMenu} 
-              className="p-2 bg-slate-900 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all border border-slate-700/50"
-            >
-              <X size={16} />
-            </button>
-          </div>
-        </div>
+    <>
+      {/* HUD Toggle Button (visible when HUD is closed or on mobile) */}
+      <button
+        onClick={onToggleHud}
+        className={`fixed top-4 right-4 z-50 p-3 bg-slate-800/80 backdrop-blur-md border border-slate-700/50 rounded-full text-white shadow-xl transition-all active:scale-95 ${isHudOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        title={isHudOpen ? "Fechar Menu" : "Abrir Menu"}
+      >
+        <BarChart3 size={20} />
+      </button>
+
+      <motion.div 
+        initial={false}
+        animate={{ 
+          x: isHudOpen ? 0 : '100%',
+          opacity: isHudOpen ? 1 : 0
+        }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+        className="h-full w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 relative"
+      >
+        {/* Toggle handle for desktop */}
+        <button 
+          onClick={onToggleHud}
+          className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 bg-slate-800/90 text-slate-400 rounded-l-lg border-l border-t border-b border-white/10 flex items-center justify-center hover:text-white transition-colors"
+        >
+          {isHudOpen ? <ArrowRight size={20} /> : <BarChart3 size={20} />}
+        </button>
+
+        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
+          <div className="p-4 md:p-6 space-y-6">
+            {/* Header with Fullscreen option */}
+            <div className="flex justify-between items-center mb-2">
+               <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100 flex items-center gap-2">
+                 <Crown className="text-amber-500" /> {playerRealm.name}
+               </h1>
+               <div className="flex gap-1">
+                 <button 
+                   onClick={onToggleFullScreen}
+                   className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors"
+                   title="Tela Cheia"
+                 >
+                   <Globe2 size={16} />
+                 </button>
+                 <button onClick={onOpenChronicles} className="p-2 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded-lg transition-colors">
+                   <Scroll size={16} />
+                 </button>
+               </div>
+            </div>
 
         {/* Resources Grid */}
         <div className="grid grid-cols-2 gap-2 mb-4">
@@ -470,18 +516,22 @@ export const HUD: React.FC<HUDProps> = ({
               
               <div className="pt-2 border-t border-slate-800">
                 <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Composição do Exército</span>
-                <div className="grid grid-cols-3 gap-2 mt-1">
+                <div className="grid grid-cols-4 gap-1 mt-1">
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-xs block text-slate-400">Infantaria</span>
-                    <span className="font-bold text-base">{selectedProv.army?.infantry ?? 0}</span>
+                    <span className="text-[10px] block text-slate-400">Inf.</span>
+                    <span className="font-bold text-sm">{selectedProv.army?.infantry ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-xs block text-slate-400">Arqueiros</span>
-                    <span className="font-bold text-base">{selectedProv.army?.archers ?? 0}</span>
+                    <span className="text-[10px] block text-slate-400">Arq.</span>
+                    <span className="font-bold text-sm">{selectedProv.army?.archers ?? 0}</span>
                   </div>
                   <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-xs block text-slate-400">Cavalaria</span>
-                    <span className="font-bold text-base">{selectedProv.army?.cavalry ?? 0}</span>
+                    <span className="text-[10px] block text-slate-400">Cav.</span>
+                    <span className="font-bold text-sm">{selectedProv.army?.cavalry ?? 0}</span>
+                  </div>
+                  <div className="bg-slate-800 p-2 rounded text-center ring-1 ring-blue-500/30">
+                    <span className="text-[10px] block text-blue-400 flex items-center justify-center gap-0.5"><Eye size={10} /> Bat.</span>
+                    <span className="font-bold text-sm text-blue-300">{selectedProv.army?.scouts ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -583,18 +633,19 @@ export const HUD: React.FC<HUDProps> = ({
                             </button>
                           </div>
                           
-                          <div className="grid grid-cols-3 gap-1">
-                            {(['infantry', 'archers', 'cavalry'] as UnitType[]).map(type => (
+                          <div className="grid grid-cols-4 gap-1">
+                            {(['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).map(type => (
                               <button
                                 key={type}
                                 onClick={() => setSelectedUnitType(type)}
+                                title={type === 'scouts' ? 'Batedores: Revelam o mapa e removem fog' : ''}
                                 className={`py-1 text-[10px] font-bold uppercase rounded border transition-all ${
                                   selectedUnitType === type 
-                                    ? 'bg-blue-600 border-blue-400 text-white' 
+                                    ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' 
                                     : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-slate-200'
                                 }`}
                               >
-                                {type === 'infantry' ? 'Infantaria' : type === 'archers' ? 'Arqueiros' : 'Cavalaria'}
+                                {type === 'infantry' ? 'Inf.' : type === 'archers' ? 'Arq.' : type === 'cavalry' ? 'Cav.' : 'Bat.'}
                               </button>
                             ))}
                           </div>
@@ -685,19 +736,75 @@ export const HUD: React.FC<HUDProps> = ({
                       </div>
                       
                       <div className="pt-2">
-                        <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => onAction('move')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
-                            <ArrowRight size={14} /> Mover ({ACTION_COSTS.move} AP)
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Movimentação ({ACTION_COSTS.move} AP)</span>
+                        
+                        {/* Troop Composition Selector */}
+                        <div className="mt-2 bg-slate-800 border border-slate-700 rounded-lg p-2 space-y-2">
+                          <span className="text-[10px] text-slate-400">Selecionar tropas para mover:</span>
+                          <div className="grid grid-cols-4 gap-1 text-[10px]">
+                            {(['infantry','archers','cavalry','scouts'] as const).map(type => {
+                              const max = selectedProv.army[type] || 0;
+                              const val = moveComposition[type] || 0;
+                              const label = type === 'infantry' ? 'Inf' : type === 'archers' ? 'Arq' : type === 'cavalry' ? 'Cav' : 'Bat';
+                              if (max === 0) return null;
+                              return (
+                                <div key={type} className="flex flex-col gap-0.5">
+                                  <span className="text-slate-400 text-center">{label} (/{max})</span>
+                                  <input
+                                    type="number" min={0} max={max}
+                                    value={val}
+                                    onChange={e => {
+                                      const v = Math.min(max, Math.max(0, parseInt(e.target.value) || 0));
+                                      onMoveCompositionChange({ ...moveComposition, [type]: v });
+                                    }}
+                                    className="w-full bg-slate-700 border border-slate-600 rounded px-1 py-0.5 text-[10px] text-center text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button
+                            onClick={() => onMoveCompositionChange({
+                              infantry: selectedProv.army.infantry,
+                              archers: selectedProv.army.archers,
+                              cavalry: selectedProv.army.cavalry,
+                              scouts: 0,
+                            })}
+                            className="w-full py-0.5 text-[10px] bg-slate-700 hover:bg-slate-600 rounded transition-colors"
+                          >
+                            Selecionar todas (ex. batedores)
                           </button>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 mt-2">
+                          <button
+                            onClick={() => onAction('move')}
+                            className="flex items-center justify-center gap-1 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs"
+                          >
+                            <ArrowRight size={13} /> Mover
+                          </button>
+                          <button
+                            onClick={onRoute}
+                            className="flex items-center justify-center gap-1 py-2 bg-indigo-700 hover:bg-indigo-600 rounded font-medium transition-colors text-xs"
+                          >
+                            <Route size={13} /> Rota
+                          </button>
+                        </div>
+                        {/* Scout dispatch button if province has scouts */}
+                        {(selectedProv.army.scouts || 0) > 0 && (
+                          <button
+                            onClick={onDispatchScouts}
+                            className="w-full mt-1 flex items-center justify-center gap-1 py-2 bg-emerald-800 hover:bg-emerald-700 rounded font-medium transition-colors text-xs"
+                          >
+                            <Eye size={13} /> Despachar Batedores (qualquer território)
+                          </button>
+                        )}
+                        <div className="grid grid-cols-1 mt-2">
                           <button onClick={() => onAction('attack')} className="flex items-center justify-center gap-2 py-2 bg-red-700 hover:bg-red-600 rounded font-medium transition-colors text-xs">
                             <Swords size={14} /> Atacar ({ACTION_COSTS.attack} AP)
                           </button>
                         </div>
-                        <div className="grid grid-cols-1 mt-2">
-                          <button onClick={() => onAction('fortify')} className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs">
-                            <Shield size={14} /> Fortificar ({ACTION_COSTS.build} AP)
-                          </button>
-                        </div>
+
                       </div>
                     </div>
                   ) : (
@@ -782,9 +889,38 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
         )}
       </div>
+    </div>
+    {/* Active March Orders Panel */}
+      {marchOrders.length > 0 && (
+        <div className="px-4 pb-2">
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">⛳ Ordens de Marcha Ativas</p>
+          <div className="space-y-1">
+            {marchOrders.map(order => {
+              const dest = order.remainingPath[order.remainingPath.length - 1];
+              const destName = dest ? gameState.provinces[dest]?.name : 'N/A';
+              const turnLabel = order.isScoutMission ? '(Batedores)' : '';
+              const totalTroops = order.troops.infantry + order.troops.archers + order.troops.cavalry + order.troops.scouts;
+              return (
+                <div key={order.id} className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded p-1.5 text-[10px]">
+                  <span className="text-slate-300">
+                    {order.isScoutMission ? <Eye size={10} className="inline mr-1 text-emerald-400" /> : <Navigation size={10} className="inline mr-1 text-indigo-400" />}
+                    {totalTroops} tropas → {destName} ({order.remainingPath.length}T) {turnLabel}
+                  </span>
+                  <button
+                    onClick={() => onCancelMarchOrder(order.id)}
+                    className="ml-1 text-red-400 hover:text-red-300"
+                    title="Cancelar orden"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
-      {/* End Turn Button */}
-      <div className="p-4 border-t border-slate-700 bg-slate-800 flex gap-2">
+      <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex gap-2">
         <button 
           onClick={onMenu}
           className="p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center"
@@ -805,6 +941,7 @@ export const HUD: React.FC<HUDProps> = ({
           Finalizar Turno
         </button>
       </div>
-    </div>
+    </motion.div>
+    </>
   );
 };

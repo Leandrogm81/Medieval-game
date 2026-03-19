@@ -1,11 +1,12 @@
 export type Terrain = 'plains' | 'forest' | 'mountain';
-export type UnitType = 'infantry' | 'archers' | 'cavalry';
+export type UnitType = 'infantry' | 'archers' | 'cavalry' | 'scouts';
 export type StrategicResource = 'none' | 'iron' | 'wood' | 'horse' | 'stone';
 
 export interface Army {
   infantry: number;
   archers: number;
   cavalry: number;
+  scouts: number;
 }
 
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
@@ -114,6 +115,7 @@ export interface GameState {
   coalitions: Coalition[];
   visibleProvinces: string[];
   settings: GameSettings;
+  marchOrders: MarchOrder[];
   gameOver?: {
     winnerId: string;
     reason: string;
@@ -127,7 +129,21 @@ export interface SaveData {
   state: GameState;
 }
 
-export type ActionType = 'idle' | 'moving' | 'attacking' | 'trading' | 'diplomacy' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact';
+export type ActionType = 'idle' | 'moving' | 'routing' | 'dispatching_scouts' | 'attacking' | 'trading' | 'diplomacy' | 'send_gift' | 'propose_pact' | 'propose_alliance' | 'demand_tribute' | 'demand_vassalage' | 'declare_war' | 'offer_peace' | 'break_pact';
+
+/** Ordem de marcha: um exército viajando autonomamente pelo mapa */
+export interface MarchOrder {
+  id: string;
+  realmId: string;
+  /** Onde as tropas estão agora (última província que pisaram) */
+  currentProvId: string;
+  /** Caminho restante (IDs de províncias a visitar, excluindo currentProv) */
+  remainingPath: string[];
+  /** Composição do exército em marcha */
+  troops: Army;
+  /** Se true, são batedores — não entram em combate nem causam guerra */
+  isScoutMission: boolean;
+}
 
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources';
 
