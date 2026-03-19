@@ -201,7 +201,7 @@ export const Map: React.FC<MapProps> = ({
                 strokeOpacity={strokeOpacity}
                 strokeLinejoin="round"
                 filter={isSelected ? "url(#shadow)" : ""}
-                className="transition-colors duration-500"
+                className={`transition-colors duration-500 ${isSelected ? 'animate-pulse-slow' : ''}`}
               />
               {isVisible && prov.terrain === 'forest' && (
                 <path d={pathData} fill="url(#forest)" pointerEvents="none" />
@@ -242,7 +242,8 @@ export const Map: React.FC<MapProps> = ({
                     x={prov.center[0]}
                     y={prov.center[1] - 22}
                     textAnchor="middle"
-                    className="text-[12px] font-bold fill-[#1a0f0a] uppercase tracking-widest medieval-title"
+                    className="text-[14px] font-black fill-[#1a0f0a] uppercase tracking-[0.15em] medieval-title drop-shadow-[0_2px_1px_rgba(255,255,255,0.5)]"
+                    style={{ paintOrder: 'stroke', stroke: 'rgba(255,255,255,0.4)', strokeWidth: '3px' }}
                   >
                     {prov.name}
                   </text>

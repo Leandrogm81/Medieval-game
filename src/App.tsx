@@ -49,6 +49,10 @@ export default function App() {
   const [scale, setScale] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [showChronicles, setShowChronicles] = useState(false);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [hasDragged, setHasDragged] = useState(false);
 
   useEffect(() => {
     const handleResize = () => {
@@ -160,12 +164,38 @@ export default function App() {
     });
   };
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (e.button !== 0) return; // Only left click
+    setIsDragging(true);
+    setHasDragged(false);
+    setDragStart({ x: e.clientX - panOffset.x, y: e.clientY - panOffset.y });
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    
+    const newX = e.clientX - dragStart.x;
+    const newY = e.clientY - dragStart.y;
+    
+    if (Math.abs(newX - panOffset.x) > 5 || Math.abs(newY - panOffset.y) > 5) {
+      setHasDragged(true);
+    }
+    
+    setPanOffset({ x: newX, y: newY });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
   const handleProvinceClick = (id: string) => {
     if (!gameState) return;
+    if (hasDragged) return;
+    setSelectedProvinceId(id);
     playSound('click');
 
     if (actionState === 'idle') {
-      setSelectedProvinceId(id);
+      // setSelectedProvinceId(id); // This is now handled above
     } else if (actionState === 'moving') {
       if (actionSourceId) {
         const source = gameState.provinces[actionSourceId];
@@ -1045,10 +1075,17 @@ export default function App() {
         className="relative flex gap-4 origin-center transition-transform duration-300 ease-out"
         style={{ width: 1420, height: 850, transform: `scale(${scale})` }}
       >
-        <div className="flex-1 relative overflow-hidden rounded-xl bg-slate-900/50 border border-white/5">
+        <div className="flex-1 relative overflow-hidden rounded-xl bg-slate-900/50 border border-white/5 cursor-grab active:cursor-grabbing"
+             onMouseDown={handleMouseDown}
+             onMouseMove={handleMouseMove}
+             onMouseUp={handleMouseUp}
+             onMouseLeave={handleMouseUp}>
           <div 
-            className="w-full h-full transition-transform duration-500 ease-out origin-center"
-            style={{ transform: `scale(${zoom})` }}
+            className="w-full h-full transition-transform duration-500 ease-out origin-center flex items-center justify-center"
+            style={{ 
+              transform: `translate(${panOffset.x}px, ${panOffset.y}px) scale(${zoom})`,
+              transition: isDragging ? 'none' : 'transform 0.5s ease-out'
+            }}
           >
             <Map 
               gameState={gameState} 
