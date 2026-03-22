@@ -128,25 +128,23 @@ export const HUD: React.FC<HUDProps> = ({
       {/* HUD Toggle Button (visible when HUD is closed or on mobile) */}
       <button
         onClick={onToggleHud}
-        className={`fixed top-4 right-4 z-50 p-3 bg-slate-800/80 backdrop-blur-md border border-slate-700/50 rounded-full text-white shadow-xl transition-all active:scale-95 ${isHudOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+        className={`lg:hidden fixed top-4 right-4 z-50 p-3 bg-slate-800/80 backdrop-blur-md border border-slate-700/50 rounded-full text-white shadow-xl transition-all active:scale-95 ${isHudOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
         title={isHudOpen ? "Fechar Menu" : "Abrir Menu"}
       >
         <BarChart3 size={20} />
       </button>
 
-      <motion.div 
-        initial={false}
-        animate={{ 
-          x: isHudOpen ? 0 : '100%',
-          opacity: isHudOpen ? 1 : 0
-        }}
-        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="h-full w-[85vw] sm:w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 relative ml-auto"
+      <div 
+        className={`bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 transition-all duration-300 ease-in-out ${
+          'lg:static lg:h-[100dvh] lg:w-[clamp(320px,28vw,420px)] lg:shrink-0 lg:translate-x-0 lg:opacity-100 ' +
+          'absolute right-0 top-0 h-[100dvh] w-[85vw] max-w-sm sm:w-80 md:w-96 ' +
+          (isHudOpen ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0')
+        }`}
       >
         {/* Toggle handle for desktop */}
         <button 
           onClick={onToggleHud}
-          className="absolute -left-10 top-1/2 -translate-y-1/2 p-2 bg-slate-800/90 text-slate-400 rounded-l-lg border-l border-t border-b border-white/10 flex items-center justify-center hover:text-white transition-colors"
+          className="lg:hidden absolute -left-10 top-1/2 -translate-y-1/2 p-2 bg-slate-800/90 text-slate-400 rounded-l-lg border-l border-t border-b border-white/10 flex items-center justify-center hover:text-white transition-colors"
         >
           {isHudOpen ? <ArrowRight size={20} /> : <BarChart3 size={20} />}
         </button>
@@ -942,7 +940,7 @@ export const HUD: React.FC<HUDProps> = ({
           Finalizar Turno
         </button>
       </div>
-    </motion.div>
+    </div>
     </>
   );
 };

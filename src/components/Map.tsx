@@ -138,7 +138,7 @@ export const Map: React.FC<MapProps> = ({
     >
       <svg 
         viewBox={`0 0 ${width} ${height}`} 
-        preserveAspectRatio="xMidYMid slice"
+        preserveAspectRatio="xMidYMid meet"
         className="w-full h-full cursor-pointer touch-none"
       >
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">

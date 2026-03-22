@@ -24,7 +24,7 @@ html, body {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  height: 100vh;
+  height: 100dvh;
   width: 100vw;
   /* Support for notches on modern phones */
   padding-top: env(safe-area-inset-top, 0px);
@@ -144,10 +144,11 @@ body {
   justify-content: center;
 }
 
-@media screen and (max-width: 896px) and (orientation: portrait) {
+@media screen and (max-width: 896px) and (orientation: portrait) and (pointer: coarse) {
   .portrait-blocker {
     display: flex;
   }
+
   #root {
     display: none;
   }

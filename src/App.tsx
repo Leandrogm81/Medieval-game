@@ -246,10 +246,10 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="fixed inset-0 bg-[#0f172a] text-white flex flex-col items-center justify-center p-0 md:p-4 perspective-1000 overflow-hidden font-serif">
+    <div className="w-full h-[100dvh] bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
       <ErrorBoundary>
         <div 
-          className="relative w-full h-full bg-[#1e293b] rounded-none md:rounded-xl shadow-2xl border-0 md:border-4 border-stone-800 overflow-hidden flex flex-col select-none"
+          className="flex-1 relative overflow-hidden bg-[#1e293b]"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}
@@ -258,7 +258,7 @@ export default function App() {
           onTouchMove={ctrl.handleTouchMove}
           onTouchEnd={ctrl.handleTouchEnd}
         >
-          <div className="flex-1 relative overflow-hidden bg-stone-950">
+
             <motion.div 
               className="absolute inset-0 cursor-grab active:cursor-grabbing"
               animate={{ 
@@ -279,62 +279,12 @@ export default function App() {
               />
             </motion.div>
 
-            {/* In-Game HUD & Controls */}
-            <HUD 
-              gameState={gameState}
-              selectedProvinceId={ui.selectedProvinceId}
-              onAction={ctrl.handleAction}
-              onEndTurn={ctrl.handleEndTurn}
-              onToggleMode={() => {
-                const modes: ViewMode[] = ['political', 'military', 'economic', 'diplomatic', 'resources'];
-                const next = modes[(modes.indexOf(ui.viewMode) + 1) % modes.length];
-                ui.setViewMode(next);
-              }}
-              viewMode={ui.viewMode}
-              onSave={() => ui.setShowSaveModal(true)}
-              onMenu={() => ui.setShowMenu(true)}
-              onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
-              actionState={ui.actionState}
-              onCancelAction={() => { ui.setActionState('idle'); ui.setActionSourceId(null); ui.setPreviewPath([]); }}
-              onToggleHud={() => ui.setIsHudOpen(!ui.isHudOpen)}
-              isHudOpen={ui.isHudOpen}
-              onMapAction={(type) => {
-                if (!ui.selectedProvinceId) return;
-                const prov = gameState.provinces[ui.selectedProvinceId];
-                if (prov.ownerId !== gameState.playerRealmId) return;
-                
-                if (type === 'move') {
-                   ui.setActionSourceId(ui.selectedProvinceId);
-                   ui.setActionState('moving');
-                   ui.setSelectingMoveComposition(true);
-                   ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione as tropas.`);
-                } else if (type === 'attack') {
-                   ui.setActionSourceId(ui.selectedProvinceId);
-                   ui.setActionState('attacking');
-                   ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
-                } else if (type === 'scout') {
-                   ui.setActionSourceId(ui.selectedProvinceId);
-                   ui.setActionState('dispatching_scouts');
-                   ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
-                }
-              }}
-              marchOrders={gameState.marchOrders || []}
-              onCancelMarchOrder={ctrl.cancelMarchOrder}
-              zoom={ui.zoom}
-              onZoomChange={ui.setZoom}
-              moveComposition={ui.moveComposition}
-              onMoveCompositionChange={ui.setMoveComposition}
-              onDispatchScouts={() => ui.setActionState('dispatching_scouts')}
-              onRoute={() => ui.setActionState('routing')}
-              onToggleFullScreen={toggleFullScreen}
-            />
-
-            {/* Floating Selection Details for Mobile (Top-right) */}
+            {/* Floating Selection Details for Mobile (Top-right within map area) */}
             <AnimatePresence>
                 {ui.selectedProvinceId && !ui.isHudOpen && (
                     <motion.div 
                         initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}
-                        className="fixed top-20 right-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none"
+                        className="absolute top-4 right-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
                     >
                         <p className="text-xs text-amber-500 font-bold uppercase tracking-widest leading-none mb-1">
                           {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId].name}
@@ -351,20 +301,71 @@ export default function App() {
                 )}
             </AnimatePresence>
 
-            <Minimap 
-              gameState={gameState} 
-              width={200}
-              height={150}
-              selectedProvinceId={ui.selectedProvinceId}
-              onProvinceClick={id => ctrl.handleProvinceClick(id, false)}
-            />
+            <div className="absolute bottom-4 left-4 z-30 pointer-events-auto">
+              <Minimap 
+                gameState={gameState} 
+                width={200}
+                height={150}
+                selectedProvinceId={ui.selectedProvinceId}
+                onProvinceClick={id => ctrl.handleProvinceClick(id, false)}
+              />
+            </div>
             
-            <div className="absolute bottom-4 left-4 z-30 flex flex-col gap-2">
+            <div className="absolute bottom-4 right-4 z-30 flex flex-col gap-2 pointer-events-auto">
                 <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-10 h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl">+</button>
                 <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-10 h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl">-</button>
             </div>
-          </div>
         </div>
+
+        {/* HUD Area */}
+        <HUD 
+          gameState={gameState}
+          selectedProvinceId={ui.selectedProvinceId}
+          onAction={ctrl.handleAction}
+          onEndTurn={ctrl.handleEndTurn}
+          onToggleMode={() => {
+            const modes: ViewMode[] = ['political', 'military', 'economic', 'diplomatic', 'resources'];
+            const next = modes[(modes.indexOf(ui.viewMode) + 1) % modes.length];
+            ui.setViewMode(next);
+          }}
+          viewMode={ui.viewMode}
+          onSave={() => ui.setShowSaveModal(true)}
+          onMenu={() => ui.setShowMenu(true)}
+          onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
+          actionState={ui.actionState}
+          onCancelAction={() => { ui.setActionState('idle'); ui.setActionSourceId(null); ui.setPreviewPath([]); }}
+          onToggleHud={() => ui.setIsHudOpen(!ui.isHudOpen)}
+          isHudOpen={ui.isHudOpen}
+          onMapAction={(type) => {
+            if (!ui.selectedProvinceId) return;
+            const prov = gameState.provinces[ui.selectedProvinceId];
+            if (prov.ownerId !== gameState.playerRealmId) return;
+            
+            if (type === 'move') {
+               ui.setActionSourceId(ui.selectedProvinceId);
+               ui.setActionState('moving');
+               ui.setSelectingMoveComposition(true);
+               ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione as tropas.`);
+            } else if (type === 'attack') {
+               ui.setActionSourceId(ui.selectedProvinceId);
+               ui.setActionState('attacking');
+               ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
+            } else if (type === 'scout') {
+               ui.setActionSourceId(ui.selectedProvinceId);
+               ui.setActionState('dispatching_scouts');
+               ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
+            }
+          }}
+          marchOrders={gameState.marchOrders || []}
+          onCancelMarchOrder={ctrl.cancelMarchOrder}
+          zoom={ui.zoom}
+          onZoomChange={ui.setZoom}
+          moveComposition={ui.moveComposition}
+          onMoveCompositionChange={ui.setMoveComposition}
+          onDispatchScouts={() => ui.setActionState('dispatching_scouts')}
+          onRoute={() => ui.setActionState('routing')}
+          onToggleFullScreen={toggleFullScreen}
+        />
 
         <AnimatePresence>
           {ui.showChronicles && (
