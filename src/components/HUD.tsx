@@ -147,8 +147,8 @@ export const HUD: React.FC<HUDProps> = ({
           {isHudOpen ? <ArrowRight size={20} /> : <BarChart3 size={20} />}
         </button>
 
-        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
-          <div className="p-4 md:p-6 space-y-6">
+        <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar overscroll-contain">
+          <div className="p-4 md:p-6 space-y-6 pb-24">
             {/* Header with Fullscreen option */}
             <div className="flex justify-between items-center mb-2 gap-2">
                <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100 flex items-center gap-2 min-w-0">

@@ -53,7 +53,7 @@ export default function App() {
 
   if (ui.showMenu) {
     return (
-      <div className="min-h-screen bg-stone-950 text-stone-200 flex flex-col items-center justify-center p-4 relative overflow-hidden font-serif select-none"
+      <div className="h-[100dvh] w-full bg-stone-950 text-stone-200 flex flex-col items-center p-4 relative overflow-y-auto overflow-x-hidden font-serif select-none custom-scrollbar"
            style={{ backgroundImage: 'radial-gradient(circle at center, #292524 0%, #0c0a09 100%)' }}>
         
         {/* Decorative elements */}
@@ -63,7 +63,7 @@ export default function App() {
         <motion.div 
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="z-10 text-center mb-12"
+          className="z-10 text-center mb-8 mt-8 md:mt-12 shrink-0"
         >
           <div className="flex justify-center mb-4">
             <div className="relative">
@@ -249,7 +249,7 @@ export default function App() {
     <div className="w-full h-[100dvh] bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
       <ErrorBoundary>
         <div 
-          className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none"
+          className="flex-1 relative overflow-hidden bg-[#1a0f0a] touch-none bg-[url('https://www.transparenttextures.com/patterns/wood-pattern.png')]"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}

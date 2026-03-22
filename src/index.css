@@ -48,6 +48,7 @@ body {
 .parchment-bg {
   background-color: var(--parchment);
   background-image: url("https://www.transparenttextures.com/patterns/paper-fibers.png");
+  background-repeat: repeat;
   position: relative;
 }
 
@@ -144,14 +145,19 @@ body {
   justify-content: center;
 }
 
-@media screen and (max-width: 896px) and (orientation: portrait) and (pointer: coarse) {
+@media screen and (max-width: 1024px) and (orientation: portrait) {
   .portrait-blocker {
-    display: flex;
+    display: flex !important;
   }
 
   #root {
-    display: none;
+    display: none !important;
   }
+}
+
+/* Prevenção de gestos do navegador no mobile */
+.touch-none {
+  touch-action: none;
 }
 
 /* Advanced HUD Docking Logic */
