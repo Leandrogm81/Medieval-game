@@ -1,5 +1,5 @@
 import { GameState, Realm, Province, UnitType } from '../types';
-import { UNIT_STATS, BUILDING_STATS } from './gameConstants';
+import { UNIT_STATS, BUILDING_STATS } from './game-constants';
 
 export function handleResourceDeficit(realm: Realm, provinces: Province[], troopsToLose: number, type: 'gold' | 'food', state: GameState) {
   realm[type] = 0;

@@ -1,6 +1,6 @@
 import * as d3 from 'd3';
 import { GameState, Realm, Province, Terrain, GameSettings } from '../types';
-import { REALM_NAMES, REALM_COLORS, PROVINCE_NAMES, STRATEGIC_RESOURCES, PERSONALITIES, OBJECTIVES } from './gameConstants';
+import { REALM_NAMES, REALM_COLORS, PROVINCE_NAMES, STRATEGIC_RESOURCES, PERSONALITIES, OBJECTIVES } from './game-constants';
 import { calculateVisibility } from './turnLogic';
 
 export function generateInitialState(width: number, height: number, settings: GameSettings): GameState {

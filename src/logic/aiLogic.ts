@@ -1,5 +1,5 @@
 import { GameState, Realm, Province, StrategicAssessment } from '../types';
-import { ACTION_COSTS } from './gameConstants';
+import { ACTION_COSTS } from './game-constants';
 import { executeAttack } from './combatLogic';
 import { executeBuilding, executeRecruitment } from './economyLogic';
 
