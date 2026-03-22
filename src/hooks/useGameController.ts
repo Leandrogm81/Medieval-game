@@ -111,6 +111,45 @@ export function useGameController(
     ui.setIsDragging(false);
   };
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      ui.setIsDragging(true);
+      const touch = e.touches[0];
+      ui.setDragStart({ x: touch.clientX - ui.panOffset.x, y: touch.clientY - ui.panOffset.y });
+      ui.setHasDragged(false);
+    } else if (e.touches.length === 2) {
+      // Pinch start
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      (ui as any)._lastPinchDist = d;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length === 1 && ui.isDragging) {
+      const touch = e.touches[0];
+      const newX = touch.clientX - ui.dragStart.x;
+      const newY = touch.clientY - ui.dragStart.y;
+      
+      if (Math.abs(newX - ui.panOffset.x) > 5 || Math.abs(newY - ui.panOffset.y) > 5) {
+        ui.setHasDragged(true);
+      }
+      ui.setPanOffset({ x: newX, y: newY });
+    } else if (e.touches.length === 2) {
+      const d = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
+      if ((ui as any)._lastPinchDist) {
+        const delta = d - (ui as any)._lastPinchDist;
+        const zoomDelta = delta * 0.01;
+        ui.setZoom(Math.min(3, Math.max(0.4, ui.zoom + zoomDelta)));
+      }
+      (ui as any)._lastPinchDist = d;
+    }
+  };
+
+  const handleTouchEnd = () => {
+    ui.setIsDragging(false);
+    (ui as any)._lastPinchDist = null;
+  };
+
   const handleProvinceClick = (id: string, hasDragged: boolean) => {
     if (!gameState) return;
     if (hasDragged) return;
@@ -697,6 +736,9 @@ export function useGameController(
     handleMouseDown,
     handleMouseMove,
     handleMouseUp,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd,
     handleProvinceClick,
     cancelMarchOrder,
     confirmAttack,

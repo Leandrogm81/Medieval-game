@@ -39,7 +39,7 @@ export const ChroniclesModal: React.FC<ChroniclesModalProps> = ({ isOpen, onClos
             initial={{ scale: 0.9, opacity: 0, y: 20 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            className="relative w-full max-w-2xl parchment-bg rounded-2xl shadow-2xl border-8 border-[#2c1810] overflow-hidden flex flex-col max-h-[80vh]"
+            className="relative w-full max-w-2xl parchment-bg rounded-2xl shadow-2xl border-8 border-[#2c1810] overflow-hidden flex flex-col max-h-[90vh]"
           >
             {/* Header */}
             <div className="p-6 border-b border-[#2c1810]/10 flex justify-between items-center bg-[#2c1810]/5">
@@ -78,7 +78,7 @@ export const ChroniclesModal: React.FC<ChroniclesModalProps> = ({ isOpen, onClos
                         {icon}
                       </div>
                       <div className="space-y-1">
-                        <div className={`text-[10px] font-bold uppercase tracking-tighter ${color} opacity-60`}>
+                        <div className={`text-xs font-bold uppercase tracking-tighter ${color} opacity-60 mb-0.5`}>
                           {category}
                         </div>
                         <p className="text-[#1a0f0a] text-sm leading-relaxed">
@@ -93,7 +93,7 @@ export const ChroniclesModal: React.FC<ChroniclesModalProps> = ({ isOpen, onClos
 
             {/* Footer */}
             <div className="p-4 border-t border-[#2c1810]/10 bg-[#2c1810]/5 text-center">
-              <p className="text-[10px] text-[#2c1810]/50 uppercase tracking-widest font-bold">
+              <p className="text-xs text-[#2c1810]/50 uppercase tracking-widest font-bold">
                 Registros preservados para a posteridade
               </p>
             </div>

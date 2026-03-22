@@ -52,7 +52,7 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
                     placeholder="Nome do registro..."
-                    className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-[#d4af37]"
+                    className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#d4af37] text-sm md:text-base"
                   />
                   <button
                     onClick={() => {
@@ -61,9 +61,9 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
                         setSaveName('');
                       }
                     }}
-                    className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-4 py-2 rounded-xl font-bold flex items-center gap-2 transition-colors"
+                    className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-5 py-3 rounded-xl font-bold flex items-center gap-2 transition-colors active:scale-95 shrink-0"
                   >
-                    <Save size={18} />
+                    <Save size={20} />
                     Salvar
                   </button>
                 </div>
@@ -84,20 +84,20 @@ export const SaveLoadModal: React.FC<SaveLoadModalProps> = ({
                         <span>{new Date(save.date).toLocaleString()}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="flex gap-2 transition-opacity">
                       <button
                         onClick={() => onLoad(save.id)}
-                        className="p-2 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-lg transition-all"
+                        className="p-3 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-xl transition-all active:scale-90"
                         title="Carregar"
                       >
-                        <Download size={18} />
+                        <Download size={20} />
                       </button>
                       <button
                         onClick={() => onDelete(save.id)}
-                        className="p-2 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-lg transition-all"
+                        className="p-3 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-xl transition-all active:scale-90"
                         title="Excluir"
                       >
-                        <Trash2 size={18} />
+                        <Trash2 size={20} />
                       </button>
                     </div>
                   </div>

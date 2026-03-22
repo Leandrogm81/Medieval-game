@@ -36,26 +36,26 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ gameState, onResta
           )}
         </div>
 
-        <h2 className={`text-4xl font-serif font-bold mb-2 ${isPlayerWinner ? 'text-amber-400' : 'text-slate-200'}`}>
-          {isPlayerWinner ? 'Victory!' : 'Defeat!'}
+        <h2 className={`text-3xl md:text-4xl font-serif font-bold mb-2 ${isPlayerWinner ? 'text-amber-400' : 'text-slate-200'}`}>
+          {isPlayerWinner ? 'Vitória!' : 'Derrota!'}
         </h2>
         
-        <p className="text-slate-400 mb-8 leading-relaxed">
+        <p className="text-sm md:text-base text-slate-400 mb-8 leading-relaxed">
           {gameState.gameOver.reason}
         </p>
 
         <div className="bg-slate-800/50 rounded-xl p-6 mb-8 border border-slate-700">
-          <div className="text-xs uppercase tracking-widest text-slate-500 mb-4 font-bold">World Statistics</div>
+          <div className="text-xs uppercase tracking-widest text-slate-500 mb-4 font-bold">Estatísticas do Mundo</div>
           <div className="grid grid-cols-2 gap-4">
             <div className="text-center">
               <div className="text-2xl font-bold text-slate-200">{gameState.turn}</div>
-              <div className="text-xs text-slate-500 uppercase">Turns Passed</div>
+              <div className="text-[10px] md:text-xs text-slate-500 uppercase">Turnos Passados</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-slate-200" style={{ color: winner.color }}>
+              <div className="text-2xl font-bold text-slate-200 truncate px-1" style={{ color: winner.color }}>
                 {winner.name}
               </div>
-              <div className="text-xs text-slate-500 uppercase">Dominant Realm</div>
+              <div className="text-[10px] md:text-xs text-slate-500 uppercase text-center">Reino Dominante</div>
             </div>
           </div>
         </div>
@@ -65,7 +65,7 @@ export const GameOverModal: React.FC<GameOverModalProps> = ({ gameState, onResta
           className="w-full py-4 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl shadow-lg shadow-amber-900/20 transition-all active:scale-95 flex items-center justify-center gap-2"
         >
           <RefreshCw size={20} />
-          Start New Campaign
+          Iniciar Nova Campanha
         </button>
       </motion.div>
     </div>

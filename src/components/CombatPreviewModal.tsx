@@ -95,7 +95,7 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
-          className="bg-[#2c1810] border-4 border-[#d4af37] rounded-3xl w-full max-w-lg overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)]"
+          className="bg-[#2c1810] border-4 border-[#d4af37] rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-[0_0_50px_rgba(0,0,0,0.8)]"
         >
           {/* Header */}
           <div className="p-5 border-b border-[#d4af37]/30 flex justify-between items-center bg-[#1a0f0a]">
@@ -107,14 +107,14 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
             </button>
           </div>
 
-          <div className="p-6 space-y-5 bg-[#2c1810]">
-            <div className="grid grid-cols-2 gap-4">
-              {/* Attacker */}
+          <div className="p-6 space-y-5 bg-[#2c1810] overflow-y-auto custom-scrollbar flex-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Atacante */}
               <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-                <h4 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-3 border-b border-white/10 pb-1">
+                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-3 border-b border-white/10 pb-2">
                   Atacante — {attackerProv.name}
                 </h4>
-                <div className="space-y-2 text-xs text-[#f5f2ed]">
+                <div className="space-y-2 text-sm text-[#f5f2ed]">
                   <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{attackingArmy.infantry}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{attackingArmy.archers}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{attackingArmy.cavalry}</span></div>
@@ -125,12 +125,12 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
                 </div>
               </div>
 
-              {/* Defender */}
+              {/* Defensor */}
               <div className="bg-black/30 p-4 rounded-xl border border-white/5">
-                <h4 className="text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3 border-b border-white/10 pb-1">
+                <h4 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-3 border-b border-white/10 pb-2">
                   Defensor — {defenderProv.name}
                 </h4>
-                <div className="space-y-2 text-xs text-[#f5f2ed]">
+                <div className="space-y-2 text-sm text-[#f5f2ed]">
                   <div className="flex justify-between"><span className="opacity-60">Infantaria</span><span className="font-bold">{defenderProv.army?.infantry ?? 0}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Arqueiros</span><span className="font-bold">{defenderProv.army?.archers ?? 0}</span></div>
                   <div className="flex justify-between"><span className="opacity-60">Cavalaria</span><span className="font-bold">{defenderProv.army?.cavalry ?? 0}</span></div>
@@ -178,7 +178,7 @@ export const CombatPreviewModal: React.FC<CombatPreviewModalProps> = ({
               <RiskIcon size={32} />
               <div className="text-center">
                 <div className="text-2xl font-serif font-bold uppercase tracking-tighter">{riskLabel}</div>
-                <div className="text-[10px] opacity-60 font-mono tracking-widest mt-1">
+                <div className="text-xs opacity-60 font-mono tracking-widest mt-1">
                   ESTIMATIVA DE PODER: {atkPower} VS {defPower}
                 </div>
               </div>

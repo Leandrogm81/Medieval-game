@@ -2,10 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Medieval Realms</title>
   </head>
   <body>
+    <!-- Blocker de Orientação Retrato para Mobile -->
+    <div id="portrait-blocker" class="portrait-blocker">
+      <div class="blocker-content">
+        <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="animate-pulse" style="color:#f59e0b; margin-bottom: 1.5rem; transform: rotate(-90deg);"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>
+        <h2 style="font-family: 'Cinzel', serif; font-size: 1.8rem; font-weight: bold; color: #f59e0b; margin-bottom: 0.5rem; text-transform: uppercase;">Modo Paisagem</h2>
+        <p style="color: #d6d3d1; font-family: 'Inter', sans-serif; font-size: 0.9rem; line-height: 1.5; max-width: 80%;">
+          O <b>Medieval Realms</b> foi otimizado para uma experiência imersiva horizontal.<br><br>Por favor, vire o seu dispositivo para jogar.
+        </p>
+      </div>
+    </div>
+    
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

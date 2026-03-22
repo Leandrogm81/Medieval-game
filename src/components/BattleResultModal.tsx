@@ -29,26 +29,26 @@ function ArmyColumn({ label, initial, losses, remaining, color }: { label: strin
 
   return (
     <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-      <h4 className={`text-xs font-bold uppercase tracking-wider mb-2 ${color}`}>{label}</h4>
-      <div className="space-y-1 text-xs">
+      <h4 className={`text-sm font-bold uppercase tracking-wider mb-2 ${color}`}>{label}</h4>
+      <div className="space-y-1.5 text-sm">
         <div className="flex justify-between">
           <span className="text-slate-400">Infantaria</span>
-          <span>{initial.infantry} → <span className="font-bold">{remaining.infantry}</span> <span className="text-red-400">(-{losses.infantry})</span></span>
+          <span className="font-medium">{initial.infantry} → <span className="font-bold text-slate-100">{remaining.infantry}</span> <span className="text-red-400">(-{losses.infantry})</span></span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-400">Arqueiros</span>
-          <span>{initial.archers} → <span className="font-bold">{remaining.archers}</span> <span className="text-red-400">(-{losses.archers})</span></span>
+          <span className="font-medium">{initial.archers} → <span className="font-bold text-slate-100">{remaining.archers}</span> <span className="text-red-400">(-{losses.archers})</span></span>
         </div>
         <div className="flex justify-between">
           <span className="text-slate-400">Cavalaria</span>
-          <span>{initial.cavalry} → <span className="font-bold">{remaining.cavalry}</span> <span className="text-red-400">(-{losses.cavalry})</span></span>
+          <span className="font-medium">{initial.cavalry} → <span className="font-bold text-slate-100">{remaining.cavalry}</span> <span className="text-red-400">(-{losses.cavalry})</span></span>
         </div>
         <div className="flex justify-between text-blue-400/80">
           <span className="opacity-60">Batedores</span>
-          <span>{initial.scouts} → <span className="font-bold">{remaining.scouts}</span> <span className="text-red-400">(-{losses.scouts})</span></span>
+          <span className="font-medium">{initial.scouts} → <span className="font-bold text-blue-100">{remaining.scouts}</span> <span className="text-red-400">(-{losses.scouts})</span></span>
         </div>
-        <div className="pt-1 border-t border-slate-700 flex justify-between font-bold text-xs">
-          <span>Baixas</span>
+        <div className="pt-2 mt-1 border-t border-slate-700 flex justify-between font-bold">
+          <span className="text-slate-500 uppercase text-[10px]">Baixas</span>
           <span className="text-red-400">{totalLost} ({pctLost}%)</span>
         </div>
       </div>
@@ -79,7 +79,7 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.3 }}
-          className="bg-slate-900 border-2 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl"
+          className="bg-slate-900 border-2 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
           style={{ borderColor: result.won ? '#22c55e' : '#ef4444' }}
         >
           {/* Header */}
@@ -103,9 +103,9 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
             </div>
           </div>
 
-          <div className="p-4 space-y-3">
+          <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar flex-1">
             {/* Armies */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <ArmyColumn
                 label={`⚔️ ${attackerName}`}
                 initial={result.attackerInitial}
@@ -123,16 +123,16 @@ export const BattleResultModal: React.FC<BattleResultModalProps> = ({
             </div>
 
             {/* Modifiers */}
-            <div className="flex gap-2 justify-center text-[10px] text-slate-400">
-              <span className="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
+            <div className="flex flex-wrap gap-2 justify-center text-xs text-slate-400">
+              <span className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
                 {terrain.icon} {terrain.label}
               </span>
               {result.defenseLevel > 0 && (
-                <span className="flex items-center gap-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
-                  <Shield size={10} className="text-blue-400" /> Forte Nv.{result.defenseLevel}
+                <span className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                  <Shield size={12} className="text-blue-400" /> Forte Nv.{result.defenseLevel}
                 </span>
               )}
-              <span className="bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
+              <span className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
                 Total: <span className="text-red-400 font-bold">{totalAtkLost + totalDefLost}</span> mortos
               </span>
             </div>

@@ -72,7 +72,7 @@ export default function App() {
               <Swords className="w-10 h-10 text-amber-500 absolute -bottom-2 -left-2 transform -rotate-12" />
             </div>
           </div>
-          <h1 className="text-6xl font-bold tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-b from-amber-200 to-amber-600 drop-shadow-sm">
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tighter mb-2 text-transparent bg-clip-text bg-gradient-to-b from-amber-200 to-amber-600 drop-shadow-sm text-center">
             MEDIEVAL REALMS
           </h1>
           <p className="text-stone-400 italic font-serif flex items-center justify-center gap-2">
@@ -80,10 +80,10 @@ export default function App() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl w-full z-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 max-w-4xl w-full z-10">
           <motion.div 
             initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-            className="bg-stone-900/80 border-2 border-amber-900/30 p-8 rounded-lg backdrop-blur-sm shadow-2xl flex flex-col items-center"
+            className="bg-stone-900/80 border-2 border-amber-900/30 p-5 md:p-8 rounded-lg backdrop-blur-sm shadow-2xl flex flex-col items-center"
           >
             <h2 className="text-2xl font-bold text-amber-200 mb-6 border-b border-amber-900/50 pb-2 w-full text-center flex items-center justify-center gap-2">
               <Play className="w-5 h-5" /> Novo Reinado
@@ -156,8 +156,8 @@ export default function App() {
             initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
             className="flex flex-col gap-4"
           >
-            <div className="bg-stone-900/80 border-2 border-stone-800 p-8 rounded-lg flex-1 backdrop-blur-sm shadow-xl relative group">
-              <h2 className="text-xl font-bold text-stone-400 mb-6 flex items-center gap-2">
+            <div className="bg-stone-900/80 border-2 border-stone-800 p-5 md:p-8 rounded-lg flex-1 backdrop-blur-sm shadow-xl relative group">
+              <h2 className="text-xl font-bold text-stone-400 mb-6 flex items-center justify-center gap-2">
                 <Save className="w-5 h-5" /> Retomar Jornada
               </h2>
               {ui.autosave ? (
@@ -254,6 +254,9 @@ export default function App() {
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}
           onMouseLeave={ctrl.handleMouseUp}
+          onTouchStart={ctrl.handleTouchStart}
+          onTouchMove={ctrl.handleTouchMove}
+          onTouchEnd={ctrl.handleTouchEnd}
         >
           <div className="flex-1 relative overflow-hidden bg-stone-950">
             <motion.div 

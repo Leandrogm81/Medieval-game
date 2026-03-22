@@ -108,7 +108,7 @@ const SECTIONS = [
             </tbody>
           </table>
         </div>
-        <div className="bg-red-900/20 p-2 rounded border border-red-500/20 text-[10px] italic text-red-200">
+        <div className="bg-red-900/20 p-3 rounded border border-red-500/20 text-xs italic text-red-200">
           Nota: Recrutamento agora custa <span className="font-bold underline">ZERO ouros</span>. O ouro é focado apenas na manutenção (salários) e infraestrutura.
         </div>
       </div>
@@ -276,18 +276,18 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
           </div>
 
           {/* Page Tabs */}
-          <div className="flex gap-1 px-5 pt-4 pb-2 overflow-x-auto shrink-0">
+          <div className="flex gap-2 px-5 pt-4 pb-2 overflow-x-auto shrink-0 no-scrollbar">
             {SECTIONS.map((s, i) => {
               const SIcon = s.icon;
               return (
                 <button
                   key={i}
                   onClick={() => setPage(i)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider whitespace-nowrap transition-all ${
                     page === i ? 'bg-[#d4af37] text-[#2c1810]' : 'bg-white/5 text-[#f5f2ed]/50 hover:text-[#f5f2ed]/80'
                   }`}
                 >
-                  <SIcon size={12} />
+                  <SIcon size={14} />
                   {s.title}
                 </button>
               );
@@ -308,26 +308,26 @@ export const InstructionsModal: React.FC<InstructionsModalProps> = ({
             <button
               onClick={() => setPage(Math.max(0, page - 1))}
               disabled={page === 0}
-              className={`flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              className={`flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold transition-all active:scale-95 ${
                 page === 0 ? 'opacity-30 cursor-default' : 'bg-white/10 hover:bg-white/20 text-[#f5f2ed]'
               }`}
             >
-              <ChevronLeft size={16} /> Anterior
+              <ChevronLeft size={18} /> Anterior
             </button>
             
             {page === SECTIONS.length - 1 ? (
               <button
                 onClick={onClose}
-                className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-6 py-2 rounded-lg font-bold transition-colors active:scale-95"
+                className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-8 py-3 rounded-xl font-bold transition-colors active:scale-95 shadow-lg shadow-[#d4af37]/20"
               >
                 Entendido!
               </button>
             ) : (
               <button
                 onClick={() => setPage(page + 1)}
-                className="flex items-center gap-1 px-4 py-2 rounded-lg text-sm font-bold bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] transition-all active:scale-95"
+                className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-bold bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] transition-all active:scale-95 shadow-lg shadow-[#d4af37]/20"
               >
-                Próximo <ChevronRight size={16} />
+                Próximo <ChevronRight size={18} />
               </button>
             )}
           </div>

@@ -133,11 +133,14 @@ export const Map: React.FC<MapProps> = ({
 
   return (
     <div 
-      className="relative parchment-bg rounded-xl overflow-hidden shadow-2xl border-8 border-[#2c1810]"
-      style={{ width, height }}
+      className="relative parchment-bg rounded-xl overflow-hidden shadow-2xl border-4 md:border-8 border-[#2c1810] w-full h-full"
       onMouseMove={handleMouseMove}
     >
-      <svg width={width} height={height} className="cursor-pointer">
+      <svg 
+        viewBox={`0 0 ${width} ${height}`} 
+        preserveAspectRatio="xMidYMid slice"
+        className="w-full h-full cursor-pointer touch-none"
+      >
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
           <feOffset dx="2" dy="2" result="offsetblur" />

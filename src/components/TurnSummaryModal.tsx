@@ -19,7 +19,7 @@ export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({ isOpen, onCl
           initial={{ opacity: 0, y: 50, scale: 0.9 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           exit={{ opacity: 0, y: 50, scale: 0.9 }}
-          className="bg-[#1a0f0a] border-2 border-[#d4af37]/50 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[85vh]"
+          className="bg-[#1a0f0a] border-2 border-[#d4af37]/50 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
         >
           {/* Header */}
           <div className="p-4 border-b border-[#d4af37]/20 flex justify-between items-center bg-black/40">
@@ -35,51 +35,54 @@ export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({ isOpen, onCl
           </div>
 
           <div className="p-5 overflow-y-auto custom-scrollbar space-y-6">
-            {/* Economy Section */}
             <div className="space-y-3">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                <Coins size={14} /> Economia do Reino
+              <h3 className="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                <Coins size={16} /> Economia do Reino
               </h3>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                  <div className="flex items-center gap-2 text-yellow-400 mb-1">
-                    <Coins size={16} />
-                    <span className="text-sm font-bold">Ouro</span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-yellow-400 mb-2">
+                    <Coins size={18} />
+                    <span className="text-base font-bold">Ouro</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="opacity-60">Renda:</span>
-                    <span className="text-green-400">+{Math.floor(data.goldIncome)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="opacity-60">Manut.:</span>
-                    <span className="text-red-400">-{Math.floor(data.goldMaintenance)}</span>
-                  </div>
-                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between font-bold">
-                    <span className="text-xs">Saldo:</span>
-                    <span className={data.goldNet >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      {data.goldNet >= 0 ? '+' : ''}{Math.floor(data.goldNet)}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Renda:</span>
+                      <span className="text-green-400 font-bold">+{Math.floor(data.goldIncome)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Manut.:</span>
+                      <span className="text-red-400 font-bold">-{Math.floor(data.goldMaintenance)}</span>
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-white/10 flex justify-between font-bold text-lg">
+                      <span>Saldo:</span>
+                      <span className={data.goldNet >= 0 ? 'text-green-400' : 'text-red-400'}>
+                        {data.goldNet >= 0 ? '+' : ''}{Math.floor(data.goldNet)}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
-                <div className="bg-white/5 p-3 rounded-xl border border-white/5">
-                  <div className="flex items-center gap-2 text-green-400 mb-1">
-                    <Wheat size={16} />
-                    <span className="text-sm font-bold">Comida</span>
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-green-400 mb-2">
+                    <Wheat size={18} />
+                    <span className="text-base font-bold">Comida</span>
                   </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="opacity-60">Produção:</span>
-                    <span className="text-green-400">+{Math.floor(data.foodIncome)}</span>
-                  </div>
-                  <div className="flex justify-between text-xs">
-                    <span className="opacity-60">Consumo:</span>
-                    <span className="text-red-400">-{Math.floor(data.foodMaintenance)}</span>
-                  </div>
-                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between font-bold">
-                    <span className="text-xs">Saldo:</span>
-                    <span className={data.foodNet >= 0 ? 'text-green-400' : 'text-red-400'}>
-                      {data.foodNet >= 0 ? '+' : ''}{Math.floor(data.foodNet)}
-                    </span>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Produção:</span>
+                      <span className="text-green-400 font-bold">+{Math.floor(data.foodIncome)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Consumo:</span>
+                      <span className="text-red-400 font-bold">-{Math.floor(data.foodMaintenance)}</span>
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-white/10 flex justify-between font-bold text-lg">
+                      <span>Saldo:</span>
+                      <span className={data.foodNet >= 0 ? 'text-green-400' : 'text-red-400'}>
+                        {data.foodNet >= 0 ? '+' : ''}{Math.floor(data.foodNet)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -111,18 +114,18 @@ export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({ isOpen, onCl
               {/* Diplomacy */}
               {(data.newWars.length > 0 || data.newTreaties.length > 0) && (
                 <div className="space-y-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
-                    <Handshake size={14} /> Diplomacia
+                  <h3 className="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
+                    <Handshake size={16} /> Diplomacia
                   </h3>
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     {data.newWars.map(w => (
-                      <div key={w} className="text-xs flex items-center gap-2 text-red-500 bg-red-500/10 px-2 py-1 rounded font-bold">
-                        <Swords size={12} /> Guerra: {w}
+                      <div key={w} className="text-sm flex items-center gap-2 text-red-500 bg-red-500/10 px-3 py-2 rounded font-bold">
+                        <Swords size={14} /> Guerra: {w}
                       </div>
                     ))}
                     {data.newTreaties.map(t => (
-                      <div key={t} className="text-xs flex items-center gap-2 text-blue-400 bg-blue-400/10 px-2 py-1 rounded">
-                        <Handshake size={12} /> Acordo: {t}
+                      <div key={t} className="text-sm flex items-center gap-2 text-blue-400 bg-blue-400/10 px-3 py-2 rounded">
+                        <Handshake size={14} /> Acordo: {t}
                       </div>
                     ))}
                   </div>
@@ -134,11 +137,11 @@ export const TurnSummaryModal: React.FC<TurnSummaryModalProps> = ({ isOpen, onCl
             {(data.rebellionRisk.length > 0 || data.events.length > 0) && (
               <div className="space-y-3 pt-2 border-t border-white/5">
                 {data.rebellionRisk.length > 0 && (
-                  <div className="bg-red-500/20 border border-red-500/30 p-3 rounded-xl flex items-start gap-3">
-                    <AlertTriangle className="text-red-500 shrink-0" size={18} />
+                  <div className="bg-red-500/20 border border-red-500/30 p-4 rounded-xl flex items-start gap-3">
+                    <AlertTriangle className="text-red-500 shrink-0" size={20} />
                     <div>
-                      <p className="text-xs font-bold text-red-200">Aviso de Rebelião!</p>
-                      <p className="text-[10px] text-red-200/70">Baixa lealdade em: {data.rebellionRisk.join(', ')}</p>
+                      <p className="text-sm font-bold text-red-200 uppercase tracking-tight">Aviso de Rebelião!</p>
+                      <p className="text-xs text-red-200/70 mt-1">Baixa lealdade em: {data.rebellionRisk.join(', ')}</p>
                     </div>
                   </div>
                 )}

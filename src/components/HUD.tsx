@@ -141,7 +141,7 @@ export const HUD: React.FC<HUDProps> = ({
           opacity: isHudOpen ? 1 : 0
         }}
         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
-        className="h-full w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 relative"
+        className="h-full w-[85vw] sm:w-80 md:w-96 bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 relative ml-auto"
       >
         {/* Toggle handle for desktop */}
         <button 
@@ -154,9 +154,9 @@ export const HUD: React.FC<HUDProps> = ({
         <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
           <div className="p-4 md:p-6 space-y-6">
             {/* Header with Fullscreen option */}
-            <div className="flex justify-between items-center mb-2">
-               <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100 flex items-center gap-2">
-                 <Crown className="text-amber-500" /> {playerRealm.name}
+            <div className="flex justify-between items-center mb-2 gap-2">
+               <h1 className="text-xl md:text-2xl font-serif font-bold text-slate-100 flex items-center gap-2 min-w-0">
+                 <Crown className="text-amber-500 shrink-0" /> <span className="truncate">{playerRealm.name}</span>
                </h1>
                <div className="flex gap-1">
                  <button 
@@ -175,32 +175,32 @@ export const HUD: React.FC<HUDProps> = ({
         {/* Resources Grid */}
         <div className="grid grid-cols-2 gap-2 mb-4">
           <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
-            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
-              <span className="flex items-center gap-1"><Coins size={8} className="text-amber-600" /> Ouro</span>
+            <div className="flex justify-between items-center text-[10px] md:text-xs text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Coins size={12} className="text-amber-600" /> Ouro</span>
               <span className={netGold >= 0 ? 'text-green-500' : 'text-red-500'}>{netGold >= 0 ? '+' : ''}{netGold}</span>
             </div>
-            <div className="text-lg font-black text-amber-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.gold)}</div>
+            <div className="text-lg md:text-xl font-black text-amber-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.gold)}</div>
           </div>
           <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
-            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
-              <span className="flex items-center gap-1"><Wheat size={8} className="text-green-600" /> Comida</span>
+            <div className="flex justify-between items-center text-[10px] md:text-xs text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Wheat size={12} className="text-green-600" /> Comida</span>
               <span className={netFood >= 0 ? 'text-green-500' : 'text-red-500'}>{netFood >= 0 ? '+' : ''}{netFood}</span>
             </div>
-            <div className="text-lg font-black text-green-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.food)}</div>
+            <div className="text-lg md:text-xl font-black text-green-500 font-serif leading-none tracking-tight">{Math.floor(playerRealm.food)}</div>
           </div>
           <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
-            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
-              <span className="flex items-center gap-1"><Hammer size={8} className="text-slate-500" /> Materiais</span>
-              <span className="text-[10px] text-slate-400 font-bold">{Math.floor(playerRealm.materials)}</span>
+            <div className="flex justify-between items-center text-[10px] md:text-xs text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Hammer size={12} className="text-slate-500" /> Materiais</span>
+              <span className="text-xs text-slate-400 font-bold">{Math.floor(playerRealm.materials)}</span>
             </div>
-            <div className="text-lg font-black text-slate-300 font-serif leading-none tracking-tight">{Math.floor(playerRealm.materials)}</div>
+            <div className="text-lg md:text-xl font-black text-slate-300 font-serif leading-none tracking-tight">{Math.floor(playerRealm.materials)}</div>
           </div>
           <div className="bg-slate-900/40 p-2 rounded-lg border border-slate-700/30 flex flex-col justify-between h-12 shadow-inner">
-            <div className="flex justify-between items-center text-[8px] text-slate-500 uppercase font-black tracking-tighter">
-              <span className="flex items-center gap-1"><Zap size={8} className="text-blue-500" /> APs</span>
-              <span className="text-[10px] text-blue-400/80 font-bold">{playerRealm.actionPoints}</span>
+            <div className="flex justify-between items-center text-[10px] md:text-xs text-slate-500 uppercase font-black tracking-tighter">
+              <span className="flex items-center gap-1"><Zap size={12} className="text-blue-500" /> APs</span>
+              <span className="text-xs text-blue-400/80 font-bold">{playerRealm.actionPoints}</span>
             </div>
-            <div className="text-lg font-black text-blue-400 font-serif leading-none tracking-tight">{playerRealm.actionPoints}/{playerRealm.maxActionPoints}</div>
+            <div className="text-lg md:text-xl font-black text-blue-400 font-serif leading-none tracking-tight">{playerRealm.actionPoints}/{playerRealm.maxActionPoints}</div>
           </div>
         </div>
 
@@ -233,37 +233,37 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       </div>
 
-      {/* Main Nav (Tabs) */}
-      <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700/50 shrink-0">
-        <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shadow-inner">
-          <button onClick={() => setActiveTab('province')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'province' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-            <MapIcon size={12} /> Reinos
-          </button>
-          <button onClick={() => setActiveTab('market')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'market' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-            <ShoppingCart size={12} /> Mercado
-          </button>
-          <button onClick={() => setActiveTab('diplomacy')} className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded text-[10px] font-black uppercase transition-all ${activeTab === 'diplomacy' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
-            <Handshake size={12} /> Política
-          </button>
+        {/* Main Nav (Tabs) */}
+        <div className="px-4 py-2 bg-slate-800/50 border-b border-slate-700/50 shrink-0">
+          <div className="flex bg-slate-900 rounded-lg p-0.5 border border-slate-700 shadow-inner">
+            <button onClick={() => setActiveTab('province')} className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 py-2 sm:py-3 rounded text-[10px] sm:text-xs md:text-sm font-black uppercase transition-all ${activeTab === 'province' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+              <MapIcon size={14} className="mb-0.5 sm:mb-0" /> Reinos
+            </button>
+            <button onClick={() => setActiveTab('market')} className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 py-2 sm:py-3 rounded text-[10px] sm:text-xs md:text-sm font-black uppercase transition-all ${activeTab === 'market' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+              <ShoppingCart size={14} className="mb-0.5 sm:mb-0" /> Mercado
+            </button>
+            <button onClick={() => setActiveTab('diplomacy')} className={`flex-1 flex flex-col sm:flex-row items-center justify-center gap-1 py-2 sm:py-3 rounded text-[10px] sm:text-xs md:text-sm font-black uppercase transition-all ${activeTab === 'diplomacy' ? 'bg-amber-600 text-white shadow-md' : 'text-slate-500 hover:text-slate-300'}`}>
+              <Handshake size={14} className="mb-0.5 sm:mb-0" /> Política
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* Map View Modes Overlay (Compact) */}
-      <div className="px-4 py-1.5 bg-slate-900 border-b border-slate-800 shrink-0 overflow-x-auto custom-scrollbar no-scrollbar flex gap-1 items-center">
-        <span className="text-[8px] font-black text-slate-700 uppercase vertical-text tracking-tighter mr-1">Visão</span>
+      <div className="px-2 sm:px-4 py-2 bg-slate-900 border-b border-slate-800 shrink-0 flex flex-wrap gap-1 items-center justify-center">
+        <span className="text-[10px] font-black text-slate-700 uppercase tracking-tighter mr-1 w-full text-center sm:w-auto sm:text-left mb-1 sm:mb-0">Visão</span>
         {[
-          { id: 'political', icon: <Globe2 size={12} />, color: 'blue', label: 'Pol' },
-          { id: 'economic', icon: <BarChart3 size={12} />, color: 'green', label: 'Eco' },
-          { id: 'military', icon: <Crosshair size={12} />, color: 'red', label: 'Mil' },
-          { id: 'diplomatic', icon: <Handshake size={12} />, color: 'purple', label: 'Dip' },
-          { id: 'resources', icon: <Gem size={12} />, color: 'amber', label: 'Res' },
+          { id: 'political', icon: <Globe2 size={14} />, color: 'blue', label: 'Pol' },
+          { id: 'economic', icon: <BarChart3 size={14} />, color: 'green', label: 'Eco' },
+          { id: 'military', icon: <Crosshair size={14} />, color: 'red', label: 'Mil' },
+          { id: 'diplomatic', icon: <Handshake size={14} />, color: 'purple', label: 'Dip' },
+          { id: 'resources', icon: <Gem size={14} />, color: 'amber', label: 'Res' },
         ].map(mode => (
           <button 
             key={mode.id}
             onClick={onToggleMode}
-            className={`flex items-center gap-1.5 px-2 py-1 rounded border transition-all ${viewMode === mode.id ? `bg-${mode.color}-600/20 border-${mode.color}-500 text-${mode.color}-400 shadow-sm` : 'bg-slate-800 border-transparent text-slate-500 hover:bg-slate-700'}`}
+            className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 sm:py-2 rounded border transition-all flex-1 justify-center sm:flex-none ${viewMode === mode.id ? `bg-${mode.color}-600/20 border-${mode.color}-500 text-${mode.color}-400 shadow-sm` : 'bg-slate-800 border-transparent text-slate-500 hover:bg-slate-700'}`}
           >
-            {mode.icon} <span className="text-[9px] font-black uppercase">{mode.label}</span>
+            {mode.icon} <span className="text-[10px] sm:text-xs font-black uppercase">{mode.label}</span>
           </button>
         ))}
       </div>
@@ -329,13 +329,13 @@ export const HUD: React.FC<HUDProps> = ({
         if (alerts.length === 0) return null;
         
         return (
-          <div className="px-4 pt-3 space-y-1.5 max-h-40 overflow-y-auto custom-scrollbar">
+          <div className="px-4 pt-4 space-y-2 max-h-48 overflow-y-auto custom-scrollbar">
             {alerts.map((a, i) => (
               <motion.div 
                 key={i} 
                 initial={{ opacity: 0, x: -10 }}
                 animate={{ opacity: 1, x: 0 }}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-[10px] font-bold shadow-sm ${a.color} animate-pulse-subtle`}
+                className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-xs font-bold shadow-sm ${a.color} animate-pulse-subtle`}
               >
                 <div className="shrink-0">{a.icon}</div>
                 <span className="leading-tight">{a.text}</span>
@@ -474,11 +474,11 @@ export const HUD: React.FC<HUDProps> = ({
         ) : selectedProv ? (
           <div className="space-y-4">
             <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-              <h2 className="text-xl font-serif font-bold text-slate-100">
+              <h2 className="text-xl md:text-2xl font-serif font-bold text-slate-100">
                 {selectedProv.name}
               </h2>
               {selectedProv.strategicResource && (
-                <div className="flex items-center gap-1 px-2 py-0.5 bg-slate-800 rounded border border-slate-700 text-[10px] font-bold uppercase text-slate-300">
+                <div className="flex items-center gap-1 px-2.5 py-1 bg-slate-800 rounded border border-slate-700 text-xs font-bold uppercase text-slate-300">
                   {getResourceIcon(selectedProv.strategicResource)}
                   {getResourceName(selectedProv.strategicResource)}
                 </div>
@@ -491,8 +491,8 @@ export const HUD: React.FC<HUDProps> = ({
                 <span className="font-bold flex items-center gap-2" style={{ color: gameState.realms[selectedProv.ownerId]?.color || '#ffffff' }}>
                   {gameState.realms[selectedProv.ownerId]?.name || 'Desconhecido'}
                   {gameState.realms[selectedProv.ownerId]?.capitalId === selectedProv.id && (
-                    <span className="flex items-center gap-1 text-[10px] text-amber-500 font-bold uppercase">
-                       <Crown size={12} /> Sede
+                    <span className="flex items-center gap-1 text-xs text-amber-500 font-bold uppercase px-1.5 py-0.5 bg-amber-950/20 rounded">
+                       <Crown size={14} /> Sede
                     </span>
                   )}
                 </span>
@@ -512,22 +512,22 @@ export const HUD: React.FC<HUDProps> = ({
               
               <div className="pt-2 border-t border-slate-800">
                 <span className="text-sm font-bold text-slate-500 uppercase tracking-wider">Composição do Exército</span>
-                <div className="grid grid-cols-4 gap-1 mt-1">
-                  <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-[10px] block text-slate-400">Inf.</span>
-                    <span className="font-bold text-sm">{selectedProv.army?.infantry ?? 0}</span>
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  <div className="bg-slate-800 p-3 rounded text-center border border-slate-700/50">
+                    <span className="text-xs block text-slate-400 mb-1">Inf.</span>
+                    <span className="font-bold text-base">{selectedProv.army?.infantry ?? 0}</span>
                   </div>
-                  <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-[10px] block text-slate-400">Arq.</span>
-                    <span className="font-bold text-sm">{selectedProv.army?.archers ?? 0}</span>
+                  <div className="bg-slate-800 p-3 rounded text-center border border-slate-700/50">
+                    <span className="text-xs block text-slate-400 mb-1">Arq.</span>
+                    <span className="font-bold text-base">{selectedProv.army?.archers ?? 0}</span>
                   </div>
-                  <div className="bg-slate-800 p-2 rounded text-center">
-                    <span className="text-[10px] block text-slate-400">Cav.</span>
-                    <span className="font-bold text-sm">{selectedProv.army?.cavalry ?? 0}</span>
+                  <div className="bg-slate-800 p-3 rounded text-center border border-slate-700/50">
+                    <span className="text-xs block text-slate-400 mb-1">Cav.</span>
+                    <span className="font-bold text-base">{selectedProv.army?.cavalry ?? 0}</span>
                   </div>
-                  <div className="bg-slate-800 p-2 rounded text-center ring-1 ring-blue-500/30">
-                    <span className="text-[10px] block text-blue-400 flex items-center justify-center gap-0.5"><Eye size={10} /> Bat.</span>
-                    <span className="font-bold text-sm text-blue-300">{selectedProv.army?.scouts ?? 0}</span>
+                  <div className="bg-slate-800 p-3 rounded text-center ring-1 ring-blue-500/30 border border-blue-500/20">
+                    <span className="text-xs block text-blue-400 flex items-center justify-center gap-0.5 mb-1"><Eye size={12} /> Bat.</span>
+                    <span className="font-bold text-base text-blue-300">{selectedProv.army?.scouts ?? 0}</span>
                   </div>
                 </div>
               </div>
@@ -629,13 +629,13 @@ export const HUD: React.FC<HUDProps> = ({
                             </button>
                           </div>
                           
-                          <div className="grid grid-cols-4 gap-1">
+                          <div className="grid grid-cols-4 gap-2">
                             {(['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).map(type => (
                               <button
                                 key={type}
                                 onClick={() => setSelectedUnitType(type)}
                                 title={type === 'scouts' ? 'Batedores: Revelam o mapa e removem fog' : ''}
-                                className={`py-1 text-[10px] font-bold uppercase rounded border transition-all ${
+                                className={`py-2 text-xs font-bold uppercase rounded border transition-all ${
                                   selectedUnitType === type 
                                     ? 'bg-blue-600 border-blue-400 text-white shadow-[0_0_10px_rgba(37,99,235,0.4)]' 
                                     : 'bg-slate-700 border-slate-600 text-slate-400 hover:text-slate-200'
@@ -646,19 +646,19 @@ export const HUD: React.FC<HUDProps> = ({
                             ))}
                           </div>
 
-                          <div className="space-y-2">
+                          <div className="space-y-3">
                             <div className="flex justify-between items-end">
-                              <div className="flex flex-col gap-1">
-                                <span className="text-[10px] text-slate-400">Quantidade</span>
+                              <div className="flex flex-col gap-1.5">
+                                <span className="text-xs text-slate-400">Quantidade</span>
                                 <input 
                                   type="number"
                                   min="1"
                                   value={recruitAmount}
                                   onChange={(e) => setRecruitAmount(parseInt(e.target.value) || 0)}
-                                  className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-xs font-bold text-white focus:outline-none focus:border-blue-500"
+                                  className="w-24 bg-slate-700 border border-slate-600 rounded px-2.5 py-2 text-sm font-bold text-white focus:outline-none focus:border-blue-500"
                                 />
                               </div>
-                              <div className="text-right text-[10px] space-y-0.5">
+                              <div className="text-right text-xs space-y-1">
                                 <div className="text-yellow-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.gold || 0) * recruitAmount} Ouro</div>
                                 <div className="text-green-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.food || 0) * recruitAmount} Comida</div>
                                 <div className="text-slate-300 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.materials || 0) * recruitAmount} Materiais</div>
@@ -709,24 +709,24 @@ export const HUD: React.FC<HUDProps> = ({
                         </button>
                       )}
                       
-                      <div className="pt-2">
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Construção ({ACTION_COSTS.build} AP)</span>
-                        <div className="grid grid-cols-1 gap-1 mt-1">
-                           <button onClick={() => onAction('build_farms')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                             <span className="flex items-center gap-2"><Wheat size={12} className="text-green-500" /> Fazenda</span>
-                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.farms.gold}O, {BUILDING_STATS.farms.materials}M</span>
+                      <div className="pt-3">
+                        <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Construção ({ACTION_COSTS.build} AP)</span>
+                        <div className="grid grid-cols-1 gap-1.5 mt-2">
+                           <button onClick={() => onAction('build_farms')} className="flex items-center justify-between px-3 py-2.5 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Wheat size={14} className="text-green-500" /> Fazenda</span>
+                             <span className="text-xs text-slate-400">{BUILDING_STATS.farms.gold}O, {BUILDING_STATS.farms.materials}M</span>
                            </button>
-                           <button onClick={() => onAction('build_mines')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                             <span className="flex items-center gap-2"><Pickaxe size={12} className="text-yellow-500" /> Mina</span>
-                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.mines.gold}O, {BUILDING_STATS.mines.materials}M</span>
+                           <button onClick={() => onAction('build_mines')} className="flex items-center justify-between px-3 py-2.5 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Pickaxe size={14} className="text-yellow-500" /> Mina</span>
+                             <span className="text-xs text-slate-400">{BUILDING_STATS.mines.gold}O, {BUILDING_STATS.mines.materials}M</span>
                            </button>
-                           <button onClick={() => onAction('build_workshops')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                             <span className="flex items-center gap-2"><Factory size={12} className="text-slate-400" /> Oficina</span>
-                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.workshops.gold}O, {BUILDING_STATS.workshops.materials}M</span>
+                           <button onClick={() => onAction('build_workshops')} className="flex items-center justify-between px-3 py-2.5 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Factory size={14} className="text-slate-400" /> Oficina</span>
+                             <span className="text-xs text-slate-400">{BUILDING_STATS.workshops.gold}O, {BUILDING_STATS.workshops.materials}M</span>
                            </button>
-                           <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-1.5 bg-slate-800 hover:bg-slate-700 rounded text-xs transition-colors border border-slate-700">
-                             <span className="flex items-center gap-2"><Home size={12} className="text-blue-400" /> Tribunal</span>
-                             <span className="text-[10px] text-slate-400">{BUILDING_STATS.courts.gold}O, {BUILDING_STATS.courts.materials}M</span>
+                           <button onClick={() => onAction('build_courts')} className="flex items-center justify-between px-3 py-2.5 bg-slate-800 hover:bg-slate-700 rounded text-sm transition-colors border border-slate-700">
+                             <span className="flex items-center gap-2"><Home size={14} className="text-blue-400" /> Tribunal</span>
+                             <span className="text-xs text-slate-400">{BUILDING_STATS.courts.gold}O, {BUILDING_STATS.courts.materials}M</span>
                            </button>
                         </div>
                       </div>
@@ -795,9 +795,9 @@ export const HUD: React.FC<HUDProps> = ({
                             <Eye size={13} /> Despachar Batedores (qualquer território)
                           </button>
                         )}
-                        <div className="grid grid-cols-1 mt-2">
-                          <button onClick={() => onAction('attack')} className="flex items-center justify-center gap-2 py-2 bg-red-700 hover:bg-red-600 rounded font-medium transition-colors text-xs">
-                            <Swords size={14} /> Atacar ({ACTION_COSTS.attack} AP)
+                        <div className="grid grid-cols-1 mt-3">
+                          <button onClick={() => onAction('attack')} className="flex items-center justify-center gap-2 py-3 bg-red-700 hover:bg-red-600 rounded font-medium transition-colors text-sm">
+                            <Swords size={18} /> Atacar ({ACTION_COSTS.attack} AP)
                           </button>
                         </div>
 
@@ -829,45 +829,45 @@ export const HUD: React.FC<HUDProps> = ({
                             <Swords size={16} /> Declarar Guerra ({ACTION_COSTS.diplomacy} AP)
                           </button>
                           
-                          <div className="grid grid-cols-2 gap-2 mt-2">
+                          <div className="grid grid-cols-2 gap-2 mt-3">
                             <button 
                               onClick={() => onAction('send_gift')}
-                              className="flex items-center justify-center gap-2 py-2 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-xs"
+                              className="flex items-center justify-center gap-2 py-3 bg-purple-600 hover:bg-purple-500 rounded font-medium transition-colors text-sm"
                             >
-                              <Handshake size={14} /> Presente
+                              <Handshake size={16} /> Presente
                             </button>
                             <button 
                               onClick={playerRealm.pacts.includes(selectedProv.ownerId) ? () => onAction('break_pact') : () => onAction('propose_pact')}
-                              className={`flex items-center justify-center gap-2 py-2 rounded font-medium transition-colors text-xs ${playerRealm.pacts.includes(selectedProv.ownerId) ? 'bg-orange-700 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-500'}`}
+                              className={`flex items-center justify-center gap-2 py-3 rounded font-medium transition-colors text-sm ${playerRealm.pacts.includes(selectedProv.ownerId) ? 'bg-orange-700 hover:bg-orange-600' : 'bg-blue-600 hover:bg-blue-500'}`}
                             >
-                              <Shield size={14} /> {playerRealm.pacts.includes(selectedProv.ownerId) ? 'Quebrar Pacto' : 'Pacto'}
+                              <Shield size={16} /> {playerRealm.pacts.includes(selectedProv.ownerId) ? 'Quebrar Pacto' : 'Pacto'}
                             </button>
                             <button 
                               onClick={() => onAction('propose_alliance')}
-                              className="flex items-center justify-center gap-2 py-2 bg-indigo-600 hover:bg-indigo-500 rounded font-medium transition-colors text-xs"
+                              className="flex items-center justify-center gap-2 py-3 bg-indigo-600 hover:bg-indigo-500 rounded font-medium transition-colors text-sm"
                             >
-                              <Zap size={14} /> Aliança
+                              <Zap size={16} /> Aliança
                             </button>
                             <button 
                               onClick={() => onAction('trade_route')}
-                              className="flex items-center justify-center gap-2 py-2 bg-emerald-600 hover:bg-emerald-500 rounded font-medium transition-colors text-xs"
+                              className="flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-500 rounded font-medium transition-colors text-sm"
                             >
-                              <TrendingUp size={14} /> Rota Com.
+                              <TrendingUp size={16} /> Rota Com.
                             </button>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 mt-2">
                             <button 
                               onClick={() => onAction('demand_tribute')}
-                              className="flex items-center justify-center gap-2 py-2 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors text-xs"
+                              className="flex items-center justify-center gap-2 py-3 bg-amber-700 hover:bg-amber-600 rounded font-medium transition-colors text-sm"
                             >
-                              <Coins size={14} /> Tributo
+                              <Coins size={16} /> Tributo
                             </button>
                             <button 
                               onClick={() => onAction('demand_vassalage')}
-                              className="flex items-center justify-center gap-2 py-2 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-xs"
+                              className="flex items-center justify-center gap-2 py-3 bg-slate-700 hover:bg-slate-600 rounded font-medium transition-colors text-sm"
                             >
-                              <Gem size={14} /> Vassalagem
+                              <Gem size={16} /> Vassalagem
                             </button>
                           </div>
                         </>
@@ -888,26 +888,31 @@ export const HUD: React.FC<HUDProps> = ({
     </div>
     {/* Active March Orders Panel */}
       {marchOrders.length > 0 && (
-        <div className="px-4 pb-2">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">⛳ Ordens de Marcha Ativas</p>
-          <div className="space-y-1">
+        <div className="px-4 pb-3 border-t border-slate-700/30 pt-3">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+             <Navigation size={14} /> Ordens de Marcha Ativas
+          </p>
+          <div className="space-y-1.5">
             {marchOrders.map(order => {
               const dest = order.remainingPath[order.remainingPath.length - 1];
               const destName = dest ? gameState.provinces[dest]?.name : 'N/A';
-              const turnLabel = order.isScoutMission ? '(Batedores)' : '';
+              const turnsRem = order.remainingPath.length;
               const totalTroops = order.troops.infantry + order.troops.archers + order.troops.cavalry + order.troops.scouts;
               return (
-                <div key={order.id} className="flex items-center justify-between bg-slate-800 border border-slate-700 rounded p-1.5 text-[10px]">
-                  <span className="text-slate-300">
-                    {order.isScoutMission ? <Eye size={10} className="inline mr-1 text-emerald-400" /> : <Navigation size={10} className="inline mr-1 text-indigo-400" />}
-                    {totalTroops} tropas → {destName} ({order.remainingPath.length}T) {turnLabel}
-                  </span>
+                <div key={order.id} className="flex items-center justify-between bg-slate-800/80 border border-slate-700/50 rounded-lg p-2.5 text-xs">
+                  <div className="flex flex-col gap-0.5">
+                    <div className="flex items-center gap-1.5 font-bold">
+                       {order.isScoutMission ? <Eye size={12} className="text-emerald-400" /> : <Swords size={12} className="text-indigo-400" />}
+                       <span className={order.isScoutMission ? 'text-emerald-400' : 'text-slate-100'}>{totalTroops} {order.isScoutMission ? 'Batedores' : 'Soldados'}</span>
+                    </div>
+                    <span className="text-slate-500 text-[10px] uppercase font-black">Destino: {destName} ({turnsRem}T restantes)</span>
+                  </div>
                   <button
                     onClick={() => onCancelMarchOrder(order.id)}
-                    className="ml-1 text-red-400 hover:text-red-300"
-                    title="Cancelar orden"
+                    className="p-2 bg-red-900/20 hover:bg-red-900/40 text-red-500 rounded-full transition-colors"
+                    title="Cancelar ordem"
                   >
-                    <X size={12} />
+                    <X size={16} />
                   </button>
                 </div>
               );
@@ -916,23 +921,23 @@ export const HUD: React.FC<HUDProps> = ({
         </div>
       )}
 
-      <div className="p-4 border-t border-slate-700 bg-slate-800/50 flex gap-2">
+      <div className="p-2 sm:p-4 border-t border-slate-700 bg-slate-800/50 flex gap-2">
         <button 
           onClick={onMenu}
-          className="p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center"
+          className="p-2 sm:p-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center shrink-0"
           title="Menu Principal"
         >
-          <Home size={18} />
+          <Home size={16} className="sm:w-[18px] sm:h-[18px]" />
         </button>
         <button 
           onClick={onSave}
-          className="flex-1 py-3 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2"
+          className="flex-1 py-2 sm:py-3 bg-slate-700 hover:bg-slate-600 text-white text-xs sm:text-base font-bold rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center gap-1 sm:gap-2"
         >
-          <Save size={18} /> Salvar
+          <Save size={14} className="sm:w-[18px] sm:h-[18px]" /> <span className="hidden sm:inline">Salvar</span><span className="sm:hidden">S.</span>
         </button>
         <button 
           onClick={onEndTurn}
-          className="flex-[2] py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-lg shadow-lg transition-all active:scale-95"
+          className="flex-[2] py-2 sm:py-3 bg-amber-600 hover:bg-amber-500 text-white text-xs sm:text-base font-bold rounded-lg shadow-lg transition-all active:scale-95"
         >
           Finalizar Turno
         </button>
