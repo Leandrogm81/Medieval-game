@@ -1,7 +1,7 @@
 import { GameState, Realm, Province, StrategicAssessment } from '../types';
 import { ACTION_COSTS } from './gameConstants';
-import { executeAttack } from './combatLogic.ts';
-import { executeBuilding, executeRecruitment } from './economyLogic.ts';
+import { executeAttack } from './combatLogic';
+import { executeBuilding, executeRecruitment } from './economyLogic';
 
 export function processAITurn(state: GameState, realmId: string) {
   const realm = state.realms[realmId];

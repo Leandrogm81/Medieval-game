@@ -1,6 +1,6 @@
 import { GameState, Realm, Province } from '../types';
 import { ACTION_COSTS, UNIT_STATS, BUILDING_PRODUCTION } from './gameConstants';
-import { handleResourceDeficit } from './economyLogic.ts';
+import { handleResourceDeficit } from './economyLogic';
 
 export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
