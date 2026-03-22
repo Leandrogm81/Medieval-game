@@ -77,23 +77,23 @@ export const Map: React.FC<MapProps> = ({
   const getProvinceColor = (prov: Province, isVisible: boolean) => {
     if (!isVisible) return '#1a1a1a';
     const owner = gameState.realms[prov.ownerId];
-    const playerRealm = gameState.realms[gameState.playerRealmId];
+    const playerRealm = gameState.realms[gameState.playerRealmId] || { id: '', color: '#cbd5e1', relations: {} };
 
     switch (viewMode) {
       case 'political':
         return owner?.color || '#cbd5e1';
       case 'economic':
-        const wealth = prov.wealth + prov.buildings.mines * 5;
+        const wealth = (prov.wealth || 0) + (prov.buildings?.mines || 0) * 5;
         if (wealth > 15) return '#15803d'; // Rich
         if (wealth > 8) return '#16a34a'; // Medium
         return '#4ade80'; // Low
       case 'military':
-        if (prov.troops > 100) return '#b91c1c'; // Strong
-        if (prov.troops > 50) return '#dc2626'; // Medium
+        if ((prov.troops || 0) > 100) return '#b91c1c'; // Strong
+        if ((prov.troops || 0) > 50) return '#dc2626'; // Medium
         return '#f87171'; // Weak
       case 'diplomatic':
         if (prov.ownerId === gameState.playerRealmId) return '#3b82f6';
-        const rel = playerRealm.relations[prov.ownerId] || 0;
+        const rel = playerRealm.relations?.[prov.ownerId] || 0;
         if (rel > 50) return '#8b5cf6'; // Ally
         if (rel > 0) return '#a78bfa'; // Friendly
         if (rel < -50) return '#ef4444'; // Hostile

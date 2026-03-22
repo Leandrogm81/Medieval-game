@@ -287,15 +287,15 @@ export default function App() {
                         className="absolute top-4 left-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
                     >
                         <p className="text-xs text-amber-500 font-bold uppercase tracking-widest leading-none mb-1">
-                          {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId].name}
+                          {gameState.provinces[ui.selectedProvinceId]?.ownerId === 'neutral' ? 'Terra de Ninguém' : (gameState.realms[gameState.provinces[ui.selectedProvinceId]?.ownerId || '']?.name || 'Desconhecido')}
                         </p>
                         <h4 className="text-lg font-black text-stone-100 flex items-center gap-2">
-                           {gameState.provinces[ui.selectedProvinceId].name}
-                           <span className="text-[10px] bg-stone-800 px-1.5 py-0.5 rounded text-stone-400 capitalize">{gameState.provinces[ui.selectedProvinceId].terrain}</span>
+                           {gameState.provinces[ui.selectedProvinceId]?.name}
+                           <span className="text-[10px] bg-stone-800 px-1.5 py-0.5 rounded text-stone-400 capitalize">{gameState.provinces[ui.selectedProvinceId]?.terrain}</span>
                         </h4>
                         <div className="flex gap-4 mt-2">
-                           <div className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-stone-500" /> <span className="text-xs font-bold">{gameState.provinces[ui.selectedProvinceId].troops}</span></div>
-                           <div className="flex items-center gap-1.5"><Crown className="w-3 h-3 text-amber-600" /> <span className="text-xs font-bold text-amber-500/80">{gameState.provinces[ui.selectedProvinceId].loyalty}%</span></div>
+                           <div className="flex items-center gap-1.5"><Shield className="w-3 h-3 text-stone-500" /> <span className="text-xs font-bold">{gameState.provinces[ui.selectedProvinceId]?.troops || 0}</span></div>
+                           <div className="flex items-center gap-1.5"><Crown className="w-3 h-3 text-amber-600" /> <span className="text-xs font-bold text-amber-500/80">{gameState.provinces[ui.selectedProvinceId]?.loyalty || 0}%</span></div>
                         </div>
                     </motion.div>
                 )}
