@@ -1,4 +1,4 @@
-export * from './logic/constants';
+export * from './logic/gameConstants';
 export * from './logic/mapGeneration';
 export * from './logic/combatLogic';
 export * from './logic/aiLogic';
