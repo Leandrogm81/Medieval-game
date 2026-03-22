@@ -4,7 +4,7 @@ import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
 import { GameEndModal } from './components/GameEndModal';
-import { SaveLoadModal } from './components/SaveLoadModal';
+import { SaveGameModal } from './components/SaveGameModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { TurnSummaryModal } from './components/TurnSummaryModal';
 import { CombatPreviewModal } from './components/CombatPreviewModal';
@@ -153,7 +153,7 @@ export default function App() {
         </div>
         
         {ui.showSaveModal && (
-          <SaveLoadModal 
+          <SaveGameModal 
             isOpen={ui.showSaveModal}
             onClose={() => ui.setShowSaveModal(false)}
             onSave={ctrl.handleSave}
@@ -306,7 +306,7 @@ export default function App() {
             />
           )}
           {ui.showSaveModal && (
-            <SaveLoadModal 
+            <SaveGameModal 
               isOpen={ui.showSaveModal}
               onClose={() => ui.setShowSaveModal(false)}
               onSave={ctrl.handleSave}
