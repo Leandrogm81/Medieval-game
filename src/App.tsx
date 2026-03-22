@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { GameState, ViewMode, ActionType, UnitType } from './types';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
-import { ChroniclesModal } from './components/ChroniclesModal';
+import { ChronicleModal } from './components/ChronicleModal';
 import { GameOverModal } from './components/GameOverModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { InstructionsModal } from './components/InstructionsModal';
@@ -299,7 +299,7 @@ export default function App() {
 
         <AnimatePresence>
           {ui.showChronicles && (
-            <ChroniclesModal 
+            <ChronicleModal 
               isOpen={ui.showChronicles}
               logs={gameState.logs} 
               onClose={() => ui.setShowChronicles(false)} 
