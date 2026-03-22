@@ -5,10 +5,10 @@ import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
 import { GameEndModal } from './components/GameEndModal';
 import { SaveGameModal } from './components/SaveGameModal';
-import { InstructionsModal } from './components/InstructionsModal';
-import { TurnSummaryModal } from './components/TurnSummaryModal';
-import { CombatPreviewModal } from './components/CombatPreviewModal';
-import { BattleResultModal } from './components/BattleResultModal';
+import { GameInstructionsModal } from './components/GameInstructionsModal';
+import { TurnResultModal } from './components/TurnResultModal';
+import { CombatSetupModal } from './components/CombatSetupModal';
+import { BattleOutcomeModal } from './components/BattleOutcomeModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save, Home } from 'lucide-react';
@@ -164,7 +164,7 @@ export default function App() {
         )}
         
         {ui.showInstructionsModal && (
-          <InstructionsModal 
+          <GameInstructionsModal 
             isOpen={ui.showInstructionsModal}
             onClose={() => ui.setShowInstructionsModal(false)} 
           />
@@ -316,20 +316,20 @@ export default function App() {
             />
           )}
           {ui.showInstructionsModal && (
-            <InstructionsModal 
+            <GameInstructionsModal 
               isOpen={ui.showInstructionsModal}
               onClose={() => ui.setShowInstructionsModal(false)} 
             />
           )}
           {ui.showTurnSummary && ui.turnSummaryData && (
-            <TurnSummaryModal 
+            <TurnResultModal 
               isOpen={ui.showTurnSummary}
               data={ui.turnSummaryData} 
               onClose={() => ui.setShowTurnSummary(false)} 
             />
           )}
           {ui.showCombatPreview && ui.combatAttackerProvId && ui.combatDefenderProvId && ui.combatAttackingArmy && (
-            <CombatPreviewModal 
+            <CombatSetupModal 
               isOpen={ui.showCombatPreview}
               attackerProv={gameState.provinces[ui.combatAttackerProvId]}
               defenderProv={gameState.provinces[ui.combatDefenderProvId]}
@@ -339,7 +339,7 @@ export default function App() {
             />
           )}
           {ui.showBattleResult && ui.battleResultData && ui.battleResultMeta && (
-            <BattleResultModal 
+            <BattleOutcomeModal 
               isOpen={ui.showBattleResult}
               result={ui.battleResultData}
               attackerName={ui.battleResultMeta.attackerName}
