@@ -421,6 +421,15 @@ export const Map: React.FC<MapProps> = ({
       <AnimatePresence>
         {gameState.visualEffects.map(renderEffect)}
       </AnimatePresence>
+
+      {/* Map Legend */}
+      <div className="absolute bottom-4 right-4 bg-slate-900/80 backdrop-blur p-2 rounded border border-slate-700 text-[10px] text-slate-400">
+        {(Object.values(gameState.realms) as Realm[]).map(r => (
+          <div key={r.id} className="flex items-center gap-2">
+            <div className="w-2 h-2 rounded-full" style={{ backgroundColor: r.color }}></div> {r.name}
+          </div>
+        ))}
+      </div>
     </div>
     </div>
   );

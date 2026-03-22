@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import { useCallback } from 'react';
 import { GameState, Province, Realm, Army, UnitType, ActionType, MarchOrder, GameSettings, War } from '../types';
 import { generateInitialState, processEndOfTurn, resolveCombat, findPath, ACTION_COSTS, UNIT_STATS, BUILDING_STATS } from '../gameLogic';
 import { persistence } from '../persistence';

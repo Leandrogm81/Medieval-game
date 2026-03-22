@@ -13,7 +13,7 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState, width, height, sele
   const mapWidth = 1000;
   const mapHeight = 750;
 
-  const playerRealm = gameState.realms[gameState.playerRealmId] || { id: '', wars: [] };
+  const playerRealm = gameState.realms[gameState.playerRealmId];
 
   return (
     <div 
@@ -35,9 +35,9 @@ export const Minimap: React.FC<MinimapProps> = ({ gameState, width, height, sele
           const owner = gameState.realms[prov.ownerId];
           const isSelected = prov.id === selectedProvinceId;
           const isOwned = prov.ownerId === playerRealm.id;
-          const isAtWar = playerRealm.wars?.includes(prov.ownerId) || false;
-          const isLowLoyalty = isOwned && (prov.loyalty || 0) < 30;
-          const isRecentlyConquered = isOwned && (prov.recentlyConquered || 0) > 0;
+          const isAtWar = playerRealm.wars.includes(prov.ownerId);
+          const isLowLoyalty = isOwned && prov.loyalty < 30;
+          const isRecentlyConquered = isOwned && prov.recentlyConquered > 0;
           
           const scaledPolygon = prov.polygon.map(([x, y]) => [x * (width / mapWidth), y * (height / mapHeight)]);
           const pathData = `M${scaledPolygon.map(p => p.join(',')).join('L')}Z`;
