@@ -13,7 +13,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import { Shield, Swords, Crown, Scroll, Play, Info, Handshake, Settings, Save, Home } from 'lucide-react';
 
-import { useUIState } from './hooks/useUIState';
+import { useUI } from './hooks/useUI';
 import { useGameController } from './hooks/useGameController';
 import { persistence } from './persistence';
 
@@ -22,7 +22,7 @@ const MAP_HEIGHT = 750;
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
-  const ui = useUIState();
+  const ui = useUI();
   const ctrl = useGameController(gameState, setGameState, ui);
 
   // Persistence and Visual Effects cleanup

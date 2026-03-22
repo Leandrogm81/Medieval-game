@@ -6,7 +6,7 @@ import { persistence } from '../persistence';
 export function useGameController(
   gameState: GameState | null,
   setGameState: React.Dispatch<React.SetStateAction<GameState | null>>,
-  ui: any // useUIState return type
+  ui: any // useUI return type
 ) {
   
   const addLog = useCallback((msg: string) => {
