@@ -132,15 +132,17 @@ export const Map: React.FC<MapProps> = ({
   };
 
   return (
-    <div 
-      className="relative parchment-bg rounded-xl overflow-hidden shadow-2xl border-4 md:border-8 border-[#2c1810] w-full h-full"
-      onMouseMove={handleMouseMove}
-    >
-      <svg 
-        viewBox={`0 0 ${width} ${height}`} 
-        preserveAspectRatio="xMidYMid meet"
-        className="w-full h-full cursor-pointer touch-none"
+    <div className="w-full h-full flex items-center justify-center pointer-events-none p-2 md:p-4">
+      <div 
+        className="relative parchment-bg rounded-xl overflow-hidden shadow-2xl border-4 md:border-8 border-[#2c1810] touch-none pointer-events-auto flex items-center justify-center"
+        style={{ aspectRatio: '4 / 3', width: '100%', maxHeight: '100%' }}
+        onMouseMove={handleMouseMove}
       >
+        <svg 
+          viewBox={`0 0 ${width} ${height}`} 
+          preserveAspectRatio="xMidYMid meet"
+          className="w-full h-full cursor-pointer"
+        >
         <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur in="SourceAlpha" stdDeviation="3" />
           <feOffset dx="2" dy="2" result="offsetblur" />
@@ -428,6 +430,7 @@ export const Map: React.FC<MapProps> = ({
           </div>
         ))}
       </div>
+    </div>
     </div>
   );
 };

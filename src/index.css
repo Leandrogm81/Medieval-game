@@ -154,3 +154,18 @@ body {
   }
 }
 
+/* Advanced HUD Docking Logic */
+@media screen and (min-width: 1024px) and (min-height: 500px) {
+  .hud-docked {
+     position: static !important;
+     height: 100dvh !important;
+     width: clamp(320px, 28vw, 420px) !important;
+     flex-shrink: 0 !important;
+     transform: translateX(0) !important;
+     opacity: 1 !important;
+  }
+  .hud-toggle-btn {
+     display: none !important;
+  }
+}
+

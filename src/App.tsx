@@ -249,7 +249,7 @@ export default function App() {
     <div className="w-full h-[100dvh] bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
       <ErrorBoundary>
         <div 
-          className="flex-1 relative overflow-hidden bg-[#1e293b]"
+          className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}
@@ -279,12 +279,12 @@ export default function App() {
               />
             </motion.div>
 
-            {/* Floating Selection Details for Mobile (Top-right within map area) */}
+            {/* Floating Selection Details for Mobile (Top-left within map area) */}
             <AnimatePresence>
                 {ui.selectedProvinceId && !ui.isHudOpen && (
                     <motion.div 
-                        initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 50 }}
-                        className="absolute top-4 right-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
+                        initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
+                        className="absolute top-4 left-4 z-40 bg-stone-900/90 border border-amber-900/50 p-3 rounded-lg backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
                     >
                         <p className="text-xs text-amber-500 font-bold uppercase tracking-widest leading-none mb-1">
                           {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId].name}
