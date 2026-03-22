@@ -3,7 +3,7 @@ import { GameState, ViewMode, ActionType, UnitType } from './types';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
-import { GameOverModal } from './components/GameOverModal';
+import { GameEndModal } from './components/GameEndModal';
 import { SaveLoadModal } from './components/SaveLoadModal';
 import { InstructionsModal } from './components/InstructionsModal';
 import { TurnSummaryModal } from './components/TurnSummaryModal';
@@ -350,7 +350,7 @@ export default function App() {
             />
           )}
           {gameState.gameOver && (
-            <GameOverModal 
+            <GameEndModal 
               gameState={gameState}
               onRestart={() => { ui.setShowMenu(true); setGameState(null); }}
             />
