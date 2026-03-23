@@ -554,8 +554,8 @@ export function useGameController(
     } else if (action === 'buy_food' || action === 'sell_food' || action === 'buy_materials' || action === 'sell_materials') {
       const type = action.split('_')[1] as 'food' | 'materials';
       const isBuy = action.startsWith('buy');
-      const amount = 50;
-      const price = type === 'food' ? 30 : 50;
+      const amount = 50; // Aligned with HUD
+      const price = type === 'food' ? 30 : 50; // Aligned with HUD
 
       if (isBuy) {
         if (playerRealm.gold >= price) {
@@ -566,19 +566,28 @@ export function useGameController(
             next.realms[prev.playerRealmId][type] += amount;
             return next;
           });
-          addLog(`Comprado ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} por ${price} de ouro.`);
-        } else { addLog("Ouro insuficiente no tesouro."); }
+          ui.showToast(`Comprado ${amount} de ${type === 'food' ? 'alimento' : 'materiais'}!`, 'success');
+          addLog(`MERCADO: Comprado ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} por ${price} de ouro.`);
+        } else { 
+          ui.showToast("Ouro insuficiente!", "error");
+          addLog("MERCADO: Ouro insuficiente no tesouro."); 
+        }
       } else {
         if (playerRealm[type] >= amount) {
+          const sellPrice = Math.floor(price * 0.7);
           setGameState(prev => {
             if (!prev) return prev;
             const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
             next.realms[prev.playerRealmId][type] -= amount;
-            next.realms[prev.playerRealmId].gold += Math.floor(price * 0.7);
+            next.realms[prev.playerRealmId].gold += sellPrice;
             return next;
           });
-          addLog(`Vendido ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} por ${Math.floor(price * 0.7)} de ouro.`);
-        } else { addLog(`Você não tem ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} para vender.`); }
+          ui.showToast(`Vendido ${amount} de ${type === 'food' ? 'alimento' : 'materiais'}!`, 'success');
+          addLog(`MERCADO: Vendido ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} por ${sellPrice} de ouro.`);
+        } else { 
+          ui.showToast(`${type === 'food' ? 'Alimento' : 'Materiais'} insuficiente!`, "error");
+          addLog(`MERCADO: Você não tem ${amount} de ${type === 'food' ? 'alimento' : 'materiais'} para vender.`); 
+        }
       }
     } else if (['send_gift', 'propose_pact', 'propose_alliance', 'demand_tribute', 'demand_vassalage', 'declare_war', 'offer_peace', 'break_pact', 'trade_route'].includes(action)) {
        handleDiplomacyAction(action as any);
@@ -591,8 +600,13 @@ export function useGameController(
     const targetRealmId = targetProv.ownerId;
     const playerRealm = gameState.realms[gameState.playerRealmId];
 
-    if (targetRealmId === 'neutral' || targetRealmId === playerRealm.id) {
-       addLog("Ação diplomática inválida para este território.");
+    if (targetRealmId === 'neutral') {
+       ui.showToast("Territórios neutros podem ser conquistados movendo tropas para eles.", "info");
+       addLog("DIPLOMACIA: Ação inválida para território neutro. Use 'Mover' para conquistar.");
+       return;
+    }
+    if (targetRealmId === playerRealm.id) {
+       addLog("DIPLOMACIA: Você não pode realizar ações diplomáticas com seu próprio reino.");
        return;
     }
 
@@ -681,13 +695,13 @@ export function useGameController(
         const pr = next.realms[prev.playerRealmId];
         const tr = next.realms[targetRealmId];
         pr.actionPoints -= ACTION_COSTS.diplomacy;
-        if(action === 'send_gift') { pr.gold -= 100; pr.relations[targetRealmId] += 20; tr.relations[prev.playerRealmId] += 20; }
+        if(action === 'send_gift') { pr.gold -= 100; pr.relations[targetRealmId] = Math.min(100, (pr.relations[targetRealmId] || 0) + 20); tr.relations[prev.playerRealmId] = Math.min(100, (tr.relations[prev.playerRealmId] || 0) + 20); }
         if(action === 'propose_pact') { pr.pacts.push(targetRealmId); tr.pacts.push(prev.playerRealmId); }
         if(action === 'propose_alliance') { pr.alliances.push(targetRealmId); tr.alliances.push(prev.playerRealmId); }
         if(action === 'offer_peace') { 
           pr.wars = pr.wars.filter(id => id !== targetRealmId); 
           tr.wars = tr.wars.filter(id => id !== prev.playerRealmId);
-          next.activeWars = next.activeWars.filter(w => 
+          next.activeWars = (next.activeWars || []).filter(w => 
             !((w.attackerId === prev.playerRealmId && w.defenderId === targetRealmId) ||
               (w.attackerId === targetRealmId && w.defenderId === prev.playerRealmId))
           );
@@ -700,8 +714,10 @@ export function useGameController(
         if(action === 'demand_vassalage') { pr.vassals.push(targetRealmId); tr.vassalOf = prev.playerRealmId; }
         return next;
       });
+      ui.showToast(msg, 'success');
       addLog(`DIPLOMACIA: ${msg}`);
     } else {
+      ui.showToast(`${targetRealm.name} recusou sua proposta.`, 'error');
       addLog(`DIPLOMACIA: ${targetRealm.name} recusou sua proposta.`);
       setGameState(prev => {
         if (!prev) return prev;
@@ -740,13 +756,13 @@ export function useGameController(
       .map(p => p.name);
 
     ui.setTurnSummaryData({
-      goldIncome: 0, // Placeholder, actual logic would calculate deltas
-      goldMaintenance: 0,
+      goldIncome: playerNext.goldIncome || 0,
+      goldMaintenance: playerNext.goldMaintenance || 0,
       goldNet: playerNext.gold - playerRealmPrior.gold,
-      foodIncome: 0,
-      foodMaintenance: 0,
+      foodIncome: playerNext.foodIncome || 0,
+      foodMaintenance: playerNext.foodMaintenance || 0,
       foodNet: playerNext.food - playerRealmPrior.food,
-      materialsIncome: playerNext.materials - playerRealmPrior.materials,
+      materialsIncome: playerNext.materialsIncome || 0,
       provincesGained: gained,
       provincesLost: lost,
       newWars: playerNext.wars.filter(w => !playerRealmPrior.wars.includes(w)).map(id => nextState.realms[id]?.name || 'Reino Misterioso'),

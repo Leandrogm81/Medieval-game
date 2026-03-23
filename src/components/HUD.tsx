@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { GameState, Province, Realm, ActionType, UnitType, ViewMode, Army, MarchOrder } from '../types';
-import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Globe2, Crosshair, Save, Home, Crown, Scroll, Navigation, Route } from 'lucide-react';
+import { Coins, Shield, Swords, Users, Mountain, TreePine, Map as MapIcon, ArrowRight, PlusCircle, Handshake, X, Wheat, Hammer, Pickaxe, Factory, Tractor, ShoppingCart, TrendingUp, AlertTriangle, Info, Zap, Activity, Gem, Eye, BarChart3, Crosshair, Save, Home, Crown, Scroll, Navigation, Route, Settings, Flag } from 'lucide-react';
 import { UNIT_STATS, ACTION_COSTS, BUILDING_STATS, BUILDING_PRODUCTION } from '../gameLogic';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -9,7 +9,7 @@ interface HUDProps {
   selectedProvinceId: string | null;
   onAction: (action: string, unitType?: UnitType, amount?: number) => void;
   onEndTurn: () => void;
-  onToggleMode: () => void;
+  onToggleMode: (mode: ViewMode) => void;
   viewMode: ViewMode;
   onSave: () => void;
   onMenu: () => void;
@@ -155,13 +155,7 @@ export const HUD: React.FC<HUDProps> = ({
                  <Crown className="text-amber-500 shrink-0" size={12} /> <span className="truncate">{playerRealm.name}</span>
                </h1>
                <div className="flex gap-1">
-                 <button 
-                   onClick={onToggleFullScreen}
-                   className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition-colors"
-                   title="Tela Cheia"
-                 >
-                   <Globe2 size={10} />
-                 </button>
+
                  <button onClick={onToggleChronicles} className="p-1 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition-colors">
                    <Scroll size={10} />
                  </button>
@@ -248,7 +242,7 @@ export const HUD: React.FC<HUDProps> = ({
       <div className="px-2 sm:px-3 py-1.5 bg-slate-900 border-b border-slate-800 shrink-0 flex flex-wrap gap-1 items-center justify-center">
         <span className="text-[9px] font-black text-slate-700 uppercase tracking-tighter mr-1 w-full text-center sm:w-auto sm:text-left mb-0.5 sm:mb-0">Visão</span>
         {[
-          { id: 'political', icon: <Globe2 size={12} />, color: 'blue', label: 'Pol' },
+          { id: 'political', icon: <Flag size={12} />, color: 'blue', label: 'Pol' },
           { id: 'economic', icon: <BarChart3 size={12} />, color: 'green', label: 'Eco' },
           { id: 'military', icon: <Crosshair size={12} />, color: 'red', label: 'Mil' },
           { id: 'diplomatic', icon: <Handshake size={12} />, color: 'purple', label: 'Dip' },
@@ -256,7 +250,7 @@ export const HUD: React.FC<HUDProps> = ({
         ].map(mode => (
           <button 
             key={mode.id}
-            onClick={onToggleMode}
+            onClick={() => onToggleMode(mode.id as ViewMode)}
             className={`flex items-center gap-1 px-1.5 sm:px-2 py-1 sm:py-1.5 rounded border transition-all flex-1 justify-center sm:flex-none ${viewMode === mode.id ? `bg-${mode.color}-600/20 border-${mode.color}-500 text-${mode.color}-400 shadow-sm` : 'bg-slate-800 border-transparent text-slate-500 hover:bg-slate-700'}`}
           >
             {mode.icon} <span className="text-[9px] sm:text-[10px] font-black uppercase">{mode.label}</span>
@@ -356,18 +350,20 @@ export const HUD: React.FC<HUDProps> = ({
                   <span className="text-[10px] text-slate-500">Estoque: {playerRealm.food || 0}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button 
-                    onClick={() => onAction('buy_food')}
-                    className="py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] font-bold transition-colors"
-                  >
-                    Comprar 50 (25O)
-                  </button>
-                  <button 
-                    onClick={() => onAction('sell_food')}
-                    className="py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] font-bold transition-colors"
-                  >
-                    Vender 50 (15O)
-                  </button>
+                    <button onClick={() => onAction('buy_food')} className="flex items-center justify-between px-2 py-2 bg-slate-800 hover:bg-slate-700 rounded transition-colors group">
+                      <div className="flex items-center gap-1.5">
+                        <PlusCircle size={10} className="text-emerald-500" />
+                        <span className="text-[10px] font-bold">Comprar 50</span>
+                      </div>
+                      <span className="text-[10px] text-yellow-500 font-black tracking-tighter bg-yellow-500/10 px-1 rounded">30O</span>
+                    </button>
+                    <button onClick={() => onAction('sell_food')} className="flex items-center justify-between px-2 py-2 bg-slate-800 hover:bg-slate-700 rounded transition-colors group">
+                      <div className="flex items-center gap-1.5">
+                        <Users size={10} className="text-orange-500" />
+                        <span className="text-[10px] font-bold">Vender 50</span>
+                      </div>
+                      <span className="text-[10px] text-yellow-500 font-black tracking-tighter bg-yellow-500/10 px-1 rounded">21O</span>
+                    </button>
                 </div>
               </div>
 
@@ -377,94 +373,79 @@ export const HUD: React.FC<HUDProps> = ({
                   <span className="text-[10px] text-slate-500">Estoque: {playerRealm.materials || 0}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-1.5">
-                  <button 
-                    onClick={() => onAction('buy_materials')}
-                    className="py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] font-bold transition-colors"
-                  >
-                    Comprar 25 (35O)
-                  </button>
-                  <button 
-                    onClick={() => onAction('sell_materials')}
-                    className="py-1.5 bg-slate-700 hover:bg-slate-600 rounded text-[10px] font-bold transition-colors"
-                  >
-                    Vender 25 (20O)
-                  </button>
+                    <button onClick={() => onAction('buy_materials')} className="flex items-center justify-between px-2 py-2 bg-slate-800 hover:bg-slate-700 rounded transition-colors group">
+                      <div className="flex items-center gap-1.5">
+                        <PlusCircle size={10} className="text-emerald-500" />
+                        <span className="text-[10px] font-bold">Comprar 50</span>
+                      </div>
+                      <span className="text-[10px] text-yellow-500 font-black tracking-tighter bg-yellow-500/10 px-1 rounded">50O</span>
+                    </button>
+                    <button onClick={() => onAction('sell_materials')} className="flex items-center justify-between px-2 py-2 bg-slate-800 hover:bg-slate-700 rounded transition-colors group">
+                      <div className="flex items-center gap-1.5">
+                        <Users size={10} className="text-orange-500" />
+                        <span className="text-[10px] font-bold">Vender 50</span>
+                      </div>
+                      <span className="text-[10px] text-yellow-500 font-black tracking-tighter bg-yellow-500/10 px-1 rounded">35O</span>
+                    </button>
                 </div>
               </div>
             </div>
           </div>
         ) : activeTab === 'diplomacy' ? (
-          <div className="space-y-4">
-            <h2 className="text-lg font-serif font-bold text-slate-100 border-b border-slate-700 pb-1.5 flex items-center gap-1.5">
+          <div className="space-y-4 h-full flex flex-col">
+            <h2 className="text-lg font-serif font-bold text-slate-100 border-b border-slate-700 pb-1.5 flex items-center gap-1.5 shrink-0">
               <Handshake size={16} className="text-purple-500" /> Diplomacia
             </h2>
             
-            <div className="space-y-2">
-              {(Object.values(gameState.realms) as Realm[]).filter(r => r && r.id !== playerRealm.id).map(realm => {
-                const relations = playerRealm.relations?.[realm.id] || 0;
-                const isAlly = playerRealm.alliances?.includes(realm.id);
-                const hasPact = playerRealm.pacts?.includes(realm.id);
-                const isVassal = realm.vassalOf === playerRealm.id;
-                const isOurSuzerain = playerRealm.vassalOf === realm.id;
-                
-                const personalityNames: Record<string, string> = {
-                  expansionist: 'Expansionista',
-                  defensive: 'Defensivo',
-                  diplomatic: 'Diplomático',
-                  opportunistic: 'Oportunista',
-                  commercial: 'Comercial'
-                };
-
-                const objectiveNames: Record<string, string> = {
-                  regional_dominance: 'Domínio Regional',
-                  destroy_rival: 'Destruir Rival',
-                  wealth: 'Acumular Riqueza',
-                  resource_control: 'Controle de Recursos',
-                  defensive_block: 'Bloco Defensivo'
-                };
-
-                return (
-                  <div key={realm.id} className="bg-slate-800 p-2 rounded-lg border border-slate-700">
-                    <div className="flex justify-between items-center mb-1.5">
-                      <span className="font-bold text-sm" style={{ color: realm.color }}>{realm.name}</span>
-                      <div className="flex flex-wrap gap-0.5 justify-end">
-                        {isAlly && <span className="text-[9px] bg-purple-900 text-purple-200 px-1 py-0.5 rounded uppercase font-bold">Aliado</span>}
-                        {hasPact && <span className="text-[9px] bg-blue-900 text-blue-200 px-1 py-0.5 rounded uppercase font-bold">Pacto</span>}
-                        {isVassal && <span className="text-[9px] bg-amber-900 text-amber-200 px-1 py-0.5 rounded uppercase font-bold">Vassalo</span>}
-                        {isOurSuzerain && <span className="text-[9px] bg-red-900 text-red-200 px-1 py-0.5 rounded uppercase font-bold">Suserano</span>}
-                        {realm.isCoalitionMember && <span className="text-[9px] bg-orange-900 text-orange-200 px-1 py-0.5 rounded uppercase font-bold">Coalizão</span>}
+            <div className="mb-3 p-2 bg-indigo-900/20 border border-indigo-500/30 rounded-lg shrink-0">
+              <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-400 mb-1 flex items-center gap-1.5">
+                Geopolítica Mundial
+              </h3>
+              <p className="text-[9px] text-slate-400 leading-tight">
+                Status e relações com outros reinos soberanos. Selecione uma província no mapa para interagir.
+              </p>
+            </div>
+            
+            <div className="space-y-1.5 overflow-y-auto pr-1 flex-1 custom-scrollbar">
+              {Object.values(gameState.realms)
+                .filter(r => r && r.id !== gameState.playerRealmId)
+                .map(realm => {
+                  const relations = playerRealm.relations[realm.id] || 0;
+                  const isAlly = playerRealm.alliances.includes(realm.id);
+                  const hasPact = playerRealm.pacts.includes(realm.id);
+                  const isWar = playerRealm.wars.includes(realm.id);
+                  const isVassal = playerRealm.vassals.includes(realm.id);
+                  
+                  return (
+                    <div key={realm.id} className="p-2 bg-slate-800/60 border border-slate-700/50 rounded-lg group hover:border-slate-500 transition-colors">
+                      <div className="flex justify-between items-start mb-1.5">
+                        <div>
+                          <h4 className="text-xs font-bold flex items-center gap-1.5" style={{ color: realm.color }}>
+                            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: realm.color }}></span>
+                            {realm.name}
+                          </h4>
+                          <p className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">
+                            {realm.personality.replace('_', ' ')} • {realm.objective.replace('_', ' ')}
+                          </p>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <span className={`text-[10px] font-black ${relations > 50 ? 'text-green-400' : relations > 0 ? 'text-emerald-500' : relations < -50 ? 'text-red-500' : relations < 0 ? 'text-orange-500' : 'text-slate-400'}`}>
+                            {relations > 0 ? '+' : ''}{relations}
+                          </span>
+                          <span className="text-[7px] text-slate-600 uppercase font-bold tracking-widest">Relação</span>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {isWar && <span className="px-1.5 py-0.5 bg-red-900/40 text-red-500 border border-red-500/30 rounded text-[7px] font-black uppercase">Guerra</span>}
+                        {isAlly && <span className="px-1.5 py-0.5 bg-indigo-900/40 text-indigo-400 border border-indigo-500/30 rounded text-[7px] font-black uppercase">Aliado</span>}
+                        {hasPact && <span className="px-1.5 py-0.5 bg-blue-900/40 text-blue-400 border border-blue-500/30 rounded text-[7px] font-black uppercase">Pacto</span>}
+                        {isVassal && <span className="px-1.5 py-0.5 bg-amber-900/40 text-amber-500 border border-amber-500/30 rounded text-[7px] font-black uppercase">Vassalo</span>}
+                        {!isWar && !isAlly && !hasPact && !isVassal && <span className="px-1.5 py-0.5 bg-slate-900/40 text-slate-500 border border-slate-700/30 rounded text-[7px] font-black uppercase">Independente</span>}
                       </div>
                     </div>
-
-                    <div className="grid grid-cols-2 gap-1 mb-2">
-                      <div className="text-[10px] text-slate-400">
-                        Perfil: <span className="text-slate-200">{personalityNames[realm.personality]}</span>
-                      </div>
-                      <div className="text-[10px] text-slate-400">
-                        Objetivo: <span className="text-slate-200">{objectiveNames[realm.objective]}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <div className="flex justify-between text-[10px] mb-0.5">
-                        <span className="text-slate-400">Relações</span>
-                        <span className={relations > 0 ? 'text-green-400' : relations < 0 ? 'text-red-400' : 'text-slate-400'}>
-                          {relations}
-                        </span>
-                      </div>
-                      <div className="w-full bg-slate-900 h-1 rounded-full overflow-hidden">
-                        <div 
-                          className={`h-full transition-all ${relations > 0 ? 'bg-green-500' : 'bg-red-500'}`}
-                          style={{ 
-                            width: `${Math.abs(relations)}%`,
-                            marginLeft: relations >= 0 ? '50%' : `${50 - Math.abs(relations)}%`,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+                  );
+                })}
             </div>
           </div>
         ) : selectedProv ? (
@@ -962,7 +943,7 @@ export const HUD: React.FC<HUDProps> = ({
           className="p-1.5 sm:p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center shrink-0"
           title="Menu Principal"
         >
-          <Home size={14} className="sm:w-4 sm:h-4" />
+          <Settings size={14} className="sm:w-4 sm:h-4 text-amber-500" />
         </button>
         <button 
           onClick={onSave}

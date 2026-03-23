@@ -56,13 +56,27 @@ export default function App() {
     return () => clearInterval(timer);
   }, []);
 
-  const toggleFullScreen = () => {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen().catch((err) => {
-        console.error(`Error attempting to enable full-screen mode: ${err.message}`);
-      });
-    } else {
-      document.exitFullscreen();
+  const toggleFullScreen = (e?: React.MouseEvent | React.TouchEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    try {
+      const doc = window.document as any;
+      const docEl = doc.documentElement;
+      
+      const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
+      const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
+      const isFullscreen = !!(doc.fullscreenElement || doc.mozFullScreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement);
+
+      if (!isFullscreen && requestFullScreen) {
+        requestFullScreen.call(docEl);
+      } else if (isFullscreen && cancelFullScreen) {
+        cancelFullScreen.call(doc);
+      }
+    } catch (err) {
+      console.error("Erro ao alternar tela cheia:", err);
+      ui.showToast("Erro ao alternar tela cheia. O navegador pode ter bloqueado a ação.", "error");
     }
   };
 
@@ -308,13 +322,17 @@ export default function App() {
           onTouchMove={ctrl.handleTouchMove}
           onTouchEnd={ctrl.handleTouchEnd}
         >
-            <div className="absolute top-4 left-4 z-30">
+            <div className="fixed top-4 left-4 z-[100] pointer-events-auto">
               <button 
-                onClick={() => ui.setShowMenu(true)}
-                className="p-1.5 sm:p-3 bg-stone-900/80 border border-stone-700 rounded-full hover:bg-stone-800 shadow-xl"
-                title="Menu Principal"
+                onClick={toggleFullScreen}
+                onTouchEnd={(e) => { e.preventDefault(); toggleFullScreen(e); }}
+                onPointerDown={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                className="w-14 h-14 md:w-20 md:h-20 bg-stone-900/95 border-2 border-amber-500 rounded-full hover:bg-stone-800 shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-90 transition-all flex items-center justify-center group"
+                title="Alternar Tela Cheia"
               >
-                <Home size={14} className="text-amber-500 sm:w-5 sm:h-5" />
+                <Maximize2 size={28} className="text-amber-500 md:w-10 md:h-10 group-hover:rotate-12 transition-transform" />
               </button>
             </div>
 
@@ -374,11 +392,7 @@ export default function App() {
           selectedProvinceId={ui.selectedProvinceId}
           onAction={ctrl.handleAction}
           onEndTurn={ctrl.handleEndTurn}
-          onToggleMode={() => {
-            const modes: ViewMode[] = ['political', 'military', 'economic', 'diplomatic', 'resources'];
-            const next = modes[(modes.indexOf(ui.viewMode) + 1) % modes.length];
-            ui.setViewMode(next);
-          }}
+          onToggleMode={(mode) => ui.setViewMode(mode)}
           viewMode={ui.viewMode}
           onSave={() => ui.setShowSaveModal(true)}
           onMenu={() => ui.setShowMenu(true)}

@@ -39,7 +39,7 @@ export const TurnResultModal: React.FC<TurnResultModalProps> = ({ isOpen, onClos
               <h3 className="text-sm font-bold uppercase tracking-wider text-white/50 flex items-center gap-2">
                 <Coins size={16} /> Economia do Reino
               </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-white/5 p-4 rounded-xl border border-white/5">
                   <div className="flex items-center gap-2 text-yellow-400 mb-2">
                     <Coins size={18} />
@@ -81,6 +81,29 @@ export const TurnResultModal: React.FC<TurnResultModalProps> = ({ isOpen, onClos
                       <span>Saldo:</span>
                       <span className={data.foodNet >= 0 ? 'text-green-400' : 'text-red-400'}>
                         {data.foodNet >= 0 ? '+' : ''}{Math.floor(data.foodNet)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white/5 p-4 rounded-xl border border-white/5">
+                  <div className="flex items-center gap-2 text-slate-400 mb-2">
+                    <Hammer size={18} />
+                    <span className="text-base font-bold">Materiais</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Produção:</span>
+                      <span className="text-green-400 font-bold">+{Math.floor(data.materialsIncome)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="opacity-60">Mestre:</span>
+                      <span className="text-slate-400">Eficiente</span>
+                    </div>
+                    <div className="pt-2 mt-2 border-t border-white/10 flex justify-between font-bold text-lg">
+                      <span>Total:</span>
+                      <span className="text-slate-100">
+                        +{Math.floor(data.materialsIncome)}
                       </span>
                     </div>
                   </div>

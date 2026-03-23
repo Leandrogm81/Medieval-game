@@ -495,6 +495,13 @@ export function processEndOfTurn(state: GameState): GameState {
     realm.food += Math.floor(foodIncome - foodMaintenance);
     realm.materials += Math.floor(materialIncome);
 
+    // Store for summary
+    realm.goldIncome = goldIncome + tradeIncome;
+    realm.goldMaintenance = goldMaintenance;
+    realm.foodIncome = foodIncome;
+    realm.foodMaintenance = foodMaintenance;
+    realm.materialsIncome = materialIncome;
+
     if (realm.gold < 0) {
       handleResourceDeficit(realm, ownedProvinces, -Math.floor(realm.gold * 10), 'gold', newState);
     }

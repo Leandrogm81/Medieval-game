@@ -74,6 +74,11 @@ export interface Realm {
   personality: PersonalityType;
   objective: StrategicObjective;
   vassalOf?: string; // Overlord ID
+  goldIncome?: number;
+  goldMaintenance?: number;
+  foodIncome?: number;
+  foodMaintenance?: number;
+  materialsIncome?: number;
   vassals: string[]; // Vassal IDs
   isCoalitionMember?: string; // Target ID
   capitalId?: string; // ID of the capital province
