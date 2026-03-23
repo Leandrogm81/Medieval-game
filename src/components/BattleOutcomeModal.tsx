@@ -28,9 +28,9 @@ function ArmyColumn({ label, initial, losses, remaining, color }: { label: strin
   const pctLost = total > 0 ? Math.round((totalLost / total) * 100) : 0;
 
   return (
-    <div className="bg-slate-800 p-3 rounded-xl border border-slate-700">
-      <h4 className={`text-sm font-bold uppercase tracking-wider mb-2 ${color}`}>{label}</h4>
-      <div className="space-y-1.5 text-sm">
+    <div className="bg-slate-800 p-2 xs:p-3 rounded-lg xs:rounded-xl border border-slate-700">
+      <h4 className={`text-xs xs:text-sm font-bold uppercase tracking-wider mb-1.5 xs:mb-2 ${color}`}>{label}</h4>
+      <div className="space-y-1 xs:space-y-1.5 text-xs xs:text-sm">
         <div className="flex justify-between">
           <span className="text-slate-400">Infantaria</span>
           <span className="font-medium">{initial.infantry} → <span className="font-bold text-slate-100">{remaining.infantry}</span> <span className="text-red-400">(-{losses.infantry})</span></span>
@@ -47,8 +47,8 @@ function ArmyColumn({ label, initial, losses, remaining, color }: { label: strin
           <span className="opacity-60">Batedores</span>
           <span className="font-medium">{initial.scouts} → <span className="font-bold text-blue-100">{remaining.scouts}</span> <span className="text-red-400">(-{losses.scouts})</span></span>
         </div>
-        <div className="pt-2 mt-1 border-t border-slate-700 flex justify-between font-bold">
-          <span className="text-slate-500 uppercase text-[10px]">Baixas</span>
+        <div className="pt-1.5 xs:pt-2 mt-1 border-t border-slate-700 flex justify-between font-bold">
+          <span className="text-slate-500 uppercase text-[8px] xs:text-[10px]">Baixas</span>
           <span className="text-red-400">{totalLost} ({pctLost}%)</span>
         </div>
       </div>
@@ -73,39 +73,38 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-2 xs:p-4">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.3 }}
-          className="bg-slate-900 border-2 rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
+          className="bg-slate-900 border-2 rounded-xl xs:rounded-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden shadow-2xl"
           style={{ borderColor: result.won ? '#22c55e' : '#ef4444' }}
         >
           {/* Header */}
-          <div className={`p-4 border-b flex items-center justify-center gap-3 ${
-            result.won 
-              ? 'bg-gradient-to-r from-green-900/40 to-slate-900 border-green-500/20' 
-              : 'bg-gradient-to-r from-red-900/40 to-slate-900 border-red-500/20'
-          }`}>
+          <div className={`p-2 xs:p-4 border-b flex items-center justify-center gap-2 xs:gap-3 ${result.won
+            ? 'bg-gradient-to-r from-green-900/40 to-slate-900 border-green-500/20'
+            : 'bg-gradient-to-r from-red-900/40 to-slate-900 border-red-500/20'
+            }`}>
             {result.won ? (
-              <Trophy size={24} className="text-green-400" />
+              <Trophy size={20} className="text-green-400" />
             ) : (
-              <Skull size={24} className="text-red-400" />
+              <Skull size={20} className="text-red-400" />
             )}
             <div className="text-center">
-              <h2 className={`text-lg font-serif font-bold ${result.won ? 'text-green-400' : 'text-red-400'}`}>
+              <h2 className={`text-base xs:text-lg font-serif font-bold ${result.won ? 'text-green-400' : 'text-red-400'}`}>
                 {result.won ? (conquered ? 'Vitória — Província Conquistada!' : 'Vitória!') : 'Derrota'}
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-[10px] xs:text-xs text-slate-400">
                 Batalha por <span className="font-bold text-white">{provinceName}</span> — {result.rounds} rodada{result.rounds > 1 ? 's' : ''}
               </p>
             </div>
           </div>
 
-          <div className="p-4 space-y-4 overflow-y-auto custom-scrollbar flex-1">
+          <div className="p-2 xs:p-4 space-y-3 xs:space-y-4 overflow-y-auto custom-scrollbar flex-1">
             {/* Armies */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 xs:gap-3">
               <ArmyColumn
                 label={`⚔️ ${attackerName}`}
                 initial={result.attackerInitial}
@@ -123,31 +122,30 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
             </div>
 
             {/* Modifiers */}
-            <div className="flex flex-wrap gap-2 justify-center text-xs text-slate-400">
-              <span className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+            <div className="flex flex-wrap gap-1.5 xs:gap-2 justify-center text-[10px] xs:text-xs text-slate-400">
+              <span className="flex items-center gap-1.5 bg-slate-800 px-2 xs:px-3 py-1 xs:py-1.5 rounded-lg border border-slate-700">
                 {terrain.icon} {terrain.label}
               </span>
               {result.defenseLevel > 0 && (
-                <span className="flex items-center gap-1.5 bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+                <span className="flex items-center gap-1.5 bg-slate-800 px-2 xs:px-3 py-1 xs:py-1.5 rounded-lg border border-slate-700">
                   <Shield size={12} className="text-blue-400" /> Forte Nv.{result.defenseLevel}
                 </span>
               )}
-              <span className="bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-700">
+              <span className="bg-slate-800 px-2 xs:px-3 py-1 xs:py-1.5 rounded-lg border border-slate-700">
                 Total: <span className="text-red-400 font-bold">{totalAtkLost + totalDefLost}</span> mortos
               </span>
             </div>
           </div>
 
-          <div className="p-3 border-t border-slate-700 bg-slate-800">
+          <div className="p-2 xs:p-3 border-t border-slate-700 bg-slate-800">
             <button
               onClick={onClose}
-              className={`w-full py-2.5 font-bold rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-2 ${
-                result.won 
-                  ? 'bg-green-600 hover:bg-green-500 text-white' 
-                  : 'bg-slate-600 hover:bg-slate-500 text-white'
-              }`}
+              className={`w-full py-2 xs:py-2.5 font-bold rounded-lg transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 xs:gap-2 ${result.won
+                ? 'bg-green-600 hover:bg-green-500 text-white'
+                : 'bg-slate-600 hover:bg-slate-500 text-white'
+                }`}
             >
-              Continuar <ChevronRight size={16} />
+              Continuar <ChevronRight size={14} />
             </button>
           </div>
         </motion.div>

@@ -11,15 +11,15 @@ import { CombatSetupModal } from './components/CombatSetupModal';
 import { BattleOutcomeModal } from './components/BattleOutcomeModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  PlusCircle, 
-  Settings, 
-  HelpCircle, 
-  Save, 
-  History, 
-  ChevronRight, 
-  ChevronLeft, 
-  Menu, 
+import {
+  PlusCircle,
+  Settings,
+  HelpCircle,
+  Save,
+  History,
+  ChevronRight,
+  ChevronLeft,
+  Menu,
   X,
   Volume2,
   VolumeX,
@@ -59,17 +59,24 @@ export default function App() {
       if (!root) return;
       const w = window.innerWidth;
       const h = window.innerHeight;
-      
-      // On small screens (landscape), we zoom out for a high-res PC experience
-      if (w < 1100 && w > h) {
+      const isLandscape = w > h;
+
+      // Unify scaling: if screen is smaller than 1280px (or any reasonable desktop width), we scale down
+      // But only in landscape mode, as portrait uses a blocker for better experience.
+      if (isLandscape && w < 1280) {
         const factor = w / 1280;
-        (root.style as any).zoom = factor;
+        root.style.transform = `scale(${factor})`;
+        root.style.transformOrigin = 'top left';
         root.style.width = '1280px';
         root.style.height = `${h / factor}px`;
+        root.style.overflow = 'hidden';
+        (root.style as any).zoom = '1'; // Reset zoom if previously set
       } else {
-        (root.style as any).zoom = '1';
+        root.style.transform = 'none';
         root.style.width = '100vw';
         root.style.height = '100dvh';
+        root.style.overflow = 'hidden';
+        (root.style as any).zoom = '1';
       }
     };
 
@@ -92,7 +99,7 @@ export default function App() {
     try {
       const doc = window.document as any;
       const docEl = doc.documentElement;
-      
+
       const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
       const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
       const isFullscreen = !!(doc.fullscreenElement || doc.mozFullScreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement);
@@ -115,18 +122,18 @@ export default function App() {
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
 
     return (
-      <div className="min-h-screen bg-black text-stone-200 flex flex-col items-center justify-center p-4 relative overflow-hidden select-none"
-           style={{ 
-             backgroundImage: 'url("/splash_bg.png")', 
-             backgroundSize: 'cover', 
-             backgroundPosition: 'center' 
-           }}>
-        
+      <div className="min-h-screen bg-black text-stone-200 flex flex-col items-center justify-center p-2 xs:p-4 relative overflow-hidden select-none"
+        style={{
+          backgroundImage: 'url("/splash_bg.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}>
+
         {/* Overlay for better readability */}
         <div className="absolute inset-0 bg-black/40 z-0"></div>
-        
+
         {/* Logo area */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
           className="z-10 flex justify-center mb-0"
@@ -134,72 +141,71 @@ export default function App() {
         >
           <div className="relative flex justify-center items-center">
             <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-75"></div>
-            <img 
-              src="/logo.png" 
-              alt="Reinos Medievais Logo" 
-              className="w-32 h-32 md:w-40 md:h-40 object-contain filter transition-all duration-700"
+            <img
+              src="/logo.png"
+              alt="Reinos Medievais Logo"
+              className="w-24 h-24 xs:w-32 xs:h-32 md:w-40 md:h-40 object-contain filter transition-all duration-700"
             />
           </div>
         </motion.div>
-        
+
         {/* Title area */}
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
           className="z-10 text-center mb-6"
         >
-          <h1 className="text-3xl md:text-5xl font-black tracking-[0.2em] mb-1 gold-gradient-text uppercase">
+          <h1 className="text-2xl xs:text-3xl md:text-5xl font-black tracking-[0.2em] mb-1 gold-gradient-text uppercase">
             Reinos Medievais
           </h1>
-          <p className="text-amber-200/60 tracking-[0.3em] md:tracking-[0.4em] text-[10px] md:text-xs uppercase font-serif">
+          <p className="text-amber-200/60 tracking-[0.3em] md:tracking-[0.4em] text-[8px] xs:text-[10px] md:text-xs uppercase font-serif">
             Forje seu império • Conquiste o destino
           </p>
         </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-4 w-full max-w-4xl z-10 px-4">
+        <div className="flex flex-col lg:flex-row gap-2 xs:gap-4 w-full max-w-4xl z-10 px-2 xs:px-4">
           {/* New Game Panel */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-            className="menu-panel flex-1 flex flex-col items-center p-6 rounded-sm group hover:scale-[1.02] transition-transform duration-500"
+            className="menu-panel flex-1 flex flex-col items-center p-3 xs:p-6 rounded-sm group hover:scale-[1.02] transition-transform duration-500"
           >
             <div className="mb-4 text-center">
-              <h2 className="text-xl md:text-2xl font-bold text-amber-100/90 tracking-widest uppercase mb-1">Novo Reinado</h2>
+              <h2 className="text-lg xs:text-xl md:text-2xl font-bold text-amber-100/90 tracking-widest uppercase mb-1">Novo Reinado</h2>
               <div className="w-12 h-1 bg-amber-600/50 mx-auto rounded-full"></div>
             </div>
-            
+
             <div className="space-y-4 w-full mb-6 flex-1">
-              <div className="bg-stone-900/40 p-3 rounded border border-white/5 backdrop-blur-sm">
-                <label className="block text-[10px] text-stone-400 mb-2 md:mb-3 font-bold uppercase tracking-widest flex items-center gap-2">
+              <div className="bg-stone-900/40 p-2 xs:p-3 rounded border border-white/5 backdrop-blur-sm">
+                <label className="block text-[8px] xs:text-[10px] text-stone-400 mb-2 md:mb-3 font-bold uppercase tracking-widest flex items-center gap-2">
                   <MapPin size={12} className="text-amber-600" /> Extensão do Mundo
                 </label>
-                <input 
-                  type="range" min="15" max="40" step="1" 
-                  value={ui.gameSettings.numProvinces} 
-                  onChange={e => ui.setGameSettings({...ui.gameSettings, numProvinces: parseInt(e.target.value)})}
+                <input
+                  type="range" min="15" max="40" step="1"
+                  value={ui.gameSettings.numProvinces}
+                  onChange={e => ui.setGameSettings({ ...ui.gameSettings, numProvinces: parseInt(e.target.value) })}
                   className="w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
                 />
-                <div className="flex justify-between text-[10px] text-stone-500 mt-2 font-serif italic">
-                  <span>Pequeno</span> 
-                  <span className="text-amber-500 font-bold not-italic">{ui.gameSettings.numProvinces} Províncias</span> 
+                <div className="flex justify-between text-[8px] xs:text-[10px] text-stone-500 mt-2 font-serif italic">
+                  <span>Pequeno</span>
+                  <span className="text-amber-500 font-bold not-italic">{ui.gameSettings.numProvinces} Províncias</span>
                   <span>Vasto</span>
                 </div>
               </div>
 
-              <div className="bg-stone-900/40 p-3 rounded border border-white/5 backdrop-blur-sm">
-                <label className="block text-[10px] text-stone-400 mb-2 font-bold uppercase tracking-widest flex items-center gap-2">
+              <div className="bg-stone-900/40 p-2 xs:p-3 rounded border border-white/5 backdrop-blur-sm">
+                <label className="block text-[8px] xs:text-[10px] text-stone-400 mb-2 font-bold uppercase tracking-widest flex items-center gap-2">
                   <Shield size={12} className="text-amber-600" /> Número de Reinos
                 </label>
                 <div className="grid grid-cols-3 gap-2">
                   {[4, 6, 8].map(n => (
-                    <button 
+                    <button
                       key={n}
-                      onClick={() => ui.setGameSettings({...ui.gameSettings, numRealms: n})}
-                      className={`text-sm py-1.5 md:py-2 rounded-sm border transition-all duration-300 font-serif ${
-                        ui.gameSettings.numRealms === n 
-                          ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]' 
-                          : 'bg-stone-800/40 border-stone-700/50 text-stone-500 hover:border-amber-900/50 hover:text-stone-300'
-                      }`}
+                      onClick={() => ui.setGameSettings({ ...ui.gameSettings, numRealms: n })}
+                      className={`text-xs xs:text-sm py-1 md:py-2 rounded-sm border transition-all duration-300 font-serif ${ui.gameSettings.numRealms === n
+                        ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                        : 'bg-stone-800/40 border-stone-700/50 text-stone-500 hover:border-amber-900/50 hover:text-stone-300'
+                        }`}
                     >
                       {n}
                     </button>
@@ -208,7 +214,7 @@ export default function App() {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={ctrl.startNewGame}
               className="w-full btn-premium-gold h-12 rounded-sm font-black text-stone-950 tracking-[0.15em] flex items-center justify-center gap-3 active:scale-95 group/btn"
             >
@@ -218,7 +224,7 @@ export default function App() {
           </motion.div>
 
           {/* Resume Game Panel */}
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
             className="menu-panel flex-1 flex flex-col p-6 rounded-sm hover:scale-[1.02] transition-transform duration-500"
           >
@@ -239,7 +245,7 @@ export default function App() {
                   const playerRealm = save.state.realms[save.state.playerRealmId];
 
                   return (
-                    <div 
+                    <div
                       key={save.id}
                       onClick={() => ctrl.handleLoad(save.id)}
                       className="group/save bg-stone-900/50 border border-white/5 p-3 rounded-sm flex items-center gap-3 hover:bg-amber-600/10 hover:border-amber-600/30 transition-all cursor-pointer relative"
@@ -247,10 +253,10 @@ export default function App() {
                       <div className="relative w-10 h-10 flex-shrink-0">
                         <svg className="progress-bar-circular w-10 h-10" viewBox="0 0 36 36">
                           <circle cx="18" cy="18" r="16" fill="none" className="stroke-stone-800" strokeWidth="2"></circle>
-                          <circle 
-                            cx="18" cy="18" r="16" fill="none" 
-                            className="stroke-amber-600 transition-all duration-1000" 
-                            strokeWidth="2" 
+                          <circle
+                            cx="18" cy="18" r="16" fill="none"
+                            className="stroke-amber-600 transition-all duration-1000"
+                            strokeWidth="2"
                             strokeDasharray={`${progress}, 100`}
                           ></circle>
                         </svg>
@@ -258,10 +264,10 @@ export default function App() {
                           {progress}%
                         </div>
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <p className="text-stone-400 text-[8px] uppercase tracking-tighter font-bold mb-0.5 opacity-60">
-                          {save.id === 'autosave' ? 'Auto-Save' : 'Manual Save'}
+                          {save.id === 'autosave' ? 'Salvamento Auto' : 'Salvamento Manual'}
                         </p>
                         <h4 className="text-sm font-bold text-amber-100 truncate flex items-center gap-2">
                           {playerRealm?.name || 'Império'}
@@ -272,8 +278,8 @@ export default function App() {
                           <span className="flex items-center gap-1"><Crown size={10} /> Ano {years}</span>
                         </div>
                       </div>
-                      
-                      <button 
+
+                      <button
                         onClick={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
@@ -298,7 +304,7 @@ export default function App() {
               )}
             </div>
 
-            <button 
+            <button
               onClick={() => ui.setShowSaveModal(true)}
               className="w-full py-2.5 bg-stone-800/40 hover:bg-stone-800/60 border border-stone-700/50 hover:border-amber-900/50 text-stone-400 hover:text-amber-200 rounded-sm text-[10px] md:text-xs font-bold tracking-widest transition-all uppercase"
             >
@@ -306,9 +312,9 @@ export default function App() {
             </button>
           </motion.div>
         </div>
-        
+
         {ui.showSaveModal && (
-          <SaveGameModal 
+          <SaveGameModal
             isOpen={ui.showSaveModal}
             onClose={() => ui.setShowSaveModal(false)}
             onSave={ctrl.handleSave}
@@ -317,11 +323,11 @@ export default function App() {
             saves={persistence.listSaves()}
           />
         )}
-        
+
         {ui.showInstructionsModal && (
-          <GameInstructionsModal 
+          <GameInstructionsModal
             isOpen={ui.showInstructionsModal}
-            onClose={() => ui.setShowInstructionsModal(false)} 
+            onClose={() => ui.setShowInstructionsModal(false)}
           />
         )}
       </div>
@@ -340,7 +346,7 @@ export default function App() {
         </div>
       </div>
       <ErrorBoundary>
-        <div 
+        <div
           className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
@@ -350,72 +356,72 @@ export default function App() {
           onTouchMove={ctrl.handleTouchMove}
           onTouchEnd={ctrl.handleTouchEnd}
         >
-            <div className="fixed top-4 left-4 z-[100] pointer-events-auto">
-              <button 
-                onClick={toggleFullScreen}
-                onTouchEnd={(e) => { e.preventDefault(); toggleFullScreen(e); }}
-                onPointerDown={(e) => e.stopPropagation()}
-                onMouseDown={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
-                className="w-14 h-14 md:w-20 md:h-20 bg-stone-900/95 border-2 border-amber-500 rounded-full hover:bg-stone-800 shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-90 transition-all flex items-center justify-center group"
-                title="Alternar Tela Cheia"
-              >
-                <Maximize2 size={28} className="text-amber-500 md:w-10 md:h-10 group-hover:rotate-12 transition-transform" />
-              </button>
-            </div>
-
-            <motion.div 
-              className="absolute inset-0 cursor-grab active:cursor-grabbing"
-              animate={{ 
-                x: ui.panOffset.x, 
-                y: ui.panOffset.y,
-                scale: ui.zoom 
-              }}
-              transition={{ type: 'spring', damping: 25, stiffness: 150, mass: 0.5 }}
+          <div className="fixed top-2 left-2 xs:top-4 xs:left-4 z-[100] pointer-events-auto">
+            <button
+              onClick={toggleFullScreen}
+              onTouchEnd={(e) => { e.preventDefault(); toggleFullScreen(e); }}
+              onPointerDown={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+              onTouchStart={(e) => e.stopPropagation()}
+              className="w-10 h-10 xs:w-14 xs:h-14 md:w-20 md:h-20 bg-stone-900/95 border-2 border-amber-500 rounded-full hover:bg-stone-800 shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-90 transition-all flex items-center justify-center group"
+              title="Alternar Tela Cheia"
             >
-              <Map 
-                gameState={gameState} 
-                selectedProvinceId={ui.selectedProvinceId}
-                onProvinceClick={(id) => ctrl.handleProvinceClick(id, ui.hasDragged)}
-                viewMode={ui.viewMode}
-                previewPath={ui.previewPath}
-                marchAnimations={ui.marchAnimations}
-                triggerMarchAnimation={ui.triggerMarchAnimation}
-                actionState={ui.actionState}
-                actionSourceId={ui.actionSourceId}
-              />
-            </motion.div>
+              <Maximize2 size={20} className="text-amber-500 md:w-10 md:h-10 group-hover:rotate-12 transition-transform" />
+            </button>
+          </div>
 
-            {/* Floating Selection Details for Mobile (Top-left within map area) */}
-            <AnimatePresence>
-                {ui.selectedProvinceId && !ui.isHudOpen && (
-                    <motion.div 
-                        initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
-                        className="absolute top-4 left-12 z-40 bg-stone-900/90 border border-amber-900/50 p-1.5 rounded backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
-                    >
-                        <p className="text-[6px] text-amber-500 font-bold uppercase tracking-widest leading-none mb-0.5">
-                          {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : (gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId]?.name || 'Reino Misterioso')}
-                        </p>
-                        <h4 className="text-[10px] font-black text-stone-100 flex items-center gap-1">
-                           {gameState.provinces[ui.selectedProvinceId].name}
-                           <span className="text-[6px] bg-stone-800 px-0.5 py-0.5 rounded text-stone-400 capitalize">{gameState.provinces[ui.selectedProvinceId].terrain}</span>
-                        </h4>
-                        <div className="flex gap-2 mt-0.5">
-                           <div className="flex items-center gap-0.5"><Shield className="w-2 h-2 text-stone-500" /> <span className="text-[8px] font-bold">{gameState.provinces[ui.selectedProvinceId].troops}</span></div>
-                           <div className="flex items-center gap-0.5"><Crown className="w-2 h-2 text-amber-600" /> <span className="text-[8px] font-bold text-amber-500/80">{gameState.provinces[ui.selectedProvinceId].loyalty}%</span></div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
+          <motion.div
+            className="absolute inset-0 cursor-grab active:cursor-grabbing"
+            animate={{
+              x: ui.panOffset.x,
+              y: ui.panOffset.y,
+              scale: ui.zoom
+            }}
+            transition={{ type: 'spring', damping: 25, stiffness: 150, mass: 0.5 }}
+          >
+            <Map
+              gameState={gameState}
+              selectedProvinceId={ui.selectedProvinceId}
+              onProvinceClick={(id) => ctrl.handleProvinceClick(id, ui.hasDragged)}
+              viewMode={ui.viewMode}
+              previewPath={ui.previewPath}
+              marchAnimations={ui.marchAnimations}
+              triggerMarchAnimation={ui.triggerMarchAnimation}
+              actionState={ui.actionState}
+              actionSourceId={ui.actionSourceId}
+            />
+          </motion.div>
 
-            <div className="absolute bottom-4 right-4 z-30 flex flex-col gap-1 pointer-events-auto">
-                <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-6 h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-sm sm:text-xl">+</button>
-                <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-6 h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-sm sm:text-xl">-</button>
-            </div>
+          {/* Floating Selection Details for Mobile (Top-left within map area) */}
+          <AnimatePresence>
+            {ui.selectedProvinceId && !ui.isHudOpen && (
+              <motion.div
+                initial={{ opacity: 0, x: -50 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -50 }}
+                className="absolute top-2 left-8 xs:top-4 xs:left-12 z-40 bg-stone-900/90 border border-amber-900/50 p-1 xs:p-1.5 rounded backdrop-blur-md shadow-2xl pointer-events-none lg:hidden"
+              >
+                <p className="text-[6px] text-amber-500 font-bold uppercase tracking-widest leading-none mb-0.5">
+                  {gameState.provinces[ui.selectedProvinceId].ownerId === 'neutral' ? 'Terra de Ninguém' : (gameState.realms[gameState.provinces[ui.selectedProvinceId].ownerId]?.name || 'Reino Misterioso')}
+                </p>
+                <h4 className="text-[10px] font-black text-stone-100 flex items-center gap-1">
+                  {gameState.provinces[ui.selectedProvinceId].name}
+                  <span className="text-[6px] bg-stone-800 px-0.5 py-0.5 rounded text-stone-400 capitalize">{gameState.provinces[ui.selectedProvinceId].terrain}</span>
+                </h4>
+                <div className="flex gap-2 mt-0.5">
+                  <div className="flex items-center gap-0.5"><Shield className="w-2 h-2 text-stone-500" /> <span className="text-[8px] font-bold">{gameState.provinces[ui.selectedProvinceId].troops}</span></div>
+                  <div className="flex items-center gap-0.5"><Crown className="w-2 h-2 text-amber-600" /> <span className="text-[8px] font-bold text-amber-500/80">{gameState.provinces[ui.selectedProvinceId].loyalty}%</span></div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="absolute bottom-2 right-2 xs:bottom-4 xs:right-4 z-30 flex flex-col gap-0.5 xs:gap-1 pointer-events-auto">
+            <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-5 h-5 xs:w-6 xs:h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xs xs:text-sm sm:text-xl">+</button>
+            <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-5 h-5 xs:w-6 xs:h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xs xs:text-sm sm:text-xl">-</button>
+          </div>
         </div>
 
         {/* HUD Area */}
-        <HUD 
+        <HUD
           gameState={gameState}
           selectedProvinceId={ui.selectedProvinceId}
           onAction={ctrl.handleAction}
@@ -433,26 +439,26 @@ export default function App() {
             if (!ui.selectedProvinceId) return;
             const prov = gameState.provinces[ui.selectedProvinceId];
             if (prov.ownerId !== gameState.playerRealmId) return;
-            
+
             if (type === 'move') {
-               ui.setActionSourceId(ui.selectedProvinceId);
-               ui.setActionState('moving');
-               ui.setSelectingMoveComposition(true);
-               ui.setMoveComposition({
-                  infantry: prov.army.infantry,
-                  archers: prov.army.archers,
-                  cavalry: prov.army.cavalry,
-                  scouts: 0
-               });
-               ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
+              ui.setActionSourceId(ui.selectedProvinceId);
+              ui.setActionState('moving');
+              ui.setSelectingMoveComposition(true);
+              ui.setMoveComposition({
+                infantry: prov.army.infantry,
+                archers: prov.army.archers,
+                cavalry: prov.army.cavalry,
+                scouts: 0
+              });
+              ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
             } else if (type === 'attack') {
-               ui.setActionSourceId(ui.selectedProvinceId);
-               ui.setActionState('attacking');
-               ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
+              ui.setActionSourceId(ui.selectedProvinceId);
+              ui.setActionState('attacking');
+              ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
             } else if (type === 'scout') {
-               ui.setActionSourceId(ui.selectedProvinceId);
-               ui.setActionState('dispatching_scouts');
-               ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
+              ui.setActionSourceId(ui.selectedProvinceId);
+              ui.setActionState('dispatching_scouts');
+              ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
             }
           }}
           marchOrders={gameState.marchOrders || []}
@@ -468,14 +474,14 @@ export default function App() {
 
         <AnimatePresence>
           {ui.showChronicles && (
-            <ChronicleModal 
+            <ChronicleModal
               isOpen={ui.showChronicles}
-              logs={gameState.logs} 
-              onClose={() => ui.setShowChronicles(false)} 
+              logs={gameState.logs}
+              onClose={() => ui.setShowChronicles(false)}
             />
           )}
           {ui.showSaveModal && (
-            <SaveGameModal 
+            <SaveGameModal
               isOpen={ui.showSaveModal}
               onClose={() => ui.setShowSaveModal(false)}
               onSave={ctrl.handleSave}
@@ -485,20 +491,20 @@ export default function App() {
             />
           )}
           {ui.showInstructionsModal && (
-            <GameInstructionsModal 
+            <GameInstructionsModal
               isOpen={ui.showInstructionsModal}
-              onClose={() => ui.setShowInstructionsModal(false)} 
+              onClose={() => ui.setShowInstructionsModal(false)}
             />
           )}
           {ui.showTurnSummary && ui.turnSummaryData && (
-            <TurnResultModal 
+            <TurnResultModal
               isOpen={ui.showTurnSummary}
-              data={ui.turnSummaryData} 
-              onClose={() => ui.setShowTurnSummary(false)} 
+              data={ui.turnSummaryData}
+              onClose={() => ui.setShowTurnSummary(false)}
             />
           )}
           {ui.showCombatPreview && ui.combatAttackerProvId && ui.combatDefenderProvId && ui.combatAttackingArmy && (
-            <CombatSetupModal 
+            <CombatSetupModal
               isOpen={ui.showCombatPreview}
               attackerProv={gameState.provinces[ui.combatAttackerProvId]}
               defenderProv={gameState.provinces[ui.combatDefenderProvId]}
@@ -508,7 +514,7 @@ export default function App() {
             />
           )}
           {ui.showBattleResult && ui.battleResultData && ui.battleResultMeta && (
-            <BattleOutcomeModal 
+            <BattleOutcomeModal
               isOpen={ui.showBattleResult}
               result={ui.battleResultData}
               attackerName={ui.battleResultMeta.attackerName}
@@ -519,7 +525,7 @@ export default function App() {
             />
           )}
           {gameState.gameOver && (
-            <GameEndModal 
+            <GameEndModal
               gameState={gameState}
               onRestart={() => { ui.setShowMenu(true); setGameState(null); }}
             />
@@ -533,11 +539,10 @@ export default function App() {
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, scale: 0.9 }}
-            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-lg shadow-2xl border flex items-center gap-2 backdrop-blur-md ${
-              ui.toast.type === 'success' ? 'bg-green-900/90 border-green-500 text-green-100' :
+            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-lg shadow-2xl border flex items-center gap-2 backdrop-blur-md ${ui.toast.type === 'success' ? 'bg-green-900/90 border-green-500 text-green-100' :
               ui.toast.type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' :
-              'bg-blue-900/90 border-blue-500 text-blue-100'
-            }`}
+                'bg-blue-900/90 border-blue-500 text-blue-100'
+              }`}
           >
             {ui.toast.type === 'success' && <div className="p-1 bg-green-500 rounded-full"><PlusCircle size={12} className="text-green-900" /></div>}
             <span className="text-xs font-bold medieval-text">{ui.toast.message}</span>

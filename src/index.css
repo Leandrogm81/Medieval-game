@@ -1,15 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Inter:wght@400;500;600;700&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap');
 @import "tailwindcss";
 
+/* Tailwind CSS v4 custom theme extensions */
+@theme {
+  --breakpoint-xs: 320px;
+  --breakpoint-sm: 640px;
+  --breakpoint-md: 768px;
+  --breakpoint-lg: 1024px;
+  --breakpoint-xl: 1280px;
+}
+
 :root {
   --font-serif: "Cinzel", serif;
   --font-body: "Libre Baskerville", serif;
   --font-sans: "Inter", sans-serif;
-  
+
   --parchment: #f4ead5;
   --parchment-dark: #e6d5b8;
   --ink: #1a0f0a;
-  
+
   --bg-dark: #1a1a1a;
   --text-slate-200: #e2e8f0;
   --slate-900: #0f172a;
@@ -20,7 +29,9 @@
   --touch-target-size: 44px;
 }
 
-html, body, #root {
+html,
+body,
+#root {
   margin: 0;
   padding: 0;
   overflow: hidden;
@@ -31,7 +42,7 @@ html, body, #root {
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  
+
   /* Prevent zoom on double tap for inputs */
   touch-action: manipulation;
   -webkit-text-size-adjust: 100%;
@@ -55,7 +66,7 @@ body {
   content: "";
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at center, transparent 0%, rgba(0,0,0,0.1) 100%);
+  background: radial-gradient(circle at center, transparent 0%, rgba(0, 0, 0, 0.1) 100%);
   pointer-events: none;
 }
 
@@ -88,9 +99,20 @@ body {
 }
 
 @keyframes pulse-slow {
-  0% { stroke-opacity: 0.5; stroke-width: 3; }
-  50% { stroke-opacity: 1; stroke-width: 4; }
-  100% { stroke-opacity: 0.5; stroke-width: 3; }
+  0% {
+    stroke-opacity: 0.5;
+    stroke-width: 3;
+  }
+
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 4;
+  }
+
+  100% {
+    stroke-opacity: 0.5;
+    stroke-width: 3;
+  }
 }
 
 .animate-pulse-slow {
@@ -109,15 +131,148 @@ body {
   .parchment-bg {
     background-size: cover;
   }
-  
+
   .medieval-title {
     font-size: 1.1em;
+  }
+}
+
+/* Extra small phones (320px-414px) */
+@media screen and (max-width: 414px) {
+  :root {
+    --touch-target-size: 40px;
+  }
+
+  .medieval-title {
+    font-size: 0.85em;
+    letter-spacing: 0.02em;
+  }
+
+  .medieval-text {
+    font-size: 0.8em;
+  }
+}
+
+/* Mobile-specific optimizations for common phone sizes */
+@media screen and (max-width: 414px) and (max-height: 896px) {
+
+  html,
+  body,
+  #root {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+  }
+
+  .medieval-title {
+    font-size: 0.9em;
+    letter-spacing: 0.03em;
+  }
+
+  .medieval-text {
+    font-size: 0.85em;
+  }
+}
+
+/* iPhone SE, iPhone 8, and similar small phones (375x667, 360x640) */
+@media screen and (max-width: 375px) and (max-height: 812px) {
+
+  html,
+  body,
+  #root {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+  }
+
+  .medieval-title {
+    font-size: 0.85em;
+    letter-spacing: 0.02em;
+  }
+
+  .medieval-text {
+    font-size: 0.8em;
+  }
+}
+
+/* Larger phones like iPhone 11, 12, 13 (390x844, 414x896) */
+@media screen and (min-width: 390px) and (max-width: 414px) and (min-height: 844px) {
+
+  html,
+  body,
+  #root {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+  }
+}
+
+/* Landscape mode optimizations for all phones */
+@media screen and (max-height: 500px) and (orientation: landscape) {
+
+  html,
+  body,
+  #root {
+    overflow: hidden;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+    height: 100dvh;
+  }
+
+  .medieval-title {
+    font-size: 0.8em;
+    letter-spacing: 0.02em;
+  }
+
+  .medieval-text {
+    font-size: 0.75em;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (pointer: coarse) {
+
+  button,
+  a,
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  input[type="range"] {
+    height: 44px;
+    padding: 10px 0;
+  }
+
+  input[type="range"]::-webkit-slider-thumb {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+/* Safe area insets for notched phones */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-top: max(1rem, env(safe-area-inset-top));
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+    padding-left: max(1rem, env(safe-area-inset-left));
+    padding-right: max(1rem, env(safe-area-inset-right));
   }
 }
 
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
 .no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -144,7 +299,8 @@ body {
   justify-content: center;
 }
 
-@media screen and (max-width: 896px) and (orientation: portrait) and (pointer: coarse) {
+/* Portrait blocker only for very small screens in portrait mode */
+@media screen and (max-width: 500px) and (orientation: portrait) and (pointer: coarse) {
   .portrait-blocker {
     display: flex;
   }
@@ -154,27 +310,52 @@ body {
   }
 }
 
+/* Allow landscape and larger portrait screens */
+@media screen and (min-width: 501px) and (orientation: portrait) {
+  .portrait-blocker {
+    display: none;
+  }
+}
+
+@media screen and (orientation: landscape) {
+  .portrait-blocker {
+    display: none;
+  }
+}
+
 /* Advanced HUD Docking Logic */
 @media screen and (min-width: 1024px) and (min-height: 500px) {
   .hud-docked {
-     position: static !important;
-     height: 100% !important;
-     width: clamp(320px, 28vw, 420px) !important;
-     flex-shrink: 0 !important;
-     transform: translateX(0) !important;
-     opacity: 1 !important;
+    position: static !important;
+    height: 100% !important;
+    width: clamp(320px, 28vw, 420px) !important;
+    flex-shrink: 0 !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
   }
+
   .hud-toggle-btn {
-     display: none !important;
+    display: none !important;
   }
 }
 
 
 /* Premium Menu Animations and Effects */
 @keyframes glow-pulse {
-  0% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.2); }
-  50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.5); border-color: rgba(251, 191, 36, 0.6); }
-  100% { box-shadow: 0 0 5px rgba(251, 191, 36, 0.2); border-color: rgba(251, 191, 36, 0.2); }
+  0% {
+    box-shadow: 0 0 5px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.2);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(251, 191, 36, 0.5);
+    border-color: rgba(251, 191, 36, 0.6);
+  }
+
+  100% {
+    box-shadow: 0 0 5px rgba(251, 191, 36, 0.2);
+    border-color: rgba(251, 191, 36, 0.2);
+  }
 }
 
 .animate-glow {
