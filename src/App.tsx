@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, ViewMode, ActionType, UnitType, Province } from './types.ts';
+import { GameState, ViewMode, ActionType, UnitType } from './types';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
@@ -34,7 +34,7 @@ import {
 
 import { useUI } from './hooks/useUI';
 import { useGameController } from './hooks/useGameController';
-import { persistence } from './persistence.ts';
+import { persistence } from './persistence';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -234,7 +234,7 @@ export default function App() {
                   const years = Math.floor(turn / 12) + 1;
                   const months = (turn % 12) + 1;
                   const totalProvinces = Object.keys(save.state.provinces).length;
-                  const ownedProvinces = (Object.values(save.state.provinces) as Province[]).filter(p => p.ownerId === save.state.playerRealmId).length;
+                  const ownedProvinces = Object.values(save.state.provinces).filter(p => p.ownerId === save.state.playerRealmId).length;
                   const progress = Math.round((ownedProvinces / (totalProvinces || 1)) * 100);
                   const playerRealm = save.state.realms[save.state.playerRealmId];
 
