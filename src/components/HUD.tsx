@@ -30,6 +30,27 @@ interface HUDProps {
   onToggleFullScreen: () => void;
 }
 
+const translatePersonality = (p: string) => {
+  switch (p) {
+    case 'expansionist': return 'Expansionista';
+    case 'defensive': return 'Defensivo';
+    case 'diplomatic': return 'Diplomático';
+    case 'opportunistic': return 'Oportunista';
+    case 'commercial': return 'Comercial';
+    default: return p.replace('_', ' ');
+  }
+};
+
+const translateObjective = (o: string) => {
+  switch (o) {
+    case 'regional_dominance': return 'Domínio Regional';
+    case 'destroy_rival': return 'Destruir Rival';
+    case 'wealth': return 'Riqueza';
+    case 'resource_control': return 'Controle de Recursos';
+    case 'defensive_block': return 'Bloco Defensivo';
+    default: return o.replace('_', ' ');
+  }
+};
 
 export const HUD: React.FC<HUDProps> = ({
   gameState,
@@ -80,9 +101,15 @@ export const HUD: React.FC<HUDProps> = ({
     return sum + ((p.foodProduction || 0) + ((p.buildings?.farms || 0) * BUILDING_PRODUCTION.farms)) * efficiency;
   }, 0);
 
+  const baseMaterialsIncome = playerProvinces.reduce((sum, p) => {
+    const efficiency = (p.population || 0) / (p.maxPopulation || 1);
+    return sum + ((p.materialProduction || 0) + ((p.buildings?.workshops || 0) * BUILDING_PRODUCTION.workshops)) * efficiency;
+  }, 0);
+
   const oePenalty = (playerRealm.overextension || 0) > 20 ? ((playerRealm.overextension || 0) - 20) / 100 : 0;
   const goldIncome = Math.floor(baseGoldIncome * (1 - oePenalty));
   const foodIncome = Math.floor(baseFoodIncome * (1 - oePenalty));
+  const materialsIncome = Math.floor(baseMaterialsIncome * (1 - oePenalty));
 
   const goldMaintenance = playerProvinces.reduce((sum, p) => 
     sum + (p.army?.infantry || 0) * UNIT_STATS.infantry.maintenance.gold + 
@@ -96,6 +123,7 @@ export const HUD: React.FC<HUDProps> = ({
   
   const netGold = Math.floor(goldIncome - goldMaintenance);
   const netFood = Math.floor(foodIncome - foodMaintenance);
+  const netMaterials = Math.floor(materialsIncome);
 
   const handleRecruitConfirm = () => {
     onAction('recruit', selectedUnitType, recruitAmount);
@@ -181,7 +209,9 @@ export const HUD: React.FC<HUDProps> = ({
           <div className="bg-slate-900/40 p-1 rounded border border-slate-700/30 flex flex-col justify-between h-8 shadow-inner">
             <div className="flex justify-between items-center text-[7px] md:text-[8px] text-slate-500 uppercase font-black tracking-tighter">
               <span className="flex items-center gap-0.5"><Hammer size={8} className="text-slate-500" /> Mat.</span>
-              <span className="text-[7px] text-slate-400 font-bold">{Math.floor(playerRealm.materials)}</span>
+              <span className={netMaterials >= 0 ? "text-[7px] text-slate-400 font-bold" : "text-[7px] text-red-500 font-bold"}>
+                {netMaterials >= 0 ? '+' : ''}{netMaterials}
+              </span>
             </div>
             <div className="text-xs md:text-sm font-black text-slate-300 font-serif leading-none tracking-tight">{Math.floor(playerRealm.materials)}</div>
           </div>
@@ -425,7 +455,7 @@ export const HUD: React.FC<HUDProps> = ({
                             {realm.name}
                           </h4>
                           <p className="text-[8px] text-slate-500 uppercase font-black tracking-tighter">
-                            {realm.personality.replace('_', ' ')} • {realm.objective.replace('_', ' ')}
+                            {translatePersonality(realm.personality)} • {translateObjective(realm.objective)}
                           </p>
                         </div>
                         <div className="flex flex-col items-end">
@@ -943,7 +973,7 @@ export const HUD: React.FC<HUDProps> = ({
           className="p-1.5 sm:p-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg shadow-lg transition-all active:scale-95 flex items-center justify-center shrink-0"
           title="Menu Principal"
         >
-          <Settings size={14} className="sm:w-4 sm:h-4 text-amber-500" />
+          <Home size={14} className="sm:w-4 sm:h-4 text-amber-500" />
         </button>
         <button 
           onClick={onSave}
