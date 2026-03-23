@@ -54,34 +54,33 @@ export default function App() {
       });
     }, 100);
 
-    const handleResize = () => {
+    const handleZoom = () => {
       const root = document.getElementById('root');
       if (!root) return;
       const w = window.innerWidth;
       const h = window.innerHeight;
       
-      // Scale out the game on mobile landscape to mimic a 1280px screen without native viewport bugs
-      if (w < 1280 && w > h) {
-        const scale = w / 1280;
-        root.style.transform = `scale(${scale})`;
-        root.style.transformOrigin = 'top left';
+      // On small screens (landscape), we zoom out for a high-res PC experience
+      if (w < 1100 && w > h) {
+        const factor = w / 1280;
+        (root.style as any).zoom = factor;
         root.style.width = '1280px';
-        root.style.height = `${h / scale}px`;
+        root.style.height = `${h / factor}px`;
       } else {
-        root.style.transform = 'none';
-        root.style.width = '100%';
-        root.style.height = '100%';
+        (root.style as any).zoom = '1';
+        root.style.width = '100vw';
+        root.style.height = '100dvh';
       }
     };
-    
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    handleResize();
+
+    window.addEventListener('resize', handleZoom);
+    window.addEventListener('orientationchange', handleZoom);
+    handleZoom();
 
     return () => {
       clearInterval(timer);
-      window.removeEventListener('resize', handleResize);
-      window.removeEventListener('orientationchange', handleResize);
+      window.removeEventListener('resize', handleZoom);
+      window.removeEventListener('orientationchange', handleZoom);
     };
   }, []);
 
