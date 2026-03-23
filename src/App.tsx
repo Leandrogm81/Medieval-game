@@ -59,25 +59,19 @@ export default function App() {
       if (!root) return;
       const w = window.innerWidth;
       const h = window.innerHeight;
-      const isLandscape = w > h;
-
-      // Unify scaling: if screen is smaller than 1280px (or any reasonable desktop width), we scale down
-      // But only in landscape mode, as portrait uses a blocker for better experience.
-      if (isLandscape && w < 1280) {
-        const factor = w / 1280;
-        root.style.transform = `scale(${factor})`;
-        root.style.transformOrigin = 'top left';
-        root.style.width = '1280px';
-        root.style.height = `${h / factor}px`;
-        root.style.overflow = 'hidden';
-        (root.style as any).zoom = '1'; // Reset zoom if previously set
-      } else {
-        root.style.transform = 'none';
-        root.style.width = '100vw';
-        root.style.height = '100dvh';
-        root.style.overflow = 'hidden';
-        (root.style as any).zoom = '1';
-      }
+      
+      // Force a desktop-like resolution (e.g., 1440px width) and scale down to fit
+      const targetWidth = 1440;
+      const factor = w / targetWidth;
+      
+      root.style.transform = `scale(${factor})`;
+      root.style.transformOrigin = 'top left';
+      root.style.width = `${targetWidth}px`;
+      root.style.height = `${h / factor}px`;
+      root.style.overflow = 'hidden';
+      root.style.position = 'fixed';
+      root.style.top = '0';
+      root.style.left = '0';
     };
 
     window.addEventListener('resize', handleZoom);
@@ -337,17 +331,10 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="w-full h-full bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
-      <div className="portrait-blocker">
-        <div className="blocker-content px-10">
-          <RotateCw size={48} className="text-amber-500 animate-spin-slow mb-4" />
-          <h2 className="medieval-title text-xl mb-2 text-amber-200">Gire seu Dispositivo</h2>
-          <p className="medieval-text text-sm text-stone-400">Para uma melhor experiência de conquista, jogue em modo paisagem.</p>
-        </div>
-      </div>
+    <div className="w-full h-full bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none relative">
       <ErrorBoundary>
         <div
-          className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none"
+          className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none h-full"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}
@@ -363,10 +350,10 @@ export default function App() {
               onPointerDown={(e) => e.stopPropagation()}
               onMouseDown={(e) => e.stopPropagation()}
               onTouchStart={(e) => e.stopPropagation()}
-              className="w-10 h-10 xs:w-14 xs:h-14 md:w-20 md:h-20 bg-stone-900/95 border-2 border-amber-500 rounded-full hover:bg-stone-800 shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-90 transition-all flex items-center justify-center group"
+              className="w-10 h-10 xs:w-12 xs:h-12 md:w-16 md:h-16 bg-stone-900/95 border-2 border-amber-500 rounded-full hover:bg-stone-800 shadow-[0_0_30px_rgba(245,158,11,0.4)] hover:scale-110 active:scale-90 transition-all flex items-center justify-center group"
               title="Alternar Tela Cheia"
             >
-              <Maximize2 size={20} className="text-amber-500 md:w-10 md:h-10 group-hover:rotate-12 transition-transform" />
+              <Maximize2 size={18} className="text-amber-500 md:w-8 md:h-8 group-hover:rotate-12 transition-transform" />
             </button>
           </div>
 
