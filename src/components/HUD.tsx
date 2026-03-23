@@ -643,22 +643,47 @@ export const HUD: React.FC<HUDProps> = ({
                           </div>
 
                           <div className="space-y-1.5">
+                            <div className="flex justify-between items-center mb-1">
+                               <span className="text-[10px] text-blue-400 font-bold">Limite por População: {Math.floor(selectedProv.population / (UNIT_STATS[selectedUnitType]?.cost?.pop || 1))}</span>
+                            </div>
                             <div className="flex justify-between items-end">
                               <div className="flex flex-col gap-0.5">
                                 <span className="text-[8px] text-slate-400">Quantidade</span>
-                                <input 
-                                  type="number"
-                                  min="1"
-                                  value={recruitAmount}
-                                  onChange={(e) => setRecruitAmount(parseInt(e.target.value) || 0)}
-                                  className="w-16 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500"
-                                />
+                                <div className="flex gap-1 items-center">
+                                  <input 
+                                    type="number"
+                                    min="1"
+                                    value={recruitAmount}
+                                    onChange={(e) => setRecruitAmount(parseInt(e.target.value) || 0)}
+                                    className="w-12 bg-slate-700 border border-slate-600 rounded px-1.5 py-0.5 text-[10px] font-bold text-white focus:outline-none focus:border-blue-500"
+                                  />
+                                  <div className="flex gap-0.5">
+                                    {[0.25, 0.5, 1].map(ratio => {
+                                      const stats = UNIT_STATS[selectedUnitType];
+                                      const maxGold = stats.cost.gold > 0 ? Math.floor(playerRealm.gold / stats.cost.gold) : 999;
+                                      const maxFood = stats.cost.food > 0 ? Math.floor(playerRealm.food / stats.cost.food) : 999;
+                                      const maxMat = stats.cost.materials > 0 ? Math.floor(playerRealm.materials / stats.cost.materials) : 999;
+                                      const maxPop = Math.floor(selectedProv.population / stats.cost.pop);
+                                      const absoluteMax = Math.min(maxGold, maxFood, maxMat, maxPop);
+                                      const amount = Math.max(1, Math.floor(absoluteMax * ratio));
+                                      return (
+                                        <button
+                                          key={ratio}
+                                          onClick={() => setRecruitAmount(amount)}
+                                          className="px-1 py-0.5 bg-slate-600 hover:bg-slate-500 rounded text-[7px] text-white"
+                                        >
+                                          {ratio === 1 ? 'M' : ratio === 0.5 ? '½' : '¼'}
+                                        </button>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
                               </div>
                               <div className="text-right text-[8px] space-y-0.5">
-                                <div className="text-yellow-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.gold || 0) * recruitAmount} Ouro</div>
-                                <div className="text-green-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.food || 0) * recruitAmount} Comida</div>
-                                <div className="text-slate-300 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.materials || 0) * recruitAmount} Mat.</div>
-                                <div className="text-blue-400 font-bold">{(UNIT_STATS[selectedUnitType]?.cost?.pop || 0) * recruitAmount} Pop</div>
+                                <div className={playerRealm.gold < (UNIT_STATS[selectedUnitType]?.cost?.gold || 0) * recruitAmount ? "text-red-400 font-bold" : "text-yellow-400 font-bold"}>{(UNIT_STATS[selectedUnitType]?.cost?.gold || 0) * recruitAmount} Ouro</div>
+                                <div className={playerRealm.food < (UNIT_STATS[selectedUnitType]?.cost?.food || 0) * recruitAmount ? "text-red-400 font-bold" : "text-green-400 font-bold"}>{(UNIT_STATS[selectedUnitType]?.cost?.food || 0) * recruitAmount} Comida</div>
+                                <div className={playerRealm.materials < (UNIT_STATS[selectedUnitType]?.cost?.materials || 0) * recruitAmount ? "text-red-400 font-bold" : "text-slate-300 font-bold"}>{(UNIT_STATS[selectedUnitType]?.cost?.materials || 0) * recruitAmount} Mat.</div>
+                                <div className={selectedProv.population < (UNIT_STATS[selectedUnitType]?.cost?.pop || 0) * recruitAmount ? "text-red-500 font-bold" : "text-blue-400 font-bold"}>{(UNIT_STATS[selectedUnitType]?.cost?.pop || 0) * recruitAmount} Pop</div>
                               </div>
                             </div>
                             
@@ -740,16 +765,31 @@ export const HUD: React.FC<HUDProps> = ({
                               if (max === 0) return null;
                               return (
                                 <div key={type} className="flex flex-col gap-0.5">
-                                  <span className="text-slate-400 text-center">{label} (/{max})</span>
-                                  <input
-                                    type="number" min={0} max={max}
-                                    value={val}
-                                    onChange={e => {
-                                      const v = Math.min(max, Math.max(0, parseInt(e.target.value) || 0));
-                                      onMoveCompositionChange({ ...moveComposition, [type]: v });
-                                    }}
-                                    className="w-full bg-slate-700 border border-slate-600 rounded px-0.5 py-0.5 text-[8px] text-center text-white focus:outline-none focus:border-blue-500"
-                                  />
+                                  <div className="flex justify-between items-center px-0.5">
+                                    <span className="text-slate-400">{label}</span>
+                                    <span className="text-slate-500 font-bold">/{max}</span>
+                                  </div>
+                                  <div className="flex gap-0.5">
+                                    <input
+                                      type="number" min={0} max={max}
+                                      value={val}
+                                      onChange={e => {
+                                        const v = Math.min(max, Math.max(0, parseInt(e.target.value) || 0));
+                                        onMoveCompositionChange({ ...moveComposition, [type]: v });
+                                      }}
+                                      className="flex-1 bg-slate-700 border border-slate-600 rounded px-0.5 py-0.5 text-[8px] text-center text-white focus:outline-none focus:border-blue-500"
+                                    />
+                                    <div className="flex flex-col gap-0.5">
+                                      <button 
+                                        onClick={() => onMoveCompositionChange({...moveComposition, [type]: Math.floor(max * 0.5)})}
+                                        className="px-1 py-0 bg-slate-600 hover:bg-slate-500 rounded text-[7px]"
+                                      >½</button>
+                                      <button 
+                                        onClick={() => onMoveCompositionChange({...moveComposition, [type]: max})}
+                                        className="px-1 py-0 bg-slate-600 hover:bg-slate-500 rounded text-[7px]"
+                                      >M</button>
+                                    </div>
+                                  </div>
                                 </div>
                               );
                             })}

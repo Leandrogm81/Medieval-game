@@ -150,6 +150,7 @@ export interface GameState {
   settings: GameSettings;
   marchOrders: MarchOrder[];
   activeWars: War[];
+  lastTurnMovements?: { fromId: string; toId: string; realmId: string }[];
   gameOver?: {
     winnerId: string;
     reason: string;

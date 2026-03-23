@@ -6,14 +6,15 @@ export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
   const playerProvinces = Object.values(state.provinces).filter(p => p.ownerId === state.playerRealmId);
   
-  const hasScouts = playerProvinces.some(p => (p.army?.scouts || 0) > 0);
-  const hasScoutOrders = (state.marchOrders || []).some(
-    o => o.realmId === state.playerRealmId && o.isScoutMission
-  );
+  // Scouts no longer reveal everything
+  // const hasScouts = playerProvinces.some(p => (p.army?.scouts || 0) > 0);
+  // const hasScoutOrders = (state.marchOrders || []).some(
+  //   o => o.realmId === state.playerRealmId && o.isScoutMission
+  // );
   
-  if (hasScouts || hasScoutOrders) {
-    return Object.keys(state.provinces);
-  }
+  // if (hasScouts || hasScoutOrders) {
+  //   return Object.keys(state.provinces);
+  // }
   
   playerProvinces.forEach(p => {
     visible.add(p.id);
@@ -22,8 +23,10 @@ export function calculateVisibility(state: GameState): string[] {
   
   (state.marchOrders || []).filter(o => o.realmId === state.playerRealmId).forEach(o => {
     visible.add(o.currentProvId);
-    const prov = state.provinces[o.currentProvId];
-    if (prov) (prov.neighbors || []).forEach(nId => visible.add(nId));
+    if (!o.isScoutMission) {
+      const prov = state.provinces[o.currentProvId];
+      if (prov) (prov.neighbors || []).forEach(nId => visible.add(nId));
+    }
   });
   
   return Array.from(visible);
@@ -142,6 +145,7 @@ export function findPath(
 
 function processMarchOrders(state: GameState) {
   if (!state.marchOrders) { state.marchOrders = []; return; }
+  state.lastTurnMovements = [];
   const toRemove: string[] = [];
 
   state.marchOrders.forEach(order => {
@@ -149,14 +153,20 @@ function processMarchOrders(state: GameState) {
       const prov = state.provinces[order.currentProvId];
       if (prov) {
         if (!order.isScoutMission) {
-          if (prov.ownerId === order.realmId) {
+          const isNeutral = prov.ownerId === 'neutral';
+          if (prov.ownerId === order.realmId || isNeutral) {
+            if (isNeutral) {
+              prov.ownerId = order.realmId;
+              prov.loyalty = 50;
+              prov.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+            }
             prov.army.infantry += order.troops.infantry;
             prov.army.archers += order.troops.archers;
             prov.army.cavalry += order.troops.cavalry;
             prov.army.scouts += order.troops.scouts;
             prov.troops = prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts;
             if (order.realmId === state.playerRealmId) {
-              state.logs.push(`Tropas chegaram em ${prov.name}.`);
+              state.logs.push(isNeutral ? `EXPANSÃO: Suas tropas estabeleceram o domínio em ${prov.name}.` : `Tropas chegaram em ${prov.name}.`);
             }
           }
         } else {
@@ -201,6 +211,9 @@ function processMarchOrders(state: GameState) {
       return;
     }
 
+    if (state.lastTurnMovements) {
+      state.lastTurnMovements.push({ fromId: order.currentProvId, toId: nextProvId, realmId: order.realmId });
+    }
     order.currentProvId = nextProvId;
     order.remainingPath = order.remainingPath.slice(1);
   });

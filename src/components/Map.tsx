@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GameState, Province, Realm, ActionType, VisualEffect, ViewMode } from '../types';
+import React, { useState, useEffect } from 'react';
+import { GameState, Province, Realm, ActionType, VisualEffect, ViewMode, Army } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Swords, Flag, TrendingUp, Wheat, Pickaxe, Hammer, Users, Activity, Mountain, TreePine, Shield, Coins, Gem, Handshake, Crown } from 'lucide-react';
 
@@ -13,6 +13,8 @@ interface MapProps {
   width?: number;
   height?: number;
   previewPath?: string[];
+  marchAnimations?: { id: string; from: [number, number]; to: [number, number]; troops: Army; realmId?: string }[];
+  triggerMarchAnimation?: (from: [number, number], to: [number, number], troops: Army, realmId?: string) => void;
 }
 
 export const Map: React.FC<MapProps> = ({
@@ -24,10 +26,27 @@ export const Map: React.FC<MapProps> = ({
   onProvinceClick,
   width = 1000,
   height = 750,
-  previewPath = []
+  previewPath = [],
+  marchAnimations = [],
+  triggerMarchAnimation
 }) => {
   const [hoveredProvinceId, setHoveredProvinceId] = useState<string | null>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (gameState.lastTurnMovements && gameState.lastTurnMovements.length > 0 && triggerMarchAnimation) {
+      gameState.lastTurnMovements.forEach((move, i) => {
+        const from = gameState.provinces[move.fromId];
+        const to = gameState.provinces[move.toId];
+        if (from && to) {
+          // Delay each animation slightly for better visual feedback
+          setTimeout(() => {
+            triggerMarchAnimation(from.center, to.center, { infantry: 1, archers: 0, cavalry: 0, scouts: 0 }, move.realmId);
+          }, i * 200);
+        }
+      });
+    }
+  }, [gameState.turn]);
 
   const handleMouseMove = (e: React.MouseEvent) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -355,6 +374,40 @@ export const Map: React.FC<MapProps> = ({
             })()}
           </g>
         )}
+
+        {/* March Animations (Troops physically moving) */}
+        <AnimatePresence>
+          {marchAnimations.map(anim => {
+            const Icon = anim.troops.cavalry > anim.troops.infantry ? Activity : Shield;
+            const color = anim.realmId ? gameState.realms[anim.realmId]?.color : '#3b82f6';
+            
+            return (
+              <motion.g
+                key={anim.id}
+                initial={{ x: anim.from[0], y: anim.from[1], opacity: 0, scale: 0.5 }}
+                animate={{ 
+                  x: anim.to[0], 
+                  y: anim.to[1], 
+                  opacity: 1, 
+                  scale: 1,
+                }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                transition={{ duration: 1.5, ease: "easeInOut" }}
+                style={{ zIndex: 100 }}
+              >
+                <circle r="12" fill={color} stroke="white" strokeWidth="2" fillOpacity="0.9" />
+                <foreignObject x="-8" y="-8" width="16" height="16">
+                   <div className="flex items-center justify-center w-full h-full text-white">
+                      <Icon size={12} />
+                   </div>
+                </foreignObject>
+                <text y="22" textAnchor="middle" className="text-[8px] font-bold fill-white stroke-black stroke-[2px]" style={{ paintOrder: 'stroke' }}>
+                  {anim.troops.infantry + anim.troops.archers + anim.troops.cavalry + anim.troops.scouts}
+                </text>
+              </motion.g>
+            );
+          })}
+        </AnimatePresence>
       </svg>
 
       {/* Tooltip */}

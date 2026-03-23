@@ -87,6 +87,10 @@ export function useGameController(
 
   const handleDeleteSave = (id: string) => {
     persistence.deleteSave(id);
+    if (id === 'autosave') {
+      ui.setAutosave(null);
+    }
+    ui.setUpdateTrigger((prev: number) => prev + 1);
   };
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -190,26 +194,50 @@ export function useGameController(
         }
 
         if (path.length === 1) {
+          if (target.ownerId !== 'neutral' && target.ownerId !== gameState.playerRealmId) {
+            addLog(`Ação inválida: Use "Atacar" para entrar em território inimigo.`);
+            ui.setActionState('idle'); ui.setActionSourceId(null);
+            return;
+          }
+
+          ui.triggerMarchAnimation(source.center, target.center, ui.moveComposition);
+          
           setGameState(prev => {
             if (!prev) return prev;
             const next = JSON.parse(JSON.stringify(prev)) as typeof prev;
             const s = next.provinces[ui.actionSourceId!];
             const t = next.provinces[id];
+            
             s.army.infantry -= ui.moveComposition.infantry;
             s.army.archers  -= ui.moveComposition.archers;
             s.army.cavalry  -= ui.moveComposition.cavalry;
             s.army.scouts   -= ui.moveComposition.scouts;
             s.troops = s.army.infantry + s.army.archers + s.army.cavalry + s.army.scouts;
-            t.army.infantry += ui.moveComposition.infantry;
-            t.army.archers  += ui.moveComposition.archers;
-            t.army.cavalry  += ui.moveComposition.cavalry;
-            t.army.scouts   += ui.moveComposition.scouts;
+            
+            const isNeutral = t.ownerId === 'neutral';
+            if (isNeutral) {
+              t.ownerId = prev.playerRealmId;
+              t.loyalty = 50;
+              t.army = { ...ui.moveComposition };
+            } else {
+              t.army.infantry += ui.moveComposition.infantry;
+              t.army.archers  += ui.moveComposition.archers;
+              t.army.cavalry  += ui.moveComposition.cavalry;
+              t.army.scouts   += ui.moveComposition.scouts;
+            }
             t.troops = t.army.infantry + t.army.archers + t.army.cavalry + t.army.scouts;
+            
             next.realms[prev.playerRealmId].actionPoints -= ACTION_COSTS.move;
             return next;
           });
-          addVisualEffect('conquest', target.center[0], target.center[1]);
-          addLog(`Tropas movidas de ${source.name} para ${target.name}.`);
+          
+          addVisualEffect(target.ownerId === 'neutral' ? 'conquest' : 'trade', target.center[0], target.center[1]);
+          ui.showToast(target.ownerId === 'neutral' 
+            ? `CONQUISTA: ${target.name} agora é nossa!` 
+            : `Movimento para ${target.name} concluído.`, 'success');
+          addLog(target.ownerId === 'neutral' 
+            ? `CONQUISTA: ${source.name} expandiu o reino para ${target.name}!` 
+            : `Tropas movidas de ${source.name} para ${target.name}.`);
         } else {
           const order: MarchOrder = {
             id: `march_${Date.now()}`,
@@ -259,6 +287,12 @@ export function useGameController(
         const path = findPath(gameState, ui.actionSourceId, id, gameState.playerRealmId, true);
         if (path.length === 0) {
           addLog('Nenhum caminho encontrado para os batedores.');
+          ui.setActionState('idle'); ui.setActionSourceId(null); return;
+        }
+
+        if (playerRealm.wars.includes(target.ownerId)) {
+          ui.showToast(`Batedores recusam ir para ${target.name} (território inimigo em guerra)!`, 'error');
+          addLog(`Batedores não podem espiar reinos inimigos em guerra direta.`);
           ui.setActionState('idle'); ui.setActionSourceId(null); return;
         }
 
@@ -512,6 +546,7 @@ export function useGameController(
           return next;
         });
         const buildingNames: any = { farms: 'Fazenda', mines: 'Mina', workshops: 'Oficina', courts: 'Tribunal', fortify: 'Fortificação' };
+        ui.showToast(`${buildingNames[buildingType]} ${isFortify ? 'concluída' : 'construída'}!`, 'success');
         addLog(`${buildingNames[buildingType]} ${isFortify ? 'concluída' : 'construída'} em ${prov.name}.`);
       } else {
         addLog("Recursos insuficientes para construir.");
@@ -721,6 +756,8 @@ export function useGameController(
     });
     
     setGameState(nextState);
+    persistence.autoSave(nextState);
+    ui.setAutosave(persistence.loadAutoSave());
     ui.setShowTurnSummary(true);
     ui.setSelectedProvinceId(null);
   };

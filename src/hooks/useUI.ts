@@ -39,6 +39,24 @@ export function useUI() {
   const [previewPath, setPreviewPath] = useState<string[]>([]);
   const [selectingMoveComposition, setSelectingMoveComposition] = useState(false);
 
+  const [marchAnimations, setMarchAnimations] = useState<{ id: string; from: [number, number]; to: [number, number]; troops: Army; realmId?: string }[]>([]);
+
+  const triggerMarchAnimation = (from: [number, number], to: [number, number], troops: Army, realmId?: string) => {
+    const id = `march_${Date.now()}_${Math.random()}`;
+    setMarchAnimations(prev => [...prev, { id, from, to, troops, realmId }]);
+    setTimeout(() => {
+      setMarchAnimations(prev => prev.filter(a => a.id !== id));
+    }, 1500);
+  };
+
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
+  const [updateTrigger, setUpdateTrigger] = useState(0);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3000);
+  };
+
   return {
     selectedProvinceId, setSelectedProvinceId,
     actionState, setActionState,
@@ -67,6 +85,9 @@ export function useUI() {
     isHudOpen, setIsHudOpen,
     moveComposition, setMoveComposition,
     previewPath, setPreviewPath,
-    selectingMoveComposition, setSelectingMoveComposition
+    selectingMoveComposition, setSelectingMoveComposition,
+    toast, showToast,
+    marchAnimations, triggerMarchAnimation,
+    updateTrigger, setUpdateTrigger
   };
 }

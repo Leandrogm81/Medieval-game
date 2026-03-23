@@ -37,14 +37,22 @@ export const persistence = {
   },
 
   loadSave: (id: string): GameState | null => {
+    if (id === 'autosave') {
+      const autoSaveData = persistence.loadAutoSave();
+      return autoSaveData ? autoSaveData.state : null;
+    }
     const saves = persistence.listSaves();
     const save = saves.find(s => s.id === id);
     return save ? save.state : null;
   },
 
   deleteSave: (id: string): void => {
-    const saves = persistence.listSaves();
-    const filtered = saves.filter(s => s.id !== id);
-    localStorage.setItem(`${SAVE_KEY_PREFIX}list`, JSON.stringify(filtered));
+    if (id === 'autosave') {
+      localStorage.removeItem(AUTOSAVE_KEY);
+    } else {
+      const saves = persistence.listSaves();
+      const filtered = saves.filter(s => s.id !== id);
+      localStorage.setItem(`${SAVE_KEY_PREFIX}list`, JSON.stringify(filtered));
+    }
   }
 };
