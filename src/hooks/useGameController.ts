@@ -212,6 +212,44 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
      });
   }, [setGameState]);
 
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    ui.setIsDragging(true);
+    ui.setDragStart({ x: e.clientX, y: e.clientY });
+    ui.setHasDragged(false);
+  }, [ui]);
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!ui.isDragging) return;
+    const dx = e.clientX - ui.dragStart.x;
+    const dy = e.clientY - ui.dragStart.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) ui.setHasDragged(true);
+    ui.setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    ui.setDragStart({ x: e.clientX, y: e.clientY });
+  }, [ui]);
+
+  const handleMouseUp = useCallback(() => {
+    ui.setIsDragging(false);
+  }, [ui]);
+
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    ui.setIsDragging(true);
+    ui.setDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+    ui.setHasDragged(false);
+  }, [ui]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!ui.isDragging) return;
+    const dx = e.touches[0].clientX - ui.dragStart.x;
+    const dy = e.touches[0].clientY - ui.dragStart.y;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) ui.setHasDragged(true);
+    ui.setPanOffset(prev => ({ x: prev.x + dx, y: prev.y + dy }));
+    ui.setDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+  }, [ui]);
+
+  const handleTouchEnd = useCallback(() => {
+    ui.setIsDragging(false);
+  }, [ui]);
+
   return {
     startNewGame,
     handleEndTurn,
@@ -222,6 +260,12 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleLoad,
     handleDeleteSave,
     cancelMarchOrder,
-    addLog
+    addLog,
+    handleMouseDown,
+    handleMouseMove,
+    handleMouseUp,
+    handleTouchStart,
+    handleTouchMove,
+    handleTouchEnd
   };
 }

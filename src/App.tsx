@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { GameState, ViewMode, ActionType, UnitType, Province } from './types';
+import { GameState, ViewMode, ActionType, UnitType, Province } from './types.ts';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
@@ -34,7 +34,7 @@ import {
 
 import { useUI } from './hooks/useUI';
 import { useGameController } from './hooks/useGameController';
-import { persistence } from './persistence';
+import { persistence } from './persistence.ts';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -61,7 +61,7 @@ export default function App() {
       const h = window.innerHeight;
       
       // Force a desktop-like resolution (e.g., 1440px width) and scale down to fit
-      const targetWidth = 1280;
+      const targetWidth = 1440;
       const factor = w / targetWidth;
       
       root.style.transform = `scale(${factor})`;
