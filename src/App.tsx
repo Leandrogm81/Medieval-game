@@ -61,7 +61,7 @@ export default function App() {
       const h = window.innerHeight;
       
       // Force a desktop-like resolution (e.g., 1440px width) and scale down to fit
-      const targetWidth = 1440;
+      const targetWidth = 1280;
       const factor = w / targetWidth;
       
       root.style.transform = `scale(${factor})`;
