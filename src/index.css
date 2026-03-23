@@ -278,23 +278,61 @@ body {
   scrollbar-width: none;
 }
 
-/* Portrait Orientation Blocker - Disabled */
+/* Portrait Orientation Blocker */
 .portrait-blocker {
-  display: none !important;
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  background-color: var(--bg-dark);
+  background-image: radial-gradient(circle at center, #2a2a2a 0%, #1a1a1a 100%);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
 }
 
-/* Advanced HUD Docking Logic - Forced for all screens to look like PC */
-.hud-docked {
-  position: static !important;
-  height: 100% !important;
-  width: clamp(320px, 28vw, 420px) !important;
-  flex-shrink: 0 !important;
-  transform: translateX(0) !important;
-  opacity: 1 !important;
+.blocker-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
-.hud-toggle-btn {
-  display: none !important;
+/* Portrait blocker for all mobile devices in portrait mode */
+@media screen and (orientation: portrait) and (pointer: coarse) {
+  .portrait-blocker {
+    display: flex;
+  }
+}
+
+/* Allow landscape and larger portrait screens */
+@media screen and (min-width: 501px) and (orientation: portrait) {
+  .portrait-blocker {
+    display: none;
+  }
+}
+
+@media screen and (orientation: landscape) {
+  .portrait-blocker {
+    display: none;
+  }
+}
+
+/* Advanced HUD Docking Logic */
+@media screen and (min-width: 1024px) and (min-height: 500px) {
+  .hud-docked {
+    position: static !important;
+    height: 100% !important;
+    width: clamp(320px, 28vw, 420px) !important;
+    flex-shrink: 0 !important;
+    transform: translateX(0) !important;
+    opacity: 1 !important;
+  }
+
+  .hud-toggle-btn {
+    display: none !important;
+  }
 }
 
 
