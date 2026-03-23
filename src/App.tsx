@@ -303,7 +303,7 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="w-full h-[100dvh] bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
+    <div className="w-full h-full bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none">
       <div className="portrait-blocker">
         <div className="blocker-content px-10">
           <RotateCw size={48} className="text-amber-500 animate-spin-slow mb-4" />

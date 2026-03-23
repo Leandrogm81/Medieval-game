@@ -20,12 +20,12 @@
   --touch-target-size: 44px;
 }
 
-html, body {
+html, body, #root {
   margin: 0;
   padding: 0;
   overflow: hidden;
-  height: 100dvh;
-  width: 100vw;
+  height: 100%;
+  width: 100%;
   /* Support for notches on modern phones */
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -158,7 +158,7 @@ body {
 @media screen and (min-width: 1024px) and (min-height: 500px) {
   .hud-docked {
      position: static !important;
-     height: 100dvh !important;
+     height: 100% !important;
      width: clamp(320px, 28vw, 420px) !important;
      flex-shrink: 0 !important;
      transform: translateX(0) !important;

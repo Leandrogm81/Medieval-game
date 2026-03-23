@@ -163,7 +163,7 @@ export const HUD: React.FC<HUDProps> = ({
       </button>
 
       <div 
-        className={`hud-docked bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 transition-all duration-300 ease-in-out absolute right-0 top-0 h-[100dvh] w-[240px] sm:w-[260px] md:w-[300px] lg:w-[360px] ${
+        className={`hud-docked bg-slate-900/95 backdrop-blur-xl border-l border-white/10 flex flex-col shadow-2xl z-40 transition-all duration-300 ease-in-out absolute right-0 top-0 h-full w-[240px] sm:w-[260px] md:w-[300px] lg:w-[360px] ${
           isHudOpen ? 'translate-x-0 opacity-100' : 'translate-x-[120%] opacity-0'
         }`}
       >
