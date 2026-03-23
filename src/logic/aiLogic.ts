@@ -1,6 +1,6 @@
-import { GameState, Realm, Province, ActionType } from '../types';
+import { GameState, Realm, Province } from '../types';
 import { executeRecruitment, executeBuilding } from './economyLogic';
-import { findPath } from './turnLogic';
+import { findPath } from './turnLogic.ts'; // Lógica de movimentação
 
 export function processAI(state: GameState) {
   Object.values(state.realms).forEach(realm => {
