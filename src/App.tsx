@@ -53,7 +53,36 @@ export default function App() {
         return { ...prev, visualEffects: filtered };
       });
     }, 100);
-    return () => clearInterval(timer);
+
+    const handleResize = () => {
+      const root = document.getElementById('root');
+      if (!root) return;
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      
+      // Scale out the game on mobile landscape to mimic a 1280px screen without native viewport bugs
+      if (w < 1280 && w > h) {
+        const scale = w / 1280;
+        root.style.transform = `scale(${scale})`;
+        root.style.transformOrigin = 'top left';
+        root.style.width = '1280px';
+        root.style.height = `${h / scale}px`;
+      } else {
+        root.style.transform = 'none';
+        root.style.width = '100%';
+        root.style.height = '100%';
+      }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleResize);
+    handleResize();
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleResize);
+    };
   }, []);
 
   const toggleFullScreen = (e?: React.MouseEvent | React.TouchEvent) => {
