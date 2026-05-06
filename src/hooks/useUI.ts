@@ -32,12 +32,24 @@ export function useUI() {
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [hasDragged, setHasDragged] = useState(false);
-  const [isHudOpen, setIsHudOpen] = useState(true);
+  const [isHudOpen, setIsHudOpen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 768;
+  });
+  const [actionBannerMessage, setActionBannerMessage] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState<boolean>(false);
 
   // ===== March / Routing State =====
   const [moveComposition, setMoveComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
   const [previewPath, setPreviewPath] = useState<string[]>([]);
   const [selectingMoveComposition, setSelectingMoveComposition] = useState(false);
+
+  // ===== Recruitment Composition State =====
+  const [recruitComposition, setRecruitComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+
+  // ===== Disband State =====
+  const [disbandComposition, setDisbandComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+  const [isDisbandMode, setIsDisbandMode] = useState(false);
 
   const [marchAnimations, setMarchAnimations] = useState<{ id: string; from: [number, number]; to: [number, number]; troops: Army; realmId?: string }[]>([]);
 
@@ -83,9 +95,14 @@ export function useUI() {
     dragStart, setDragStart,
     hasDragged, setHasDragged,
     isHudOpen, setIsHudOpen,
+    actionBannerMessage, setActionBannerMessage,
+    isGenerating, setIsGenerating,
     moveComposition, setMoveComposition,
     previewPath, setPreviewPath,
     selectingMoveComposition, setSelectingMoveComposition,
+    recruitComposition, setRecruitComposition,
+    disbandComposition, setDisbandComposition,
+    isDisbandMode, setIsDisbandMode,
     toast, showToast,
     marchAnimations, triggerMarchAnimation,
     updateTrigger, setUpdateTrigger

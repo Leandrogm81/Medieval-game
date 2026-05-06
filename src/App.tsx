@@ -9,6 +9,7 @@ import { GameInstructionsModal } from './components/GameInstructionsModal';
 import { TurnResultModal } from './components/TurnResultModal';
 import { CombatSetupModal } from './components/CombatSetupModal';
 import { BattleOutcomeModal } from './components/BattleOutcomeModal';
+import { ToastContainer } from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
 import {
@@ -54,34 +55,8 @@ export default function App() {
       });
     }, 100);
 
-    const handleZoom = () => {
-      const root = document.getElementById('root');
-      if (!root) return;
-      const w = window.innerWidth;
-      const h = window.innerHeight;
-      
-      // Force a desktop-like resolution (e.g., 1440px width) and scale down to fit
-      const targetWidth = 1440;
-      const factor = w / targetWidth;
-      
-      root.style.transform = `scale(${factor})`;
-      root.style.transformOrigin = 'top left';
-      root.style.width = `${targetWidth}px`;
-      root.style.height = `${h / factor}px`;
-      root.style.overflow = 'hidden';
-      root.style.position = 'fixed';
-      root.style.top = '0';
-      root.style.left = '0';
-    };
-
-    window.addEventListener('resize', handleZoom);
-    window.addEventListener('orientationchange', handleZoom);
-    handleZoom();
-
     return () => {
       clearInterval(timer);
-      window.removeEventListener('resize', handleZoom);
-      window.removeEventListener('orientationchange', handleZoom);
     };
   }, []);
 
@@ -109,6 +84,62 @@ export default function App() {
     }
   };
 
+  const getActionPreviewPath = (provinceId: string, type: 'move' | 'attack' | 'scout') => {
+    if (!gameState) return [];
+    const source = gameState.provinces[provinceId];
+    if (!source) return [];
+
+    if (type === 'attack') {
+      return source.neighbors.slice();
+    }
+
+    if (type === 'move') {
+      const reachable = new Set<string>();
+      const visited = new Set<string>([provinceId]);
+      const queue: { id: string; depth: number }[] = [{ id: provinceId, depth: 0 }];
+
+      while (queue.length > 0) {
+        const current = queue.shift();
+        if (!current) continue;
+
+        const prov = gameState.provinces[current.id];
+        if (!prov) continue;
+
+        for (const neighborId of prov.neighbors) {
+          if (visited.has(neighborId)) continue;
+          visited.add(neighborId);
+          reachable.add(neighborId);
+
+          const neighbor = gameState.provinces[neighborId];
+          if (!neighbor) continue;
+
+          if (neighbor.ownerId === gameState.playerRealmId && current.depth < 3) {
+            queue.push({ id: neighborId, depth: current.depth + 1 });
+          }
+        }
+      }
+
+      reachable.delete(provinceId);
+      return Array.from(reachable);
+    }
+
+    return source.neighbors.slice();
+  };
+
+  if (ui.isGenerating) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
+        <motion.div
+          animate={{ rotate: 360 }}
+          transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
+          className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full mb-6"
+        />
+        <p className="text-amber-200 text-xl font-serif">Gerando reinos...</p>
+        <p className="text-stone-500 text-sm mt-2 italic">Forjando o destino do seu império</p>
+      </div>
+    );
+  }
+
   if (ui.showMenu) {
     const saves = [
       ...(ui.autosave ? [ui.autosave] : []),
@@ -116,30 +147,31 @@ export default function App() {
     ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
 
     return (
-      <div className="min-h-screen bg-black text-stone-200 flex flex-col items-center justify-center p-2 xs:p-4 relative overflow-hidden select-none"
-        style={{
-          backgroundImage: 'url("/splash_bg.png")',
-          backgroundSize: 'cover',
-          backgroundPosition: 'center'
-        }}>
+      <div className="h-screen bg-black text-stone-200 flex flex-col items-center justify-start md:justify-center p-2 xs:p-4 py-4 md:py-8 relative overflow-y-auto overflow-x-hidden select-none menu-background">
 
         {/* Overlay for better readability */}
         <div className="absolute inset-0 bg-black/40 z-0"></div>
+
+        <button
+          onClick={() => ui.setShowInstructionsModal(true)}
+          className="absolute top-4 right-4 z-20 w-10 h-10 rounded-full bg-stone-800/80 border border-amber-600/30 hover:bg-amber-600/20 flex items-center justify-center transition-all"
+          aria-label="Instruções"
+        >
+          <HelpCircle size={20} className="text-amber-400" />
+        </button>
 
         {/* Logo area */}
         <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="z-10 flex justify-center mb-0"
-          style={{ mixBlendMode: 'screen' }}
+          className="z-10 flex justify-center mb-2 mt-6 md:mt-0"
         >
           <div className="relative flex justify-center items-center">
             <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-75"></div>
-            <img
-              src="/logo.png"
-              alt="Reinos Medievais Logo"
-              className="w-24 h-24 xs:w-32 xs:h-32 md:w-40 md:h-40 object-contain filter transition-all duration-700"
-            />
+            <div className="relative w-20 h-20 xs:w-24 xs:h-24 md:w-36 md:h-36 rounded-full border border-amber-500/25 bg-stone-950/70 shadow-[0_0_50px_rgba(245,158,11,0.15)] flex items-center justify-center">
+              <div className="absolute inset-3 rounded-full border border-amber-500/15" />
+              <Crown className="w-10 h-10 xs:w-12 xs:h-12 md:w-16 md:h-16 text-amber-400" />
+            </div>
           </div>
         </motion.div>
 
@@ -148,17 +180,17 @@ export default function App() {
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="z-10 text-center mb-6"
+          className="z-10 text-center mb-4 md:mb-6 w-full max-w-full px-2"
         >
-          <h1 className="text-2xl xs:text-3xl md:text-5xl font-black tracking-[0.2em] mb-1 gold-gradient-text uppercase">
+          <h1 className="text-[clamp(1.8rem,8.5vw,4.25rem)] leading-none font-black tracking-[0.07em] sm:tracking-[0.12em] md:tracking-[0.2em] mb-1 gold-gradient-text uppercase">
             Reinos Medievais
           </h1>
-          <p className="text-amber-200/60 tracking-[0.3em] md:tracking-[0.4em] text-[8px] xs:text-[10px] md:text-xs uppercase font-serif">
+          <p className="text-amber-200/60 tracking-[0.18em] xs:tracking-[0.24em] md:tracking-[0.4em] text-[8px] xs:text-[10px] md:text-xs uppercase font-serif">
             Forje seu império • Conquiste o destino
           </p>
         </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-2 xs:gap-4 w-full max-w-4xl z-10 px-2 xs:px-4">
+        <div className="flex flex-col lg:flex-row gap-3 xs:gap-4 w-full max-w-4xl z-10 px-2 xs:px-4 pb-6">
           {/* New Game Panel */}
           <motion.div
             initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
@@ -179,6 +211,7 @@ export default function App() {
                   value={ui.gameSettings.numProvinces}
                   onChange={e => ui.setGameSettings({ ...ui.gameSettings, numProvinces: parseInt(e.target.value) })}
                   className="w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
+                  title="Ajustar número de províncias no mapa"
                 />
                 <div className="flex justify-between text-[8px] xs:text-[10px] text-stone-500 mt-2 font-serif italic">
                   <span>Pequeno</span>
@@ -302,7 +335,7 @@ export default function App() {
               onClick={() => ui.setShowSaveModal(true)}
               className="w-full py-2.5 bg-stone-800/40 hover:bg-stone-800/60 border border-stone-700/50 hover:border-amber-900/50 text-stone-400 hover:text-amber-200 rounded-sm text-[10px] md:text-xs font-bold tracking-widest transition-all uppercase"
             >
-              Ver Todos os Reinos
+              Gerenciar Salvamentos
             </button>
           </motion.div>
         </div>
@@ -357,6 +390,12 @@ export default function App() {
             </button>
           </div>
 
+          {ui.actionBannerMessage && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 px-6 py-2 bg-black/70 backdrop-blur-sm border border-amber-500/50 rounded-b-lg">
+              <span className="text-amber-200 text-sm font-bold">{ui.actionBannerMessage}</span>
+            </div>
+          )}
+
           <motion.div
             className="absolute inset-0 cursor-grab active:cursor-grabbing"
             animate={{
@@ -401,9 +440,18 @@ export default function App() {
             )}
           </AnimatePresence>
 
-          <div className="absolute bottom-2 right-2 xs:bottom-4 xs:right-4 z-30 flex flex-col gap-0.5 xs:gap-1 pointer-events-auto">
-            <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-5 h-5 xs:w-6 xs:h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xs xs:text-sm sm:text-xl">+</button>
-            <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-5 h-5 xs:w-6 xs:h-6 sm:w-10 sm:h-10 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xs xs:text-sm sm:text-xl">-</button>
+          <div className="absolute bottom-2 right-2 xs:bottom-4 xs:right-4 z-30 flex items-end gap-2 pointer-events-auto">
+            <button
+              onClick={() => ui.setIsHudOpen(!ui.isHudOpen)}
+              className="md:hidden w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xs"
+              aria-label={ui.isHudOpen ? 'Fechar HUD' : 'Abrir HUD'}
+            >
+              {ui.isHudOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
+            </button>
+            <div className="flex flex-col gap-0.5 xs:gap-1">
+              <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">+</button>
+              <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">-</button>
+            </div>
           </div>
         </div>
 
@@ -418,8 +466,15 @@ export default function App() {
           onSave={() => ui.setShowSaveModal(true)}
           onMenu={() => ui.setShowMenu(true)}
           onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
+          onToggleInstructions={() => ui.setShowInstructionsModal(true)}
           actionState={ui.actionState}
-          onCancelAction={() => { ui.setActionState('idle'); ui.setActionSourceId(null); ui.setPreviewPath([]); }}
+          onCancelAction={() => {
+            ui.setActionState('idle');
+            ui.setActionSourceId(null);
+            ui.setPreviewPath([]);
+            ui.setActionBannerMessage(null);
+            ui.setSelectingMoveComposition(false);
+          }}
           onToggleHud={() => ui.setIsHudOpen(!ui.isHudOpen)}
           isHudOpen={ui.isHudOpen}
           onMapAction={(type) => {
@@ -431,6 +486,8 @@ export default function App() {
               ui.setActionSourceId(ui.selectedProvinceId);
               ui.setActionState('moving');
               ui.setSelectingMoveComposition(true);
+              ui.setActionBannerMessage('Modo Marcha — selecione o destino no mapa');
+              ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'move'));
               ui.setMoveComposition({
                 infantry: prov.army.infantry,
                 archers: prov.army.archers,
@@ -441,10 +498,14 @@ export default function App() {
             } else if (type === 'attack') {
               ui.setActionSourceId(ui.selectedProvinceId);
               ui.setActionState('attacking');
+              ui.setActionBannerMessage('Modo Ataque — clique em uma província adjacente');
+              ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'attack'));
               ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
             } else if (type === 'scout') {
               ui.setActionSourceId(ui.selectedProvinceId);
               ui.setActionState('dispatching_scouts');
+              ui.setActionBannerMessage('Modo Reconhecimento — selecione o destino');
+              ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'scout'));
               ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
             }
           }}
@@ -454,9 +515,30 @@ export default function App() {
           onZoomChange={ui.setZoom}
           moveComposition={ui.moveComposition}
           onMoveCompositionChange={ui.setMoveComposition}
+          selectingMoveComposition={ui.selectingMoveComposition}
+          recruitComposition={ui.recruitComposition}
+          onRecruitCompositionChange={ui.setRecruitComposition}
           onDispatchScouts={() => ui.setActionState('dispatching_scouts')}
           onRoute={() => ui.setActionState('routing')}
           onToggleFullScreen={toggleFullScreen}
+          isDisbandMode={ui.isDisbandMode}
+          onIsDisbandMode={(v) => {
+            ui.setIsDisbandMode(v);
+            if (v) {
+              ui.setActionState('disband');
+              ui.setActionBannerMessage('Modo Dispensar — selecione tropas para dispensar');
+            } else {
+              ui.setActionState('idle');
+              ui.setActionBannerMessage(null);
+            }
+          }}
+          disbandComposition={ui.disbandComposition}
+          onDisbandCompositionChange={ui.setDisbandComposition}
+          onDisband={(provinceId) => ctrl.handleDisband(provinceId)}
+          onActionState={ui.setActionState}
+          onActionSourceId={ui.setActionSourceId}
+          onPreviewPath={ui.setPreviewPath}
+          onActionBannerMessage={ui.setActionBannerMessage}
         />
 
         <AnimatePresence>
@@ -496,6 +578,7 @@ export default function App() {
               attackerProv={gameState.provinces[ui.combatAttackerProvId]}
               defenderProv={gameState.provinces[ui.combatDefenderProvId]}
               attackingArmy={ui.combatAttackingArmy}
+              onArmyChange={(army) => ui.setCombatAttackingArmy(army)}
               onConfirm={ctrl.confirmAttack}
               onClose={() => ui.setShowCombatPreview(false)}
             />
@@ -519,23 +602,7 @@ export default function App() {
           )}
         </AnimatePresence>
       </ErrorBoundary>
-      {/* Toast Notifications */}
-      <AnimatePresence>
-        {ui.toast && (
-          <motion.div
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className={`fixed bottom-24 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-lg shadow-2xl border flex items-center gap-2 backdrop-blur-md ${ui.toast.type === 'success' ? 'bg-green-900/90 border-green-500 text-green-100' :
-              ui.toast.type === 'error' ? 'bg-red-900/90 border-red-500 text-red-100' :
-                'bg-blue-900/90 border-blue-500 text-blue-100'
-              }`}
-          >
-            {ui.toast.type === 'success' && <div className="p-1 bg-green-500 rounded-full"><PlusCircle size={12} className="text-green-900" /></div>}
-            <span className="text-xs font-bold medieval-text">{ui.toast.message}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <ToastContainer toast={ui.toast} />
     </div>
   );
 }

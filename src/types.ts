@@ -2,8 +2,8 @@ export type StrategicResource = 'none' | 'iron' | 'wood' | 'horse' | 'stone';
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
 export type Terrain = 'plains' | 'forest' | 'mountain';
-export type ActionType = 'idle' | 'moving' | 'attacking' | 'recruit' | 'build' | 'diplomacy' | 'scouting' | 'dispatching_scouts' | 'routing';
-export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources';
+export type ActionType = 'idle' | 'moving' | 'attacking' | 'recruit' | 'build' | 'diplomacy' | 'scouting' | 'dispatching_scouts' | 'routing' | 'disband' | 'trade';
+export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade';
 export type UnitType = 'infantry' | 'archers' | 'cavalry' | 'scouts';
 
 export interface Army {
@@ -38,6 +38,7 @@ export interface Province {
   center: [number, number];
   recentlyConquered: number;
   loyalty: number;
+  stability: number;
   siegeDamage?: number;
 }
 
@@ -58,6 +59,7 @@ export interface Realm {
   vassals: string[];
   vassalOf?: string;
   tradeRoutes: { fromProvinceId: string; toProvinceId: string }[];
+  tradesThisTurn?: number;
   overextension: number;
   personality: PersonalityType;
   objective: StrategicObjective;

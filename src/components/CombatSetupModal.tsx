@@ -11,9 +11,10 @@ interface CombatSetupModalProps {
   attackerProv: Province;
   defenderProv: Province;
   attackingArmy: Army;
+  onArmyChange: (army: Army) => void;
 }
 
-export const CombatSetupModal: React.FC<CombatSetupModalProps> = ({ isOpen, onClose, onConfirm, attackerProv, defenderProv, attackingArmy }) => {
+export const CombatSetupModal: React.FC<CombatSetupModalProps> = ({ isOpen, onClose, onConfirm, attackerProv, defenderProv, attackingArmy, onArmyChange }) => {
   const atkPower = Math.floor(attackingArmy.infantry * UNIT_STATS.infantry.attack + 
                               attackingArmy.archers * UNIT_STATS.archers.attack + 
                               attackingArmy.cavalry * UNIT_STATS.cavalry.attack);
@@ -58,6 +59,37 @@ export const CombatSetupModal: React.FC<CombatSetupModalProps> = ({ isOpen, onCl
                      <p className="text-[10px] text-red-500/80 font-black uppercase mb-1">{defenderProv.name}</p>
                      <p className="text-2xl md:text-3xl font-black text-amber-50">{defPower}</p>
                      <p className="text-[8px] text-stone-500 uppercase font-black">Força de Defesa</p>
+                  </div>
+               </div>
+
+               {/* Troop Composition Sliders */}
+               <div className="space-y-3">
+                  <p className="text-[10px] text-amber-500 font-black uppercase mb-2">Ajustar tropas de ataque</p>
+                  {(['infantry', 'archers', 'cavalry'] as const).map(type => {
+                    const maxAvailable = attackerProv.army[type];
+                    if (maxAvailable <= 0) return null;
+                    const labels: Record<string, string> = { infantry: 'Infantaria', archers: 'Arqueiros', cavalry: 'Cavalaria' };
+                    return (
+                      <div key={type} className="flex items-center gap-3">
+                        <span className="text-[10px] text-stone-400 w-20">{labels[type]}</span>
+                        <input
+                          type="range"
+                          min="0"
+                          max={maxAvailable}
+                          value={attackingArmy[type]}
+                          onChange={(e) => {
+                            const val = parseInt(e.target.value);
+                            onArmyChange({ ...attackingArmy, [type]: val });
+                          }}
+                          className="flex-1 h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                        />
+                        <span className="text-[10px] text-amber-200 w-12 text-right">{attackingArmy[type]}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="flex justify-between text-[10px] font-bold pt-2 border-t border-stone-700">
+                    <span className="text-stone-400">Total atacando:</span>
+                    <span className="text-amber-200">{attackingArmy.infantry + attackingArmy.archers + attackingArmy.cavalry}</span>
                   </div>
                </div>
                

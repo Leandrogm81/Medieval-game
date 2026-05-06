@@ -6,6 +6,13 @@ import { calculateVisibility } from './turnLogic';
 export function generateInitialState(width: number, height: number, settings: GameSettings): GameState {
   console.log("Generating initial state...");
   try {
+    const MAP_PADDING = 32;
+    const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value));
+    const clampCenter = (center: [number, number]): [number, number] => ([
+      clamp(center[0], MAP_PADDING, width - MAP_PADDING),
+      clamp(center[1], MAP_PADDING, height - MAP_PADDING)
+    ]);
+
     const numRealms = Math.max(1, settings.numRealms || 1);
     const numProvinces = Math.max(numRealms, settings.numProvinces || 5);
     const { resourceDensity } = settings;
@@ -46,6 +53,7 @@ export function generateInitialState(width: number, height: number, settings: Ga
         wars: [],
         pacts: [],
         tradeRoutes: [],
+        tradesThisTurn: 0,
         personality: PERSONALITIES[i % PERSONALITIES.length],
         objective: OBJECTIVES[i % OBJECTIVES.length],
         vassals: []
@@ -91,9 +99,9 @@ export function generateInitialState(width: number, height: number, settings: Ga
 
       const pop = Math.floor(Math.random() * 500) + 500;
       const army = {
-        infantry: Math.floor(Math.random() * 30) + 20,
-        archers: Math.floor(Math.random() * 15) + 5,
-        cavalry: Math.floor(Math.random() * 5),
+        infantry: Math.floor(Math.random() * 10) + 5,
+        archers: Math.floor(Math.random() * 3) + 1,
+        cavalry: 0,
         scouts: 0
       };
 
@@ -115,10 +123,11 @@ export function generateInitialState(width: number, height: number, settings: Ga
         terrain,
         neighbors,
         polygon: polygon.map(p => [p[0], p[1]] as [number, number]),
-        center: points[i],
+        center: clampCenter(points[i]),
         buildings: { farms: 0, mines: 0, workshops: 0, courts: 0 },
         siegeDamage: 0,
         loyalty: 100,
+        stability: 70,
         recentlyConquered: 0
       };
     }
@@ -159,6 +168,7 @@ export function generateInitialState(width: number, height: number, settings: Ga
       if (owned.length > 0) {
         realm.capitalId = owned[Math.floor(owned.length / 2)].id;
         provinces[realm.capitalId].loyalty = 100;
+        provinces[realm.capitalId].stability = 80;
         provinces[realm.capitalId].buildings.courts = 1;
       }
     });
