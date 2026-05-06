@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Validate Gate"
+  short_description: "Run the final technical gate for Reinos Medievais changes"
+  default_prompt: "Use this skill as the final gate to verify a Reinos Medievais change is technically ready and visually safe."

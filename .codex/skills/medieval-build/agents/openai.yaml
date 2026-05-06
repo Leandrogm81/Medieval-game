@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Build Flow"
+  short_description: "Implement new Reinos Medievais features with minimal scope"
+  default_prompt: "Use this skill to implement a new feature or functional improvement in Reinos Medievais with minimal scope and proper validation."

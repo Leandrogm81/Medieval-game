@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Contract Guardian"
+  short_description: "Protect Reinos Medievais data contracts and types"
+  default_prompt: "Use this skill when changing Reinos Medievais types, payloads, or state shape to preserve contract integrity."

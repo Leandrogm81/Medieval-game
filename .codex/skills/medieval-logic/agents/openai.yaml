@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Logic Verifier"
+  short_description: "Verify Reinos Medievais game logic and math"
+  default_prompt: "Use this skill when checking or changing combat, economy, turn, or AI logic in Reinos Medievais."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Triage"
+  short_description: "Classify and route new Reinos Medievais requests"
+  default_prompt: "Use this skill to classify a new Reinos Medievais request by type, risk, and next workflow before any implementation."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Medieval Bugfix Flow"
+  short_description: "Diagnose and fix Reinos Medievais bugs surgically"
+  default_prompt: "Use this skill to reproduce, diagnose, and fix a bug in Reinos Medievais with the smallest safe change."
