@@ -11,6 +11,187 @@ const COMFORT_STOCK = 500;
 const MAX_TRADES_PER_TURN = 3;
 const MAX_TRADE_AMOUNT = 100;
 
+export type MassActionType = 'assimilate' | 'invest' | 'buildFarms' | 'buildMines' | 'buildWorkshops' | 'buildCourts';
+
+export interface MassActionCostEstimate {
+  totalCostGold: number;
+  totalCostMaterials: number;
+  affectedCount: number;
+}
+
+interface MassActionConfig {
+  goldCost: number;
+  materialsCost: number;
+  canApply: (province: Province) => boolean;
+  apply: (province: Province, realm: Realm) => void;
+}
+
+function getProvinceDistances(state: GameState, startId?: string): Record<string, number> {
+  if (!startId) return {};
+
+  const distances: Record<string, number> = { [startId]: 0 };
+  const queue = [startId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift()!;
+    const currentDist = distances[currentId];
+    const province = state.provinces[currentId];
+    if (!province) continue;
+
+    (province.neighbors || []).forEach(neighborId => {
+      if (distances[neighborId] !== undefined) return;
+      distances[neighborId] = currentDist + 1;
+      queue.push(neighborId);
+    });
+  }
+
+  return distances;
+}
+
+function getOrderedOwnedProvinces(state: GameState, realmId: string): Province[] {
+  const owned = Object.values(state.provinces).filter(province => province.ownerId === realmId);
+  if (owned.length <= 1) return owned;
+
+  const realm = state.realms[realmId];
+  const fallbackStart = owned[0]?.id;
+  const startId = realm?.capitalId && owned.some(province => province.id === realm.capitalId)
+    ? realm.capitalId
+    : fallbackStart;
+
+  const distances = getProvinceDistances(state, startId);
+  return [...owned].sort((a, b) => {
+    const distanceA = distances[a.id] ?? Number.POSITIVE_INFINITY;
+    const distanceB = distances[b.id] ?? Number.POSITIVE_INFINITY;
+    if (distanceA !== distanceB) return distanceA - distanceB;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+function runMassAction(state: GameState, realmId: string, config: MassActionConfig): { count: number; costGold: number; costMaterials: number } {
+  const realm = state.realms[realmId];
+  if (!realm) return { count: 0, costGold: 0, costMaterials: 0 };
+
+  let count = 0;
+  const orderedProvinces = getOrderedOwnedProvinces(state, realmId);
+
+  for (const province of orderedProvinces) {
+    if (!config.canApply(province)) continue;
+    if (realm.gold < config.goldCost || realm.materials < config.materialsCost) break;
+
+    config.apply(province, realm);
+    realm.gold -= config.goldCost;
+    realm.materials -= config.materialsCost;
+    count++;
+  }
+
+  return {
+    count,
+    costGold: count * config.goldCost,
+    costMaterials: count * config.materialsCost
+  };
+}
+
+function canMassBuildFarms(province: Province): boolean {
+  return province.strategicResource !== 'none';
+}
+
+function canMassBuildMines(province: Province): boolean {
+  return province.terrain === 'mountain';
+}
+
+function canMassBuildWorkshops(province: Province): boolean {
+  return province.strategicResource === 'iron' || province.strategicResource === 'wood' || province.strategicResource === 'stone';
+}
+
+function canMassBuildCourts(_province: Province): boolean {
+  return true;
+}
+
+export function estimateMassActionCost(
+  state: GameState,
+  realmId: string,
+  costGold: number,
+  costMaterials = 0
+): MassActionCostEstimate {
+  const affectedCount = Object.values(state.provinces).filter(province => province.ownerId === realmId).length;
+
+  return {
+    totalCostGold: affectedCount * costGold,
+    totalCostMaterials: affectedCount * costMaterials,
+    affectedCount
+  };
+}
+
+export function massAssimilate(state: GameState, realmId: string): { count: number; cost: number } {
+  const result = runMassAction(state, realmId, {
+    goldCost: 50,
+    materialsCost: 0,
+    canApply: province => province.loyalty < 100,
+    apply: province => {
+      province.loyalty = Math.min(100, province.loyalty + 5);
+    }
+  });
+
+  return { count: result.count, cost: result.costGold };
+}
+
+export function massInvest(state: GameState, realmId: string): { count: number; cost: number } {
+  const result = runMassAction(state, realmId, {
+    goldCost: 100,
+    materialsCost: 0,
+    canApply: province => province.loyalty >= 0,
+    apply: province => {
+      province.wealth += 10;
+    }
+  });
+
+  return { count: result.count, cost: result.costGold };
+}
+
+export function massBuildFarms(state: GameState, realmId: string): { count: number; costGold: number; costMaterials: number } {
+  return runMassAction(state, realmId, {
+    goldCost: 100,
+    materialsCost: 50,
+    canApply: canMassBuildFarms,
+    apply: province => {
+      province.buildings.farms += 1;
+    }
+  });
+}
+
+export function massBuildMines(state: GameState, realmId: string): { count: number; costGold: number; costMaterials: number } {
+  return runMassAction(state, realmId, {
+    goldCost: 150,
+    materialsCost: 75,
+    canApply: canMassBuildMines,
+    apply: province => {
+      province.buildings.mines += 1;
+    }
+  });
+}
+
+export function massBuildWorkshops(state: GameState, realmId: string): { count: number; costGold: number; costMaterials: number } {
+  return runMassAction(state, realmId, {
+    goldCost: 200,
+    materialsCost: 100,
+    canApply: canMassBuildWorkshops,
+    apply: province => {
+      province.buildings.workshops += 1;
+    }
+  });
+}
+
+export function massBuildCourts(state: GameState, realmId: string): { count: number; costGold: number; costMaterials: number } {
+  return runMassAction(state, realmId, {
+    goldCost: 300,
+    materialsCost: 150,
+    canApply: canMassBuildCourts,
+    apply: province => {
+      province.buildings.courts += 1;
+    }
+  });
+}
+
 export function getTradeRate(
   realm: Realm,
   from: 'gold' | 'food' | 'materials',
@@ -177,12 +358,30 @@ export function executeBuilding(state: GameState, realm: Realm, prov: Province, 
         prov.defense += 1;
         realm.gold -= goldCost;
         realm.materials -= matCost;
+        state.visualEffects = state.visualEffects || [];
+        state.visualEffects.push({
+          id: `build_fx_${Date.now()}_${Math.random()}`,
+          type: 'build_particles',
+          provinceId: prov.id,
+          particleCount: 8,
+          startTime: Date.now(),
+          duration: 600
+        });
         return true;
       }
     } else {
       prov.buildings[type] += 1;
       realm.gold -= goldCost;
       realm.materials -= matCost;
+      state.visualEffects = state.visualEffects || [];
+      state.visualEffects.push({
+        id: `build_fx_${Date.now()}_${Math.random()}`,
+        type: 'build_particles',
+        provinceId: prov.id,
+        particleCount: 8,
+        startTime: Date.now(),
+        duration: 600
+      });
       return true;
     }
   }

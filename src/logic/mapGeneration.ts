@@ -52,6 +52,11 @@ export function generateInitialState(width: number, height: number, settings: Ga
         alliances: [],
         wars: [],
         pacts: [],
+        nonAggressionPacts: [],
+        defensivePacts: [],
+        tributeFrom: {},
+        tributeTo: {},
+        napExpiryTurn: {},
         tradeRoutes: [],
         tradesThisTurn: 0,
         personality: PERSONALITIES[i % PERSONALITIES.length],
@@ -61,18 +66,19 @@ export function generateInitialState(width: number, height: number, settings: Ga
     }
 
     // Initialize relations and memory
+    const createMemory = () => ({
+      betrayal: 0,
+      help: 0,
+      aggression: 0,
+      lastWarTurn: 0,
+      warExhaustion: 0
+    });
+
     for (let i = 0; i < numRealms; i++) {
       for (let j = 0; j < numRealms; j++) {
         if (i !== j) {
           realms[`realm_${i}`].relations[`realm_${j}`] = 0;
-          realms[`realm_${i}`].memory[`realm_${j}`] = {
-            betrayal: 0,
-            help: 0,
-            aggression: 0,
-            lastWarTurn: -1,
-            warExhaustion: 0,
-            truces: {}
-          };
+          realms[`realm_${i}`].memory[`realm_${j}`] = createMemory();
         }
       }
     }

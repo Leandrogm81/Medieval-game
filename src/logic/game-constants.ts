@@ -1,4 +1,4 @@
-import { StrategicResource, PersonalityType, StrategicObjective } from '../types';
+import { StrategicResource, PersonalityType, StrategicObjective, DiplomacyAction } from '../types';
 
 export const ACTION_COSTS = {
   move: 1,
@@ -60,3 +60,46 @@ export const PROVINCE_NAMES = [
 export const STRATEGIC_RESOURCES: StrategicResource[] = ['none', 'iron', 'wood', 'horse', 'stone'];
 export const PERSONALITIES: PersonalityType[] = ['expansionist', 'defensive', 'diplomatic', 'opportunistic', 'commercial'];
 export const OBJECTIVES: StrategicObjective[] = ['regional_dominance', 'destroy_rival', 'wealth', 'resource_control', 'defensive_block'];
+
+export const DIPLOMACY_ACTION_COSTS: Record<DiplomacyAction, number> = {
+  alliance: 2,
+  nonAggressionPact: 1,
+  defensivePact: 1,
+  improveRelations: 1,
+  sendInsult: 1,
+  offerTribute: 1,
+  demandTribute: 1,
+  declareWar: 2
+};
+
+export const DIPLOMACY_FLAVOR_TEXTS: Record<DiplomacyAction, { accepted: string; rejected?: string }> = {
+  alliance: {
+    accepted: '{from} e {to} selam uma aliança sagrada.',
+    rejected: '{to} rejeita a proposta de aliança de {from}.'
+  },
+  nonAggressionPact: {
+    accepted: '{from} e {to} firmam um pacto de não agressão.',
+    rejected: '{to} recusa o pacto de não agressão de {from}.'
+  },
+  defensivePact: {
+    accepted: '{from} e {to} juram proteger-se mutuamente.',
+    rejected: '{to} rejeita o pacto defensivo de {from}.'
+  },
+  improveRelations: {
+    accepted: '{from} envia uma oferta de conciliação a {to}.'
+  },
+  sendInsult: {
+    accepted: '{from} ofende publicamente {to}.'
+  },
+  offerTribute: {
+    accepted: '{from} oferece tributo a {to}.',
+    rejected: '{to} recusa o tributo enviado por {from}.'
+  },
+  demandTribute: {
+    accepted: '{from} exige tributo de {to}.',
+    rejected: '{to} desafia a exigência de tributo feita por {from}.'
+  },
+  declareWar: {
+    accepted: '{from} declara guerra contra {to}.'
+  }
+};

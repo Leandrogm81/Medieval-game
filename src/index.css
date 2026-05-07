@@ -127,6 +127,23 @@ body,
   animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+@keyframes pulse-gold {
+  0% {
+    stroke-opacity: 0.7;
+    stroke-width: 2;
+  }
+
+  50% {
+    stroke-opacity: 1;
+    stroke-width: 3;
+  }
+
+  100% {
+    stroke-opacity: 0.7;
+    stroke-width: 2;
+  }
+}
+
 /* Custom Scrollbar for touch */
 @media (max-width: 768px) {
   ::-webkit-scrollbar {
@@ -233,6 +250,50 @@ input[type="range"].menu-range::-moz-range-thumb {
   box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
 }
 
+.hud-meter {
+  width: 100%;
+  height: 0.5rem;
+  appearance: none;
+  border: 0;
+  border-radius: 9999px;
+  overflow: hidden;
+  background: #334155;
+  display: block;
+}
+
+.hud-meter::-webkit-progress-bar {
+  background: #334155;
+  border-radius: 9999px;
+}
+
+.hud-meter::-webkit-progress-value {
+  border-radius: 9999px;
+}
+
+.hud-meter::-moz-progress-bar {
+  border-radius: 9999px;
+}
+
+.hud-meter-amber::-webkit-progress-value,
+.hud-meter-amber::-moz-progress-bar {
+  background: #fbbf24;
+}
+
+.hud-meter-emerald::-webkit-progress-value,
+.hud-meter-emerald::-moz-progress-bar {
+  background: #34d399;
+}
+
+.hud-meter-red::-webkit-progress-value,
+.hud-meter-red::-moz-progress-bar {
+  background: #ef4444;
+}
+
+.hud-meter-orange::-webkit-progress-value,
+.hud-meter-orange::-moz-progress-bar {
+  background: #f97316;
+}
+
 /* Safe area insets for notched phones */
 @supports (padding: max(0px)) {
   .safe-area-inset {
@@ -333,4 +394,65 @@ input[type="range"].menu-range::-moz-range-thumb {
     linear-gradient(180deg, #050505 0%, #090909 40%, #020202 100%);
   background-size: cover;
   background-position: center;
+}
+
+@keyframes particle-burst {
+  0% {
+    transform: scale(0) translate(0, 0);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1) translate(var(--tx), var(--ty));
+    opacity: 0;
+  }
+}
+
+@keyframes particle-rise {
+  0% {
+    transform: translateY(0) scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: translateY(-40px) scale(0);
+    opacity: 0;
+  }
+}
+
+@keyframes particle-fall {
+  0% {
+    transform: translateY(-20px) scale(0.5);
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+
+  100% {
+    transform: translateY(0) scale(1);
+    opacity: 0;
+  }
+}
+
+.particle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+
+.particle-battle {
+  animation: particle-burst 0.8s ease-out forwards;
+}
+
+.particle-conquest {
+  animation: particle-rise 1.2s ease-out forwards;
+}
+
+.particle-build {
+  animation: particle-fall 0.6s ease-out forwards;
 }

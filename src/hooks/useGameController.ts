@@ -1,11 +1,49 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { GameState, ActionType, Army } from '../types';
+import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest } from '../types';
 import { generateInitialState } from '../logic/mapGeneration';
 import { processEndOfTurn, findPath } from '../logic/turnLogic';
 import { resolveCombat } from '../logic/combatLogic';
-import { executeRecruitmentWithComposition, executeBuilding, executeDisband, executeTradeExchange } from '../logic/economyLogic';
+import {
+  executeRecruitmentWithComposition,
+  executeBuilding,
+  executeDisband,
+  executeTradeExchange,
+  massAssimilate,
+  massBuildCourts,
+  massBuildFarms,
+  massBuildMines,
+  massBuildWorkshops,
+  massInvest,
+  MassActionType
+} from '../logic/economyLogic';
 import { processAI } from '../logic/aiLogic';
-import { ACTION_COSTS } from '../logic/game-constants';
+import { ACTION_COSTS, DIPLOMACY_ACTION_COSTS } from '../logic/game-constants';
+import {
+  playBuildSound,
+  playEndTurnSound,
+  playRecruitSound,
+  playWarDeclaredSound
+} from '../logic/sfxLogic';
+import {
+  canDeclareWar,
+  canDemandTribute,
+  canImproveRelations,
+  canOfferTribute,
+  canProposeAlliance,
+  canProposeDefensivePact,
+  canProposeNAP,
+  canSendInsult,
+  declareWar,
+  demandTribute,
+  improveRelations,
+  offerTribute,
+  proposeAlliance,
+  proposeDefensivePact,
+  proposeNonAggressionPact,
+  resolveCallToArms,
+  sendInsult,
+  autoResolveCallToArms
+} from '../logic/diplomacyLogic';
 import { persistence } from '../persistence';
 import { useUI } from './useUI';
 import { deepClone } from '../utils/deepClone';
@@ -54,6 +92,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
   }, [setGameState]);
 
   const handleEndTurn = useCallback(() => {
+    playEndTurnSound();
     setGameState(prev => {
       if (!prev) return prev;
 
@@ -123,6 +162,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       if (success) {
         r.actionPoints -= ACTION_COSTS.recruit;
         setGameState(clone);
+        playRecruitSound();
         
         // Build toast message
         const parts: string[] = [];
@@ -148,6 +188,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       if (executeBuilding(clone, r, p, buildingType)) {
         r.actionPoints -= ACTION_COSTS.build;
         setGameState(clone);
+        playBuildSound();
         ui.showToast(`Edifício construído!`, "success");
       } else {
         ui.showToast("Recursos insuficientes para construir!", "error");
@@ -181,6 +222,275 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       return next;
     });
   }, [gameState, setGameState, ui]);
+
+  const handleMassAction = useCallback((actionType: MassActionType) => {
+    if (!gameState) return;
+
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    if (!realm) return;
+
+    let count = 0;
+    let costGold = 0;
+    let costMaterials = 0;
+    let actionLabel = '';
+
+    switch (actionType) {
+      case 'assimilate': {
+        const result = massAssimilate(clone, realm.id);
+        count = result.count;
+        costGold = result.cost;
+        actionLabel = 'Assimilação em massa';
+        break;
+      }
+      case 'invest': {
+        const result = massInvest(clone, realm.id);
+        count = result.count;
+        costGold = result.cost;
+        actionLabel = 'Investimento em massa';
+        break;
+      }
+      case 'buildFarms': {
+        const result = massBuildFarms(clone, realm.id);
+        count = result.count;
+        costGold = result.costGold;
+        costMaterials = result.costMaterials;
+        actionLabel = 'Construção de farms em massa';
+        break;
+      }
+      case 'buildMines': {
+        const result = massBuildMines(clone, realm.id);
+        count = result.count;
+        costGold = result.costGold;
+        costMaterials = result.costMaterials;
+        actionLabel = 'Construção de mines em massa';
+        break;
+      }
+      case 'buildWorkshops': {
+        const result = massBuildWorkshops(clone, realm.id);
+        count = result.count;
+        costGold = result.costGold;
+        costMaterials = result.costMaterials;
+        actionLabel = 'Construção de workshops em massa';
+        break;
+      }
+      case 'buildCourts': {
+        const result = massBuildCourts(clone, realm.id);
+        count = result.count;
+        costGold = result.costGold;
+        costMaterials = result.costMaterials;
+        actionLabel = 'Construção de courts em massa';
+        break;
+      }
+      default:
+        return;
+    }
+
+    setGameState(clone);
+    setTimeout(() => {
+      const costParts = [`${costGold}g`];
+      if (costMaterials > 0) costParts.push(`${costMaterials}m`);
+      ui.showToast(`${actionLabel} concluída em ${count} províncias. Custo: ${costParts.join(' ')}.`, count > 0 ? 'success' : 'info');
+    }, 0);
+  }, [gameState, setGameState, ui]);
+
+  const handleDiplomacyAction = useCallback((action: DiplomacyAction, payload?: { amount?: number }) => {
+    if (!gameState) return;
+
+    const targetRealmId = ui.selectedDiplomacyTargetId;
+    if (!targetRealmId) {
+      ui.showToast('Selecione um reino para diplomacia.', 'error');
+      return;
+    }
+
+    const playerRealm = gameState.realms[gameState.playerRealmId];
+    const targetRealm = gameState.realms[targetRealmId];
+    if (!playerRealm || !targetRealm) {
+      ui.showToast('Reino alvo não encontrado.', 'error');
+      return;
+    }
+
+    const cost = DIPLOMACY_ACTION_COSTS[action];
+    if ((playerRealm.actionPoints ?? 0) < cost) {
+      ui.showToast('Pontos de ação insuficientes.', 'error');
+      return;
+    }
+
+    const amount = Math.max(1, payload?.amount ?? 50);
+    const clone = deepClone(gameState) as GameState & { pendingCallToArms?: CallToArmsRequest[] };
+    const clonePlayer = clone.realms[clone.playerRealmId];
+    const cloneTarget = clone.realms[targetRealmId];
+    if (!clonePlayer || !cloneTarget) {
+      ui.showToast('Reino alvo não encontrado.', 'error');
+      return;
+    }
+
+    let toastMessage = '';
+    let toastType: 'success' | 'error' | 'info' = 'success';
+    let shouldClose = false;
+
+    switch (action) {
+      case 'alliance': {
+        const validation = canProposeAlliance(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível propor aliança.', 'error');
+          return;
+        }
+        proposeAlliance(clone, clone.playerRealmId, targetRealmId);
+        const accepted = clonePlayer.alliances.includes(targetRealmId);
+        toastMessage = accepted
+          ? `Aliança selada com ${cloneTarget.name}.`
+          : `${cloneTarget.name} recusou a aliança.`;
+        toastType = accepted ? 'success' : 'error';
+        shouldClose = accepted;
+        break;
+      }
+      case 'nonAggressionPact': {
+        const validation = canProposeNAP(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível propor pacto de não agressão.', 'error');
+          return;
+        }
+        proposeNonAggressionPact(clone, clone.playerRealmId, targetRealmId);
+        const accepted = clonePlayer.nonAggressionPacts.includes(targetRealmId);
+        toastMessage = accepted
+          ? `NAP firmado com ${cloneTarget.name}.`
+          : `${cloneTarget.name} recusou o NAP.`;
+        toastType = accepted ? 'success' : 'error';
+        shouldClose = accepted;
+        break;
+      }
+      case 'defensivePact': {
+        const validation = canProposeDefensivePact(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível propor pacto defensivo.', 'error');
+          return;
+        }
+        proposeDefensivePact(clone, clone.playerRealmId, targetRealmId);
+        const accepted = clonePlayer.defensivePacts.includes(targetRealmId);
+        toastMessage = accepted
+          ? `Pacto defensivo firmado com ${cloneTarget.name}.`
+          : `${cloneTarget.name} recusou o pacto defensivo.`;
+        toastType = accepted ? 'success' : 'error';
+        shouldClose = accepted;
+        break;
+      }
+      case 'improveRelations': {
+        const validation = canImproveRelations(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível melhorar relações.', 'error');
+          return;
+        }
+        const result = improveRelations(clone, clone.playerRealmId, targetRealmId);
+        toastMessage = `Relações com ${cloneTarget.name} melhoraram em ${result.delta}.`;
+        toastType = 'success';
+        break;
+      }
+      case 'sendInsult': {
+        const validation = canSendInsult(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível enviar insulto.', 'error');
+          return;
+        }
+        const result = sendInsult(clone, clone.playerRealmId, targetRealmId);
+        toastMessage = `Relações com ${cloneTarget.name} pioraram em ${Math.abs(result.delta)}.`;
+        toastType = 'info';
+        break;
+      }
+      case 'offerTribute': {
+        const validation = canOfferTribute(clone, clone.playerRealmId, targetRealmId, amount);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível oferecer tributo.', 'error');
+          return;
+        }
+        offerTribute(clone, clone.playerRealmId, targetRealmId, amount);
+        const accepted = !!clonePlayer.tributeTo[targetRealmId];
+        toastMessage = accepted
+          ? `Tributo de ${amount} ouro aceito por ${cloneTarget.name}.`
+          : `${cloneTarget.name} recusou o tributo.`;
+        toastType = accepted ? 'success' : 'error';
+        shouldClose = accepted;
+        break;
+      }
+      case 'demandTribute': {
+        const validation = canDemandTribute(clone, clone.playerRealmId, targetRealmId, amount);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível exigir tributo.', 'error');
+          return;
+        }
+        const result = demandTribute(clone, clone.playerRealmId, targetRealmId, amount);
+        toastMessage = result.accepted
+          ? `Tributo de ${amount} ouro exigido de ${cloneTarget.name}.`
+          : `${cloneTarget.name} rejeitou a exigência.`;
+        toastType = result.accepted ? 'success' : 'error';
+        shouldClose = result.accepted;
+        break;
+      }
+      case 'declareWar': {
+        const validation = canDeclareWar(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível declarar guerra.', 'error');
+          return;
+        }
+
+        const warResult = declareWar(clone, clone.playerRealmId, targetRealmId);
+        clone.pendingCallToArms = warResult.callsToResolve;
+
+        const playerCalls = warResult.callsToResolve.filter(call => call.calledRealmId === gameState.playerRealmId);
+        const aiCalls = warResult.callsToResolve.filter(call => call.calledRealmId !== gameState.playerRealmId);
+
+        aiCalls.forEach(call => {
+          const accepted = autoResolveCallToArms(clone, call);
+          resolveCallToArms(clone, call.id, accepted);
+        });
+
+        clonePlayer.actionPoints = Math.max(0, (clonePlayer.actionPoints ?? 0) - cost);
+        delete clone.pendingCallToArms;
+        playWarDeclaredSound();
+        setGameState(clone);
+        ui.setPendingCallToArms(playerCalls);
+        ui.setShowCallToArmsModal(playerCalls.length > 0);
+        ui.setShowDiplomacyModal(false);
+        setTimeout(() => ui.showToast(`Guerra declarada contra ${targetRealm.name}.`, 'success'), 0);
+        return;
+      }
+      default:
+        return;
+    }
+
+    clonePlayer.actionPoints = Math.max(0, (clonePlayer.actionPoints ?? 0) - cost);
+    setGameState(clone);
+    if (shouldClose) {
+      ui.setShowDiplomacyModal(false);
+    }
+    setTimeout(() => ui.showToast(toastMessage, toastType), 0);
+  }, [gameState, ui, setGameState]);
+
+  const handleCallToArmsResponse = useCallback((requestId: string, accepted: boolean) => {
+    if (!gameState) return;
+
+    const currentQueue = ui.pendingCallToArms;
+    const request = currentQueue.find(item => item.id === requestId);
+    if (!request) return;
+
+    const clone = deepClone(gameState) as GameState & { pendingCallToArms?: CallToArmsRequest[] };
+    clone.pendingCallToArms = [...currentQueue];
+    resolveCallToArms(clone, requestId, accepted);
+    delete clone.pendingCallToArms;
+    setGameState(clone);
+
+    const remaining = currentQueue.filter(item => item.id !== requestId);
+    ui.setPendingCallToArms(remaining);
+    ui.setShowCallToArmsModal(remaining.length > 0);
+    setTimeout(() => {
+      ui.showToast(
+        accepted
+          ? `${gameState.realms[request.calledRealmId]?.name || 'Reino'} entrou na guerra.`
+          : `${gameState.realms[request.calledRealmId]?.name || 'Reino'} recusou o chamado.`,
+        accepted ? 'success' : 'info'
+      );
+    }, 0);
+  }, [gameState, ui, setGameState]);
 
   const handleDisband = useCallback((provinceId: string) => {
     if (!gameState) return;
@@ -362,6 +672,12 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     ui.showToast("Jogo salvo!", "success");
   }, [gameState, ui]);
 
+  const handleQuickSave = useCallback(() => {
+    if (!gameState) return;
+    persistence.saveAutoSave(gameState);
+    ui.showToast('Jogo salvo! [S]', 'success');
+  }, [gameState, ui]);
+
   const handleLoad = useCallback((id: string) => {
     const data = persistence.loadSave(id);
     if (data) {
@@ -370,6 +686,28 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       ui.showToast("Partida carregada.", "info");
     }
   }, [setGameState, ui]);
+
+  const centerOnCapital = useCallback(() => {
+    if (!gameState) return;
+    if (typeof window === 'undefined') return;
+
+    const realm = gameState.realms[gameState.playerRealmId];
+    if (!realm?.capitalId) return;
+
+    const capital = gameState.provinces[realm.capitalId];
+    if (!capital) return;
+
+    const [capitalX, capitalY] = capital.center;
+    const zoom = ui.zoom;
+    const centerX = window.innerWidth / 2;
+    const centerY = window.innerHeight / 2;
+
+    ui.setPanOffset({
+      x: centerX - capitalX * zoom,
+      y: centerY - capitalY * zoom
+    });
+    ui.setZoom(1);
+  }, [gameState, ui]);
 
   const handleDeleteSave = useCallback((id: string) => {
     persistence.deleteSave(id);
@@ -438,12 +776,17 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     startNewGame,
     handleEndTurn,
     handleAction,
+    handleMassAction,
+    handleDiplomacyAction,
+    handleCallToArmsResponse,
     handleDisband,
     handleProvinceClick,
     confirmAttack,
     handleSave,
+    handleQuickSave,
     handleLoad,
     handleDeleteSave,
+    centerOnCapital,
     cancelMarchOrder,
     addLog,
     handleMouseDown,

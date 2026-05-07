@@ -3,6 +3,15 @@ export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opp
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
 export type Terrain = 'plains' | 'forest' | 'mountain';
 export type ActionType = 'idle' | 'moving' | 'attacking' | 'recruit' | 'build' | 'diplomacy' | 'scouting' | 'dispatching_scouts' | 'routing' | 'disband' | 'trade';
+export type DiplomacyAction =
+  | 'alliance'
+  | 'nonAggressionPact'
+  | 'defensivePact'
+  | 'improveRelations'
+  | 'sendInsult'
+  | 'offerTribute'
+  | 'demandTribute'
+  | 'declareWar';
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade';
 export type UnitType = 'infantry' | 'archers' | 'cavalry' | 'scouts';
 
@@ -64,20 +73,26 @@ export interface Realm {
   personality: PersonalityType;
   objective: StrategicObjective;
   relations: Record<string, number>;
-  memory: Record<string, {
-    betrayal: number;
-    help: number;
-    aggression: number;
-    lastWarTurn: number;
-    warExhaustion: number;
-    truces: Record<string, number>;
-  }>;
+  nonAggressionPacts: string[];
+  defensivePacts: string[];
+  tributeFrom: Record<string, number>;
+  tributeTo: Record<string, number>;
+  napExpiryTurn: Record<string, number>;
+  memory: Record<string, RealmMemory>;
   goldIncome?: number;
   goldMaintenance?: number;
   foodIncome?: number;
   foodMaintenance?: number;
   materialsIncome?: number;
   isCoalitionMember?: string;
+}
+
+export interface RealmMemory {
+  betrayal: number;
+  help: number;
+  aggression: number;
+  lastWarTurn: number;
+  warExhaustion: number;
 }
 
 export interface MarchOrder {
@@ -127,6 +142,7 @@ export interface GameState {
     provinceName: string;
     conquered: boolean;
     result: BattleResult;
+    retreatInfo?: RetreatInfo;
   }[];
   gameOver?: { winnerId: string; reason: string };
   lastTurnMovements?: { fromId: string; toId: string; realmId: string }[];
@@ -134,11 +150,13 @@ export interface GameState {
 
 export interface VisualEffect {
   id: string;
-  type: 'battle' | 'conquest' | 'trade';
-  x: number;
-  y: number;
+  type: 'battle' | 'conquest' | 'trade' | 'battle_particles' | 'conquest_particles' | 'build_particles';
+  provinceId?: string;
+  x?: number;
+  y?: number;
   duration: number;
   startTime: number;
+  particleCount?: number;
 }
 
 export interface SaveData {
@@ -171,4 +189,19 @@ export interface BattleResult {
   defenderRemaining: Army;
   attackerLosses: Army;
   defenderLosses: Army;
+}
+
+export interface RetreatInfo {
+  count: number;
+  destinationName: string;
+  composition: Army;
+}
+
+export interface CallToArmsRequest {
+  id: string;
+  defenderId: string;
+  aggressorId: string;
+  calledRealmId: string;
+  pactType: 'alliance' | 'defensivePact';
+  resolved: boolean;
 }

@@ -1,7 +1,8 @@
 import { GameState, Realm, Province, War } from '../types';
 import { ACTION_COSTS, UNIT_STATS, BUILDING_PRODUCTION } from './game-constants';
 import { handleResourceDeficit } from './economyLogic';
-import { resolveCombat } from './combatLogic';
+import { calculateRetreat, getRetreatDestination, resolveCombat } from './combatLogic';
+import { playConquestSound } from './sfxLogic';
 import { deepClone } from '../utils/deepClone';
 
 export function calculateVisibility(state: GameState): string[] {
@@ -193,18 +194,61 @@ function processMarchOrders(state: GameState) {
 
   const finishAttack = (order: (typeof state.marchOrders)[number], prov: Province) => {
     const defenderName = state.realms[prov.ownerId]?.name || 'Neutral';
-    const result = resolveCombat(order.troops, prov.army, prov.terrain, prov.defense);
+    const defenderRealmId = prov.ownerId;
+    const result = resolveCombat(order.troops, prov.army, prov.terrain, prov.defense, state, prov.id);
+    const recalcRetreatTotal = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
+      army.infantry + army.archers + army.cavalry + army.scouts;
+    const applyRetreat = (realmId: string, remainingArmy: { infantry: number; archers: number; cavalry: number; scouts: number }) => {
+      const retreatDest = getRetreatDestination(state, prov.id, realmId);
+      if (!retreatDest) return null;
+
+      const retreating = calculateRetreat(remainingArmy);
+      const retreatCount = recalcRetreatTotal(retreating);
+      if (retreatCount <= 0) return null;
+
+      const destProv = state.provinces[retreatDest];
+      if (!destProv) return null;
+
+      destProv.army.infantry += retreating.infantry;
+      destProv.army.archers += retreating.archers;
+      destProv.army.cavalry += retreating.cavalry;
+      destProv.army.scouts += retreating.scouts;
+      destProv.troops = recalcTroops(destProv.army);
+
+      if (realmId === state.playerRealmId) {
+        state.logs.push(`DERROTA! ${retreatCount} tropas recuaram para ${destProv.name}.`);
+      }
+
+      return {
+        count: retreatCount,
+        destinationName: destProv.name,
+        composition: retreating
+      };
+    };
+    let retreatInfo = null;
 
     if (result.won) {
+      retreatInfo = applyRetreat(defenderRealmId, result.defenderRemaining);
       prov.ownerId = order.realmId;
       prov.loyalty = 40;
       prov.recentlyConquered = 3;
       prov.army = result.attackerRemaining;
       prov.troops = recalcTroops(prov.army);
+      playConquestSound();
+      state.visualEffects = state.visualEffects || [];
+      state.visualEffects.push({
+        id: `conquest_fx_${Date.now()}_${Math.random()}`,
+        type: 'conquest_particles',
+        provinceId: prov.id,
+        particleCount: 12,
+        startTime: Date.now(),
+        duration: 1200
+      });
       if (order.realmId === state.playerRealmId) {
         state.logs.push(`VITORIA! Suas tropas conquistaram ${prov.name}!`);
       }
     } else {
+      retreatInfo = applyRetreat(order.realmId, result.attackerRemaining);
       prov.army = result.defenderRemaining;
       prov.troops = recalcTroops(prov.army);
       if (order.realmId === state.playerRealmId) {
@@ -217,7 +261,8 @@ function processMarchOrders(state: GameState) {
       defenderName,
       provinceName: prov.name,
       conquered: result.won,
-      result
+      result,
+      retreatInfo: retreatInfo || undefined
     });
   };
 
@@ -550,9 +595,53 @@ export function processEndOfTurn(state: GameState): GameState {
       return sum + Math.floor((p1.wealth + p2.wealth) * 0.5);
     }, 0);
 
-    realm.gold += Math.floor((goldIncome + tradeIncome) * oePenalty - goldMaintenance);
-    realm.food += Math.floor(foodIncome * oePenalty - foodMaintenance);
-    realm.materials += Math.floor(materialIncome * oePenalty);
+    const goldRevenue = Math.floor((goldIncome + tradeIncome) * oePenalty);
+    const foodRevenue = Math.floor(foodIncome * oePenalty);
+    const materialRevenue = Math.floor(materialIncome * oePenalty);
+
+    realm.gold += goldRevenue;
+    realm.food += foodRevenue;
+    realm.materials += materialRevenue;
+
+    Object.entries({ ...realm.tributeTo }).forEach(([targetId, rawAmount]) => {
+      const amount = Number(rawAmount) || 0;
+      const targetRealm = newState.realms[targetId];
+      if (!targetRealm) {
+        delete realm.tributeTo[targetId];
+        return;
+      }
+
+      if (realm.gold >= amount) {
+        realm.gold -= amount;
+        targetRealm.gold += amount;
+        return;
+      }
+
+      delete realm.tributeTo[targetId];
+      delete targetRealm.tributeFrom[realm.id];
+      realm.relations[targetId] = Math.max(-100, (realm.relations[targetId] || 0) - 10);
+      targetRealm.relations[realm.id] = realm.relations[targetId];
+      newState.logs.push(`Tributo a ${targetRealm.name} cancelado por falta de fundos.`);
+    });
+
+    Object.entries({ ...realm.napExpiryTurn }).forEach(([targetId, expiryTurn]) => {
+      const targetRealm = newState.realms[targetId];
+      const expiry = Number(expiryTurn) || 0;
+      if (!targetRealm) {
+        delete realm.napExpiryTurn[targetId];
+        return;
+      }
+      if (expiry > newState.turn || realm.id > targetId) return;
+
+      realm.nonAggressionPacts = realm.nonAggressionPacts.filter(id => id !== targetId);
+      targetRealm.nonAggressionPacts = targetRealm.nonAggressionPacts.filter(id => id !== realm.id);
+      delete realm.napExpiryTurn[targetId];
+      delete targetRealm.napExpiryTurn[realm.id];
+      newState.logs.push(`O Pacto de Não-Agressão com ${targetRealm.name} expirou.`);
+    });
+
+    realm.gold -= goldMaintenance;
+    realm.food -= foodMaintenance;
 
     realm.goldIncome = goldIncome + tradeIncome;
     realm.goldMaintenance = goldMaintenance;

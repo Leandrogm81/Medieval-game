@@ -9,9 +9,13 @@ import { GameInstructionsModal } from './components/GameInstructionsModal';
 import { TurnResultModal } from './components/TurnResultModal';
 import { CombatSetupModal } from './components/CombatSetupModal';
 import { BattleOutcomeModal } from './components/BattleOutcomeModal';
+import { DiplomacyModal } from './components/DiplomacyModal';
+import { CallToArmsModal } from './components/CallToArmsModal';
+import { Minimap } from './components/Minimap';
 import { ToastContainer } from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { motion, AnimatePresence } from 'motion/react';
+import * as Tone from 'tone';
 import {
   PlusCircle,
   Settings,
@@ -36,11 +40,13 @@ import {
 import { useUI } from './hooks/useUI';
 import { useGameController } from './hooks/useGameController';
 import { persistence } from './persistence.ts';
+import { initAudio } from './logic/sfxLogic';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
   const ui = useUI();
   const ctrl = useGameController(gameState, setGameState, ui);
+  const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
 
   // Persistence and Visual Effects cleanup
   useEffect(() => {
@@ -57,6 +63,28 @@ export default function App() {
 
     return () => {
       clearInterval(timer);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateViewportSize = () => {
+      setViewportSize({ width: window.innerWidth, height: window.innerHeight });
+    };
+
+    updateViewportSize();
+    window.addEventListener('resize', updateViewportSize);
+    return () => window.removeEventListener('resize', updateViewportSize);
+  }, []);
+
+  useEffect(() => {
+    (globalThis as typeof globalThis & { Tone?: typeof Tone }).Tone = Tone;
+    const handleFirstClick = () => {
+      initAudio();
+    };
+
+    document.addEventListener('click', handleFirstClick, { once: true });
+    return () => {
+      document.removeEventListener('click', handleFirstClick);
     };
   }, []);
 
@@ -81,6 +109,51 @@ export default function App() {
     } catch (err) {
       console.error("Erro ao alternar tela cheia:", err);
       ui.showToast("Erro ao alternar tela cheia. O navegador pode ter bloqueado a ação.", "error");
+    }
+  };
+
+  const cancelCurrentAction = () => {
+    ui.setActionState('idle');
+    ui.setActionSourceId(null);
+    ui.setPreviewPath([]);
+    ui.setActionBannerMessage(null);
+    ui.setSelectingMoveComposition(false);
+    ui.setMultiSelectedProvinceIds([]);
+  };
+
+  const handleMapAction = (type: 'move' | 'attack' | 'scout') => {
+    if (!ui.selectedProvinceId || !gameState) return;
+    const prov = gameState.provinces[ui.selectedProvinceId];
+    if (!prov || prov.ownerId !== gameState.playerRealmId) return;
+
+    if (type === 'move') {
+      ui.setMultiSelectedProvinceIds([]);
+      ui.setActionSourceId(ui.selectedProvinceId);
+      ui.setActionState('moving');
+      ui.setSelectingMoveComposition(true);
+      ui.setActionBannerMessage('Modo Marcha — selecione o destino no mapa');
+      ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'move'));
+      ui.setMoveComposition({
+        infantry: prov.army.infantry,
+        archers: prov.army.archers,
+        cavalry: prov.army.cavalry,
+        scouts: 0
+      });
+      ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
+    } else if (type === 'attack') {
+      ui.setMultiSelectedProvinceIds([]);
+      ui.setActionSourceId(ui.selectedProvinceId);
+      ui.setActionState('attacking');
+      ui.setActionBannerMessage('Modo Ataque — clique em uma província adjacente');
+      ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'attack'));
+      ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
+    } else if (type === 'scout') {
+      ui.setMultiSelectedProvinceIds([]);
+      ui.setActionSourceId(ui.selectedProvinceId);
+      ui.setActionState('dispatching_scouts');
+      ui.setActionBannerMessage('Modo Reconhecimento — selecione o destino');
+      ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'scout'));
+      ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
     }
   };
 
@@ -125,6 +198,106 @@ export default function App() {
 
     return source.neighbors.slice();
   };
+
+  const openDiplomacy = (targetRealmId: string) => {
+    ui.setSelectedDiplomacyTargetId(targetRealmId);
+    ui.setShowDiplomacyModal(true);
+  };
+
+  const handleProvinceClick = (id: string) => {
+    if (gameState && ui.viewMode === 'diplomatic') {
+      const prov = gameState.provinces[id];
+      if (prov && prov.ownerId !== gameState.playerRealmId && prov.ownerId !== 'neutral') {
+        ui.setSelectedProvinceId(id);
+        ui.setMultiSelectedProvinceIds([]);
+        openDiplomacy(prov.ownerId);
+        return;
+      }
+    }
+
+    ctrl.handleProvinceClick(id, ui.hasDragged);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+      if (ui.showMenu) return;
+      if (e.repeat) return;
+      if (!gameState) return;
+
+      switch (e.key) {
+        case 'Enter':
+          e.preventDefault();
+          ctrl.handleEndTurn();
+          return;
+        case 'Escape':
+          e.preventDefault();
+          if (ui.actionState !== 'idle') cancelCurrentAction();
+          return;
+        case 'w':
+        case 'W':
+          if (ui.selectedProvinceId && ui.actionState === 'idle') handleMapAction('move');
+          return;
+        case 'a':
+        case 'A':
+          if (ui.selectedProvinceId && ui.actionState === 'idle') handleMapAction('attack');
+          return;
+        case 's':
+        case 'S':
+          if (!e.ctrlKey && !e.metaKey) {
+            e.preventDefault();
+            ctrl.handleQuickSave();
+          }
+          return;
+        case '1':
+          ui.setViewMode('political');
+          return;
+        case '2':
+          ui.setViewMode('economic');
+          return;
+        case '3':
+          ui.setViewMode('military');
+          return;
+        case '4':
+          ui.setViewMode('diplomatic');
+          return;
+        case '5':
+          ui.setViewMode('resources');
+          return;
+        case 'q':
+        case 'Q':
+          ui.setZoom(Math.max(0.5, ui.zoom - 0.2));
+          return;
+        case 'e':
+        case 'E':
+          ui.setZoom(Math.min(3, ui.zoom + 0.2));
+          return;
+        case 'f':
+        case 'F':
+          toggleFullScreen();
+          return;
+        default:
+          if (e.code === 'Space') {
+            e.preventDefault();
+            ctrl.centerOnCapital();
+          }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [
+    ctrl,
+    gameState,
+    ui.actionState,
+    ui.showMenu,
+    ui.selectedProvinceId,
+    ui.zoom,
+    ui.setViewMode,
+    ui.setZoom,
+    toggleFullScreen
+  ]);
 
   if (ui.isGenerating) {
     return (
@@ -390,9 +563,16 @@ export default function App() {
             </button>
           </div>
 
-          {ui.actionBannerMessage && (
+          {(ui.actionBannerMessage || ui.multiSelectedProvinceIds.length > 1) && (
             <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 px-6 py-2 bg-black/70 backdrop-blur-sm border border-amber-500/50 rounded-b-lg">
-              <span className="text-amber-200 text-sm font-bold">{ui.actionBannerMessage}</span>
+              <div className="flex flex-col items-center gap-0.5">
+                {ui.actionBannerMessage && <span className="text-amber-200 text-sm font-bold">{ui.actionBannerMessage}</span>}
+                {ui.multiSelectedProvinceIds.length > 1 && (
+                  <span className="text-[11px] font-bold text-amber-300/90">
+                    {ui.multiSelectedProvinceIds.length} províncias selecionadas
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -408,15 +588,33 @@ export default function App() {
             <Map
               gameState={gameState}
               selectedProvinceId={ui.selectedProvinceId}
-              onProvinceClick={(id) => ctrl.handleProvinceClick(id, ui.hasDragged)}
+              onProvinceClick={handleProvinceClick}
               viewMode={ui.viewMode}
               previewPath={ui.previewPath}
               marchAnimations={ui.marchAnimations}
               triggerMarchAnimation={ui.triggerMarchAnimation}
               actionState={ui.actionState}
               actionSourceId={ui.actionSourceId}
+              multiSelectedProvinceIds={ui.multiSelectedProvinceIds}
+              onMultiSelectChange={ui.setMultiSelectedProvinceIds}
+              playerRealmId={gameState.playerRealmId}
             />
           </motion.div>
+
+          {ui.showMinimap && (
+            <Minimap
+              gameState={gameState}
+              panOffset={ui.panOffset}
+              zoom={ui.zoom}
+              viewportSize={viewportSize}
+              onNavigate={(x, y) => {
+                ui.setPanOffset({
+                  x: viewportSize.width / 2 - x * ui.zoom,
+                  y: viewportSize.height / 2 - y * ui.zoom
+                });
+              }}
+            />
+          )}
 
           {/* Floating Selection Details for Mobile (Top-left within map area) */}
           <AnimatePresence>
@@ -468,14 +666,10 @@ export default function App() {
           onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
           onToggleInstructions={() => ui.setShowInstructionsModal(true)}
           actionState={ui.actionState}
-          onCancelAction={() => {
-            ui.setActionState('idle');
-            ui.setActionSourceId(null);
-            ui.setPreviewPath([]);
-            ui.setActionBannerMessage(null);
-            ui.setSelectingMoveComposition(false);
-          }}
+          onCancelAction={cancelCurrentAction}
           onToggleHud={() => ui.setIsHudOpen(!ui.isHudOpen)}
+          showMinimap={ui.showMinimap}
+          onToggleMinimap={() => ui.setShowMinimap(!ui.showMinimap)}
           isHudOpen={ui.isHudOpen}
           onMapAction={(type) => {
             if (!ui.selectedProvinceId) return;
@@ -520,6 +714,8 @@ export default function App() {
           onRecruitCompositionChange={ui.setRecruitComposition}
           onDispatchScouts={() => ui.setActionState('dispatching_scouts')}
           onRoute={() => ui.setActionState('routing')}
+          onDiplomacy={openDiplomacy}
+          onMassAction={ctrl.handleMassAction}
           onToggleFullScreen={toggleFullScreen}
           isDisbandMode={ui.isDisbandMode}
           onIsDisbandMode={(v) => {
@@ -565,6 +761,33 @@ export default function App() {
               onClose={() => ui.setShowInstructionsModal(false)}
             />
           )}
+          {ui.showDiplomacyModal && ui.selectedDiplomacyTargetId && (
+            <DiplomacyModal
+              isOpen={ui.showDiplomacyModal}
+              onClose={() => ui.setShowDiplomacyModal(false)}
+              targetRealmId={ui.selectedDiplomacyTargetId}
+              gameState={gameState}
+              onAction={ctrl.handleDiplomacyAction}
+              playerRealmId={gameState.playerRealmId}
+            />
+          )}
+          {ui.showCallToArmsModal && ui.pendingCallToArms.length > 0 && (
+            (() => {
+              const request = ui.pendingCallToArms[0];
+              const defender = gameState.realms[request.defenderId];
+              const aggressor = gameState.realms[request.aggressorId];
+              return (
+                <CallToArmsModal
+                  isOpen={ui.showCallToArmsModal}
+                  defenderName={defender?.name || 'Reino aliado'}
+                  aggressorName={aggressor?.name || 'Inimigo'}
+                  pactType={request.pactType}
+                  onAccept={() => ctrl.handleCallToArmsResponse(request.id, true)}
+                  onRefuse={() => ctrl.handleCallToArmsResponse(request.id, false)}
+                />
+              );
+            })()
+          )}
           {ui.showTurnSummary && ui.turnSummaryData && (
             <TurnResultModal
               isOpen={ui.showTurnSummary}
@@ -607,6 +830,7 @@ export default function App() {
               defenderName={ui.battleResultMeta.defenderName}
               provinceName={ui.battleResultMeta.provinceName}
               conquered={ui.battleResultMeta.conquered}
+              retreatInfo={ui.battleResultMeta.retreatInfo}
               onClose={() => ui.setShowBattleResult(false)}
             />
           )}

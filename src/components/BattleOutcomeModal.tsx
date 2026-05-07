@@ -1,6 +1,8 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Swords, X, Shield, Skull, Trophy } from 'lucide-react';
+import { Swords, X, Skull } from 'lucide-react';
+import { RetreatInfo } from '../types';
+import { playDefeatSound, playVictoryFanfare } from '../logic/sfxLogic';
 
 interface BattleOutcomeModalProps {
   isOpen: boolean;
@@ -15,6 +17,7 @@ interface BattleOutcomeModalProps {
   defenderName: string;
   provinceName: string;
   conquered: boolean;
+  retreatInfo?: RetreatInfo;
 }
 
 export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
@@ -24,8 +27,18 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
   attackerName,
   defenderName,
   provinceName,
-  conquered
+  conquered,
+  retreatInfo
 }) => {
+  useEffect(() => {
+    if (!isOpen || !result) return;
+    if (result.isPlayerWinner) {
+      playVictoryFanfare();
+      return;
+    }
+    playDefeatSound();
+  }, [isOpen, result?.isPlayerWinner]);
+
   if (!isOpen || !result) return null;
 
   const battleResult = {
@@ -35,6 +48,8 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
     provinceName: provinceName,
     isPlayerAttacker: true, // Assuming for now
   };
+
+  const retreatTotal = retreatInfo?.count || 0;
 
   return (
     <AnimatePresence>
@@ -58,6 +73,9 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
             <div className="text-center">
               <p className="text-slate-400 text-sm uppercase font-bold tracking-widest mb-2">Local do Conflito</p>
               <h3 className="text-3xl font-serif text-white">{battleResult.provinceName}</h3>
+              <p className="mt-2 text-xs font-bold uppercase tracking-widest text-slate-500">
+                {conquered ? 'Província conquistada' : 'Província defendida'}
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-8 items-center relative">
@@ -99,6 +117,18 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
                 </div>
               </div>
             </div>
+
+            {retreatTotal > 0 && retreatInfo && (
+              <div className="bg-emerald-950/20 border border-emerald-800/40 rounded-xl p-4 space-y-2">
+                <p className="text-xs text-emerald-300 font-black uppercase tracking-widest">🏃 Recuo</p>
+                <p className="text-sm text-slate-200">
+                  {retreatTotal} tropas recuaram para {retreatInfo.destinationName}.
+                </p>
+                <p className="text-xs text-slate-400 font-mono">
+                  Composição: ⚔️{retreatInfo.composition.infantry} 🏹{retreatInfo.composition.archers} 🐴{retreatInfo.composition.cavalry} 🕵️{retreatInfo.composition.scouts}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="p-6 bg-slate-950/50 border-t border-slate-800 flex justify-center">

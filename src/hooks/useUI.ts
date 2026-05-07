@@ -1,14 +1,20 @@
 import { useState } from 'react';
-import { ActionType, ViewMode, GameSettings, SaveData, TurnSummaryData, Army, BattleResult, Province } from '../types';
+import { ActionType, ViewMode, GameSettings, SaveData, TurnSummaryData, Army, BattleResult, CallToArmsRequest, RetreatInfo } from '../types';
+import { playNotificationSound } from '../logic/sfxLogic';
 
 export function useUI() {
   const [selectedProvinceId, setSelectedProvinceId] = useState<string | null>(null);
+  const [multiSelectedProvinceIds, setMultiSelectedProvinceIds] = useState<string[]>([]);
   const [actionState, setActionState] = useState<ActionType>('idle');
   const [actionSourceId, setActionSourceId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState<boolean>(true);
   const [viewMode, setViewMode] = useState<ViewMode>('political');
   const [showSaveModal, setShowSaveModal] = useState<boolean>(false);
   const [showInstructionsModal, setShowInstructionsModal] = useState<boolean>(false);
+  const [showDiplomacyModal, setShowDiplomacyModal] = useState<boolean>(false);
+  const [selectedDiplomacyTargetId, setSelectedDiplomacyTargetId] = useState<string | null>(null);
+  const [showCallToArmsModal, setShowCallToArmsModal] = useState<boolean>(false);
+  const [pendingCallToArms, setPendingCallToArms] = useState<CallToArmsRequest[]>([]);
   const [showTurnSummary, setShowTurnSummary] = useState<boolean>(false);
   const [turnSummaryData, setTurnSummaryData] = useState<TurnSummaryData | null>(null);
   const [showCombatPreview, setShowCombatPreview] = useState<boolean>(false);
@@ -17,7 +23,7 @@ export function useUI() {
   const [combatAttackingArmy, setCombatAttackingArmy] = useState<Army | null>(null);
   const [showBattleResult, setShowBattleResult] = useState<boolean>(false);
   const [battleResultData, setBattleResultData] = useState<BattleResult | null>(null);
-  const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean } | null>(null);
+  const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean; retreatInfo?: RetreatInfo } | null>(null);
   const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
     numProvinces: 25,
@@ -28,6 +34,10 @@ export function useUI() {
   });
   const [zoom, setZoom] = useState(1);
   const [showChronicles, setShowChronicles] = useState(false);
+  const [showMinimap, setShowMinimap] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true;
+    return window.innerWidth >= 768;
+  });
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -66,17 +76,23 @@ export function useUI() {
 
   const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
     setToast({ message, type });
+    playNotificationSound();
     setTimeout(() => setToast(null), 3000);
   };
 
   return {
     selectedProvinceId, setSelectedProvinceId,
+    multiSelectedProvinceIds, setMultiSelectedProvinceIds,
     actionState, setActionState,
     actionSourceId, setActionSourceId,
     showMenu, setShowMenu,
     viewMode, setViewMode,
     showSaveModal, setShowSaveModal,
     showInstructionsModal, setShowInstructionsModal,
+    showDiplomacyModal, setShowDiplomacyModal,
+    selectedDiplomacyTargetId, setSelectedDiplomacyTargetId,
+    showCallToArmsModal, setShowCallToArmsModal,
+    pendingCallToArms, setPendingCallToArms,
     showTurnSummary, setShowTurnSummary,
     turnSummaryData, setTurnSummaryData,
     showCombatPreview, setShowCombatPreview,
@@ -90,6 +106,7 @@ export function useUI() {
     gameSettings, setGameSettings,
     zoom, setZoom,
     showChronicles, setShowChronicles,
+    showMinimap, setShowMinimap,
     panOffset, setPanOffset,
     isDragging, setIsDragging,
     dragStart, setDragStart,
