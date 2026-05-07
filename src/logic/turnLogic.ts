@@ -29,7 +29,7 @@ export function calculateVisibility(state: GameState): string[] {
   (state.marchOrders || []).filter(o => o.realmId === state.playerRealmId).forEach(o => {
     visible.add(o.currentProvId);
     const prov = state.provinces[o.currentProvId];
-    if (prov && !o.isScoutMission) (prov.neighbors || []).forEach(nId => visible.add(nId));
+    if (prov && o.kind !== 'scout') (prov.neighbors || []).forEach(nId => visible.add(nId));
   });
   
   return Array.from(visible);
@@ -153,90 +153,97 @@ export function findPath(
 function processMarchOrders(state: GameState) {
   if (!state.marchOrders) { state.marchOrders = []; return; }
   state.lastTurnMovements = [];
+  state.pendingBattleResults = [];
   const toRemove: string[] = [];
   const recalcTroops = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
     army.infantry + army.archers + army.cavalry + army.scouts;
 
-  state.marchOrders.forEach(order => {
-    if (order.remainingPath.length === 0) {
-      const prov = state.provinces[order.currentProvId];
-      if (prov) {
-        if (!order.isScoutMission) {
-          const isNeutral = prov.ownerId === 'neutral';
-          if (prov.ownerId === order.realmId || isNeutral) {
-            if (isNeutral) {
-              prov.ownerId = order.realmId;
-              prov.loyalty = 50;
-              prov.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
-            }
-            prov.army.infantry += order.troops.infantry;
-            prov.army.archers += order.troops.archers;
-            prov.army.cavalry += order.troops.cavalry;
-            prov.army.scouts += order.troops.scouts;
-            prov.troops = recalcTroops(prov.army);
-            if (order.realmId === state.playerRealmId) {
-              state.logs.push(isNeutral ? `EXPANSÃO: Suas tropas estabeleceram o domínio em ${prov.name}.` : `Tropas chegaram em ${prov.name}.`);
-            }
-          }
-        } else {
-          const friendlyNeighbor = prov.neighbors
-            .map(nId => state.provinces[nId])
-            .find(n => n && n.ownerId === order.realmId);
-          const depositProv = friendlyNeighbor || prov;
-          if (depositProv.ownerId === order.realmId) {
-            depositProv.army.scouts += order.troops.scouts;
-            depositProv.troops = recalcTroops(depositProv.army);
-          }
-          if (order.realmId === state.playerRealmId) {
-            state.logs.push(`Batedores completaram missão de reconhecimento.`);
-          }
-        }
-      }
-      toRemove.push(order.id);
-      return;
+  const finishMove = (order: (typeof state.marchOrders)[number], prov: Province) => {
+    if (prov.ownerId === 'neutral') {
+      prov.ownerId = order.realmId;
+      prov.loyalty = 50;
+      prov.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
     }
 
+    if (prov.ownerId === order.realmId) {
+      prov.army.infantry += order.troops.infantry;
+      prov.army.archers += order.troops.archers;
+      prov.army.cavalry += order.troops.cavalry;
+      prov.army.scouts += order.troops.scouts;
+      prov.troops = recalcTroops(prov.army);
+      if (order.realmId === state.playerRealmId) {
+        state.logs.push(`Tropas chegaram em ${prov.name}.`);
+      }
+    }
+  };
+
+  const finishScout = (order: (typeof state.marchOrders)[number], prov: Province) => {
+    const friendlyNeighbor = prov.neighbors
+      .map(nId => state.provinces[nId])
+      .find(n => n && n.ownerId === order.realmId);
+    const depositProv = friendlyNeighbor || prov;
+    if (depositProv.ownerId === order.realmId) {
+      depositProv.army.scouts += order.troops.scouts;
+      depositProv.troops = recalcTroops(depositProv.army);
+    }
+    if (order.realmId === state.playerRealmId) {
+      state.logs.push(`Batedores completaram missao de reconhecimento.`);
+    }
+  };
+
+  const finishAttack = (order: (typeof state.marchOrders)[number], prov: Province) => {
+    const defenderName = state.realms[prov.ownerId]?.name || 'Neutral';
+    const result = resolveCombat(order.troops, prov.army, prov.terrain, prov.defense);
+
+    if (result.won) {
+      prov.ownerId = order.realmId;
+      prov.loyalty = 40;
+      prov.recentlyConquered = 3;
+      prov.army = result.attackerRemaining;
+      prov.troops = recalcTroops(prov.army);
+      if (order.realmId === state.playerRealmId) {
+        state.logs.push(`VITORIA! Suas tropas conquistaram ${prov.name}!`);
+      }
+    } else {
+      prov.army = result.defenderRemaining;
+      prov.troops = recalcTroops(prov.army);
+      if (order.realmId === state.playerRealmId) {
+        state.logs.push(`DERROTA! Seu exercito foi destruido em ${prov.name}!`);
+      }
+    }
+
+    state.pendingBattleResults?.push({
+      attackerName: state.realms[order.realmId]?.name || 'Reino',
+      defenderName,
+      provinceName: prov.name,
+      conquered: result.won,
+      result
+    });
+  };
+
+  state.marchOrders.forEach(order => {
     const nextProvId = order.remainingPath[0];
-    const nextProv = state.provinces[nextProvId];
+    const nextProv = nextProvId ? state.provinces[nextProvId] : state.provinces[order.currentProvId];
 
     if (!nextProv) {
       toRemove.push(order.id);
       return;
     }
 
-    if (!order.isScoutMission && nextProv.ownerId !== order.realmId && nextProv.ownerId !== 'neutral') {
-      const result = resolveCombat(
-        order.troops,
-        nextProv.army,
-        nextProv.terrain,
-        nextProv.defense
-      );
-
-      if (result.won) {
-        nextProv.ownerId = order.realmId;
-        nextProv.loyalty = 40;
-        nextProv.recentlyConquered = 3;
-        nextProv.army = result.attackerRemaining;
-        nextProv.troops = recalcTroops(nextProv.army);
-
-        if (order.realmId === state.playerRealmId) {
-          state.logs.push(`VITÓRIA! Suas tropas conquistaram ${nextProv.name}!`);
-        }
-      } else {
-        nextProv.army = result.defenderRemaining;
-        nextProv.troops = recalcTroops(nextProv.army);
-        if (order.realmId === state.playerRealmId) {
-          state.logs.push(`DERROTA! Seu exército foi destruído em ${nextProv.name}!`);
-        }
-      }
-      toRemove.push(order.id);
-      return;
+    if (order.remainingPath.length > 0) {
+      const fromProvId = order.currentProvId;
+      order.currentProvId = nextProvId;
+      order.remainingPath.shift();
+      state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
     }
 
-    const fromProvId = order.currentProvId;
-    order.currentProvId = nextProvId;
-    order.remainingPath.shift();
-    state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
+    if (order.currentProvId !== order.destinationId) return;
+
+    if (order.kind === 'attack') finishAttack(order, nextProv);
+    else if (order.kind === 'scout') finishScout(order, nextProv);
+    else finishMove(order, nextProv);
+
+    toRemove.push(order.id);
   });
 
   state.marchOrders = state.marchOrders.filter(o => !toRemove.includes(o.id));
@@ -551,7 +558,7 @@ export function processEndOfTurn(state: GameState): GameState {
     realm.goldMaintenance = goldMaintenance;
     realm.foodIncome = foodIncome;
     realm.foodMaintenance = foodMaintenance;
-    realm.materialsIncome = materialIncome;
+    realm.materialsIncome = Math.floor(materialIncome);
     
     // Reset action points
     realm.actionPoints = realm.maxActionPoints;
@@ -579,3 +586,4 @@ export function processEndOfTurn(state: GameState): GameState {
 
   return newState;
 }
+

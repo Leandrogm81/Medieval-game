@@ -84,9 +84,10 @@ export interface MarchOrder {
   id: string;
   realmId: string;
   currentProvId: string;
+  destinationId: string;
   remainingPath: string[];
   troops: Army;
-  isScoutMission: boolean;
+  kind: 'move' | 'attack' | 'scout';
 }
 
 export interface War {
@@ -120,6 +121,13 @@ export interface GameState {
   marchOrders: MarchOrder[];
   activeWars: War[];
   settings: GameSettings;
+  pendingBattleResults?: {
+    attackerName: string;
+    defenderName: string;
+    provinceName: string;
+    conquered: boolean;
+    result: BattleResult;
+  }[];
   gameOver?: { winnerId: string; reason: string };
   lastTurnMovements?: { fromId: string; toId: string; realmId: string }[];
 }
@@ -148,6 +156,7 @@ export interface TurnSummaryData {
   foodMaintenance: number;
   foodNet: number;
   materialsIncome: number;
+  materialsNet: number;
   provincesGained: string[];
   provincesLost: string[];
   newWars: string[];

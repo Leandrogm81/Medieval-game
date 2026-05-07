@@ -1,89 +1,115 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, TrendingUp, TrendingDown, Swords, Handshake, AlertTriangle, Coins, Carrot, Hammer, Info } from 'lucide-react';
-import { TurnSummaryData } from '../types';
+import { RotateCw, X, TrendingUp, TrendingDown, Users, Coins, Wheat, Hammer } from 'lucide-react';
 
 interface TurnResultModalProps {
   isOpen: boolean;
   onClose: () => void;
-  data: TurnSummaryData;
+  data: {
+    turnNumber: number;
+    results: {
+      goldChange: number;
+      foodChange: number;
+      materialsChange: number;
+      populationChange: number;
+      events: string[];
+    };
+  } | null;
 }
 
 export const TurnResultModal: React.FC<TurnResultModalProps> = ({ isOpen, onClose, data }) => {
+  if (!isOpen || !data) return null;
+
+  const { turnNumber, results } = data;
+
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <motion.div 
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-            onClick={onClose}
-          />
-          <motion.div
-            initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 20, opacity: 0 }}
-            className="relative w-full max-w-2xl bg-stone-900 border-2 border-amber-900/50 rounded-lg shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden"
-          >
-            <div className="p-4 md:p-6 border-b border-amber-900/20 bg-black/40 flex justify-between items-center">
-              <h2 className="text-xl md:text-3xl font-black text-amber-100 uppercase tracking-widest flex items-center gap-3">
-                Relatório de Fim de Turno
-              </h2>
-              <button onClick={onClose} className="p-1 text-stone-500 hover:text-white transition-colors"><X size={24} /></button>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          className="bg-slate-900 border-2 border-amber-900/50 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+        >
+          <div className="p-5 bg-slate-800/50 border-b border-slate-700 flex items-center justify-between">
+            <h2 className="text-xl font-bold text-amber-500 flex items-center gap-2">
+              <RotateCw size={24} /> Relatório do Turno {turnNumber}
+            </h2>
+            <button onClick={onClose} className="p-1 hover:bg-slate-700 rounded-full transition-colors text-slate-400">
+              <X size={24} />
+            </button>
+          </div>
+
+          <div className="p-8 space-y-8">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-2">
+                <Coins size={20} className="text-yellow-400" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase">Ouro</p>
+                <div className="flex items-center gap-1">
+                  {results.goldChange >= 0 ? <TrendingUp size={14} className="text-emerald-400" /> : <TrendingDown size={14} className="text-red-400" />}
+                  <p className={`text-xl font-bold ${results.goldChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {results.goldChange >= 0 ? '+' : ''}{results.goldChange}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-2">
+                <Wheat size={20} className="text-green-400" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase">Comida</p>
+                <div className="flex items-center gap-1">
+                  {results.foodChange >= 0 ? <TrendingUp size={14} className="text-emerald-400" /> : <TrendingDown size={14} className="text-red-400" />}
+                  <p className={`text-xl font-bold ${results.foodChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {results.foodChange >= 0 ? '+' : ''}{results.foodChange}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-2">
+                <Hammer size={20} className="text-slate-300" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase">Materiais</p>
+                <div className="flex items-center gap-1">
+                  {results.materialsChange >= 0 ? <TrendingUp size={14} className="text-emerald-400" /> : <TrendingDown size={14} className="text-red-400" />}
+                  <p className={`text-xl font-bold ${results.materialsChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {results.materialsChange >= 0 ? '+' : ''}{results.materialsChange}
+                  </p>
+                </div>
+              </div>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 flex flex-col items-center gap-2">
+                <Users size={20} className="text-blue-400" />
+                <p className="text-[10px] text-slate-500 font-bold uppercase">População</p>
+                <div className="flex items-center gap-1">
+                  {results.populationChange >= 0 ? <TrendingUp size={14} className="text-emerald-400" /> : <TrendingDown size={14} className="text-red-400" />}
+                  <p className={`text-xl font-bold ${results.populationChange >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    {results.populationChange >= 0 ? '+' : ''}{results.populationChange}
+                  </p>
+                </div>
+              </div>
             </div>
 
-            <div className="p-4 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8">
-               {/* Financials */}
-               <div className="space-y-4">
-                  <h3 className="text-xs md:text-sm font-black text-amber-500 uppercase tracking-widest border-b border-stone-800 pb-1">Economia do Reino</h3>
-                  
-                  <div className="grid grid-cols-3 gap-2">
-                     <div className="bg-stone-800/40 p-2 rounded border border-white/5">
-                        <Coins size={16} className="text-amber-500 mb-1" />
-                        <p className="text-[8px] text-stone-500 uppercase font-bold">Ouro</p>
-                        <p className={`text-xs md:text-sm font-black ${data.goldNet >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                           {data.goldNet >= 0 ? '+' : ''}{data.goldNet}
-                        </p>
-                     </div>
-                     <div className="bg-stone-800/40 p-2 rounded border border-white/5">
-                        <Carrot size={16} className="text-orange-500 mb-1" />
-                        <p className="text-[8px] text-stone-500 uppercase font-bold">Grãos</p>
-                        <p className={`text-xs md:text-sm font-black ${data.foodNet >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-                           {data.foodNet >= 0 ? '+' : ''}{data.foodNet}
-                        </p>
-                     </div>
-                     <div className="bg-stone-800/40 p-2 rounded border border-white/5">
-                        <Hammer size={16} className="text-blue-500 mb-1" />
-                        <p className="text-[8px] text-stone-500 uppercase font-bold">Materiais</p>
-                        <p className="text-xs md:text-sm font-black text-amber-50">
-                           {data.materialsIncome > 0 ? '+' : ''}{Math.floor(data.materialsIncome)}
-                        </p>
-                     </div>
-                  </div>
-               </div>
-
-               {/* Events & News */}
-               <div className="space-y-4">
-                  <h3 className="text-xs md:text-sm font-black text-amber-500 uppercase tracking-widest border-b border-stone-800 pb-1">Eventos & Notícias</h3>
-                  <div className="space-y-2 max-h-[200px] overflow-y-auto custom-scrollbar pr-2">
-                     {data.events.length > 0 ? data.events.map((e, i) => (
-                        <div key={i} className="flex gap-2 text-[10px] md:text-xs">
-                           <Info size={14} className="text-amber-500 flex-shrink-0" />
-                           <p className="text-stone-300 font-serif italic">{e}</p>
-                        </div>
-                     )) : (
-                        <p className="text-[10px] md:text-xs text-stone-600 italic">Nada de relevante ocorreu neste turno.</p>
-                     )}
-                  </div>
-               </div>
+            <div className="space-y-3">
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest text-center">Eventos do Turno</h3>
+              <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700/50 space-y-2 max-h-40 overflow-y-auto font-serif text-sm italic text-slate-300">
+                {results.events.length === 0 ? (
+                  <p className="text-center opacity-50">Nenhum evento significativo...</p>
+                ) : (
+                  results.events.map((event, idx) => (
+                    <div key={idx} className="border-l-2 border-amber-900/30 pl-3 py-1">
+                      <p>{event}</p>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
+          </div>
 
-            <div className="p-4 bg-black/40 flex justify-end">
-               <button onClick={onClose} className="px-8 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-sm uppercase tracking-widest rounded-sm transition-all shadow-lg active:scale-95">
-                  Confirmar
-               </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
+          <div className="p-5 bg-slate-950/50 border-t border-slate-800 flex justify-center">
+            <button
+              onClick={onClose}
+              className="px-12 py-3 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded-xl transition-all active:scale-95 shadow-lg shadow-amber-900/20 uppercase tracking-widest text-sm"
+            >
+              Continuar Reinado
+            </button>
+          </div>
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

@@ -77,6 +77,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         foodMaintenance: playerNext.foodMaintenance || 0,
         foodNet: playerNext.food - playerRealmPrior.food,
         materialsIncome: playerNext.materialsIncome || 0,
+        materialsNet: playerNext.materials - playerRealmPrior.materials,
         provincesGained: [],
         provincesLost: [],
         newWars: [],
@@ -85,6 +86,18 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         rebellionRisk: []
       });
       ui.setShowTurnSummary(true);
+
+      if (next.pendingBattleResults && next.pendingBattleResults.length > 0) {
+        const battle = next.pendingBattleResults[0];
+        ui.setBattleResultData(battle.result);
+        ui.setBattleResultMeta({
+          attackerName: battle.attackerName,
+          defenderName: battle.defenderName,
+          provinceName: battle.provinceName,
+          conquered: battle.conquered
+        });
+        ui.setShowBattleResult(true);
+      }
 
       return next;
     });
@@ -234,9 +247,10 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
             id: `march_${Date.now()}`,
             realmId: next.playerRealmId,
             currentProvId: ui.actionSourceId!,
+            destinationId: id,
             remainingPath: path,
             troops: { ...ui.moveComposition },
-            isScoutMission: false
+            kind: 'move' as const
           };
           src.army.infantry -= ui.moveComposition.infantry;
           src.army.archers -= ui.moveComposition.archers;
@@ -250,7 +264,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
           const from = src.center as [number, number];
           const destProv = next.provinces[id];
           const to = destProv ? (destProv.center as [number, number]) : from;
-          ui.triggerMarchAnimation(from, to, ui.moveComposition);
+          ui.triggerMarchAnimation(from, to, ui.moveComposition, 'move');
 
           ui.setActionState('idle');
           ui.setActionSourceId(null);
@@ -303,50 +317,40 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       const defProv = next.provinces[ui.combatDefenderProvId!];
       if (!atkProv || !defProv || !next.realms[next.playerRealmId]) return prev;
 
-      const result = resolveCombat(ui.combatAttackingArmy!, defProv.army, defProv.terrain, defProv.defense);
-
-      // Preserve troops that stayed behind (not sent to battle)
       const sentArmy = ui.combatAttackingArmy!;
-      const stayedBehind = {
-        infantry: atkProv.army.infantry - sentArmy.infantry,
-        archers: atkProv.army.archers - sentArmy.archers,
-        cavalry: atkProv.army.cavalry - sentArmy.cavalry,
-        scouts: atkProv.army.scouts,
+      const path = findPath(next, ui.combatAttackerProvId!, ui.combatDefenderProvId!, next.playerRealmId);
+      if (path.length === 0) return prev;
+      const order = {
+        id: `march_${Date.now()}`,
+        realmId: next.playerRealmId,
+        currentProvId: ui.combatAttackerProvId!,
+        destinationId: ui.combatDefenderProvId!,
+        remainingPath: path,
+        troops: { ...sentArmy },
+        kind: 'attack' as const
       };
 
       atkProv.army = {
-        infantry: result.attackerRemaining.infantry + stayedBehind.infantry,
-        archers: result.attackerRemaining.archers + stayedBehind.archers,
-        cavalry: result.attackerRemaining.cavalry + stayedBehind.cavalry,
-        scouts: stayedBehind.scouts,
+        infantry: Math.max(0, atkProv.army.infantry - sentArmy.infantry),
+        archers: Math.max(0, atkProv.army.archers - sentArmy.archers),
+        cavalry: Math.max(0, atkProv.army.cavalry - sentArmy.cavalry),
+        scouts: atkProv.army.scouts
       };
       atkProv.troops = atkProv.army.infantry + atkProv.army.archers + atkProv.army.cavalry + atkProv.army.scouts;
-
-      defProv.army = result.defenderRemaining;
-      defProv.troops = defProv.army.infantry + defProv.army.archers + defProv.army.cavalry + defProv.army.scouts;
-
-      if (result.won) {
-        defProv.ownerId = next.playerRealmId;
-        defProv.loyalty = 40;
-        defProv.recentlyConquered = 3;
-        next.realms[next.playerRealmId].overextension += 10;
-      }
-
+      next.marchOrders.push(order);
       next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.attack;
 
-      ui.setBattleResultData(result);
-      ui.setBattleResultMeta({
-        attackerName: next.realms[next.playerRealmId].name,
-        defenderName: next.realms[defProv.ownerId]?.name || 'Neutral',
-        provinceName: defProv.name,
-        conquered: result.won
-      });
-      ui.setShowBattleResult(true);
+      const from = atkProv.center as [number, number];
+      const to = defProv.center as [number, number];
+      ui.triggerMarchAnimation(from, to, sentArmy, 'attack');
+
+      ui.setShowBattleResult(false);
       ui.setShowCombatPreview(false);
       ui.setActionState('idle');
       ui.setActionSourceId(null);
       ui.setPreviewPath([]);
       ui.setActionBannerMessage(null);
+      ui.showToast('Ataque enviado. O combate será resolvido na chegada.', 'info');
 
       return next;
     });
@@ -354,14 +358,14 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
   const handleSave = useCallback((name: string) => {
     if (!gameState) return;
-    persistence.saveGame(gameState, name);
+    persistence.saveGame(name, gameState);
     ui.showToast("Jogo salvo!", "success");
   }, [gameState, ui]);
 
   const handleLoad = useCallback((id: string) => {
-    const data = persistence.loadGame(id);
+    const data = persistence.loadSave(id);
     if (data) {
-      setGameState(data.state);
+      setGameState(data);
       ui.setShowMenu(false);
       ui.showToast("Partida carregada.", "info");
     }
@@ -369,7 +373,9 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
   const handleDeleteSave = useCallback((id: string) => {
     persistence.deleteSave(id);
-  }, []);
+    ui.setUpdateTrigger(v => v + 1);
+    ui.showToast("Registro apagado.", "info");
+  }, [ui]);
 
   const cancelMarchOrder = useCallback((id: string) => {
     setGameState(prev => {
@@ -448,3 +454,4 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleTouchEnd
   };
 }
+

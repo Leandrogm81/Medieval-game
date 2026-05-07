@@ -1,44 +1,26 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Swords, X, Shield, Skull, Trophy } from 'lucide-react';
+import { Swords, X, Shield, Skull } from 'lucide-react';
 
-interface BattleOutcomeModalProps {
+interface BattleModalProps {
   isOpen: boolean;
   onClose: () => void;
-  result: {
+  battleResult: {
+    attacker: string;
+    defender: string;
     winner: string;
-    attackerLosses: { infantry: number; archers: number; cavalry: number; scouts: number };
-    defenderLosses: { infantry: number; archers: number; cavalry: number; scouts: number };
-    isPlayerWinner: boolean;
-  } | null;
-  attackerName: string;
-  defenderName: string;
-  provinceName: string;
-  conquered: boolean;
+    attackerLosses: { infantry: number; archers: number; cavalry: number };
+    defenderLosses: { infantry: number; archers: number; cavalry: number };
+    provinceName: string;
+  };
 }
 
-export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
-  isOpen,
-  onClose,
-  result,
-  attackerName,
-  defenderName,
-  provinceName,
-  conquered
-}) => {
-  if (!isOpen || !result) return null;
-
-  const battleResult = {
-    ...result,
-    attacker: attackerName,
-    defender: defenderName,
-    provinceName: provinceName,
-    isPlayerAttacker: true, // Assuming for now
-  };
+export const BattleModal: React.FC<BattleModalProps> = ({ isOpen, onClose, battleResult }) => {
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
         <motion.div
           initial={{ opacity: 0, scale: 0.8, y: 50 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -106,7 +88,7 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
               onClick={onClose}
               className="px-12 py-3 bg-red-700 hover:bg-red-600 text-white font-black rounded-xl transition-all active:scale-95 shadow-lg shadow-red-900/20 uppercase tracking-widest"
             >
-              {battleResult.isPlayerWinner ? 'Glória ao Reino!' : 'Retirada Estratégica'}
+              Enterrar os Mortos
             </button>
           </div>
         </motion.div>

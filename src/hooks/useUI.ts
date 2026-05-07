@@ -51,11 +51,11 @@ export function useUI() {
   const [disbandComposition, setDisbandComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
   const [isDisbandMode, setIsDisbandMode] = useState(false);
 
-  const [marchAnimations, setMarchAnimations] = useState<{ id: string; from: [number, number]; to: [number, number]; troops: Army; realmId?: string }[]>([]);
+  const [marchAnimations, setMarchAnimations] = useState<{ id: string; from: [number, number]; to: [number, number]; troops: Army; kind?: 'move' | 'attack' | 'scout'; realmId?: string }[]>([]);
 
-  const triggerMarchAnimation = (from: [number, number], to: [number, number], troops: Army, realmId?: string) => {
+  const triggerMarchAnimation = (from: [number, number], to: [number, number], troops: Army, kind: 'move' | 'attack' | 'scout' = 'move', realmId?: string) => {
     const id = `march_${Date.now()}_${Math.random()}`;
-    setMarchAnimations(prev => [...prev, { id, from, to, troops, realmId }]);
+    setMarchAnimations(prev => [...prev, { id, from, to, troops, kind, realmId }]);
     setTimeout(() => {
       setMarchAnimations(prev => prev.filter(a => a.id !== id));
     }, 1500);

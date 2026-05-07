@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Scroll, History, ScrollText } from 'lucide-react';
+import { X, Scroll } from 'lucide-react';
 
 interface ChronicleModalProps {
   isOpen: boolean;
@@ -9,36 +9,51 @@ interface ChronicleModalProps {
 }
 
 export const ChronicleModal: React.FC<ChronicleModalProps> = ({ isOpen, onClose, logs }) => {
+  if (!isOpen) return null;
+
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-          <motion.div initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 20, opacity: 0 }}
-                      className="relative w-full max-w-xl bg-stone-900 border-2 border-amber-900/50 rounded-lg overflow-hidden shadow-2xl">
-            <div className="p-4 bg-black/40 border-b border-amber-900/20 flex justify-between items-center text-amber-100 font-black uppercase tracking-widest gap-3">
-               <Scroll size={20} className="text-amber-500" /> As Crônicas do Reino
-               <button onClick={onClose}><X size={20}/></button>
-            </div>
-            
-            <div className="p-6 h-[400px] overflow-y-auto custom-scrollbar space-y-3 bg-[#1a1a1a]">
-               {logs.length > 0 ? logs.map((log, i) => (
-                  <div key={i} className="flex gap-4 p-3 bg-stone-900/40 border border-white/5 rounded relative group hover:bg-stone-800/60 transition-all">
-                     <div className="flex-shrink-0 w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center border border-stone-700 text-stone-500 group-hover:text-amber-500 transition-colors">
-                        <History size={14} />
-                     </div>
-                     <p className="text-[10px] md:text-sm font-serif italic text-stone-300 leading-relaxed">{log}</p>
-                  </div>
-               )) : (
-                  <div className="h-full flex flex-col items-center justify-center opacity-20">
-                     <ScrollText size={64} className="mb-4" />
-                     <p className="text-sm">A história ainda não foi escrita.</p>
-                  </div>
-               )}
-            </div>
-          </motion.div>
-        </div>
-      )}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="bg-slate-900 border-2 border-amber-900/50 rounded-xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden"
+        >
+          <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-800/50">
+            <h2 className="text-xl font-bold text-amber-500 flex items-center gap-2">
+              <Scroll size={24} /> Crônicas do Reino
+            </h2>
+            <button
+              onClick={onClose}
+              className="p-1 hover:bg-slate-700 rounded-full transition-colors text-slate-400"
+            >
+              <X size={24} />
+            </button>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 space-y-4 font-serif text-slate-300">
+            {logs.length === 0 ? (
+              <p className="text-center italic opacity-50">Nenhuma crônica registrada ainda...</p>
+            ) : (
+              logs.map((entry, idx) => (
+                <div key={idx} className="border-l-2 border-amber-900/30 pl-4 py-1">
+                  <p className="leading-relaxed">{entry}</p>
+                </div>
+              ))
+            )}
+          </div>
+          
+          <div className="p-4 border-t border-slate-800 bg-slate-800/30 flex justify-end">
+            <button
+              onClick={onClose}
+              className="px-6 py-2 bg-amber-700 hover:bg-amber-600 text-white font-bold rounded-lg transition-colors"
+            >
+              Fechar
+            </button>
+          </div>
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

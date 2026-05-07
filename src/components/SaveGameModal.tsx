@@ -1,63 +1,112 @@
 import React from 'react';
+import { SaveData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Trash2, History, Crown, Save as SaveIcon } from 'lucide-react';
-import { SaveData, GameState } from '../types';
+import { Save, Trash2, X, Download } from 'lucide-react';
 
 interface SaveGameModalProps {
   isOpen: boolean;
   onClose: () => void;
+  saves: SaveData[];
   onSave: (name: string) => void;
   onLoad: (id: string) => void;
   onDelete: (id: string) => void;
-  saves: SaveData[];
+  canSave?: boolean;
 }
 
-export const SaveGameModal: React.FC<SaveGameModalProps> = ({ isOpen, onClose, onSave, onLoad, onDelete, saves }) => {
+export const SaveGameModal: React.FC<SaveGameModalProps> = ({
+  isOpen,
+  onClose,
+  saves,
+  onSave,
+  onLoad,
+  onDelete,
+  canSave = true
+}) => {
   const [saveName, setSaveName] = React.useState('');
+
+  if (!isOpen) return null;
 
   return (
     <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[1000] flex items-center justify-center p-4">
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
-          <motion.div initial={{ scale: 0.9, y: 20, opacity: 0 }} animate={{ scale: 1, y: 0, opacity: 1 }} exit={{ scale: 0.9, y: 20, opacity: 0 }}
-                      className="relative w-full max-w-xl bg-stone-900 border-2 border-amber-900/50 rounded-lg overflow-hidden shadow-2xl">
-            <div className="p-4 bg-black/40 border-b border-amber-900/20 flex justify-between items-center text-amber-100 font-black uppercase tracking-widest gap-3">
-               <SaveIcon size={20} className="text-amber-500" /> Registros e Salvamentos
-               <button onClick={onClose}><X size={20}/></button>
-            </div>
-            
-            <div className="p-6 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
-               <div className="flex gap-2">
-                  <input 
-                     type="text" value={saveName} onChange={e => setSaveName(e.target.value)}
-                     placeholder="Nome do Novo Registro..."
-                     className="flex-1 bg-stone-800 border border-stone-700 p-2 text-xs md:text-sm text-amber-50 rounded italic"
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-2 xs:p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="bg-[#2c1810] border-2 xs:border-4 border-[#d4af37] rounded-2xl xs:rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]"
+        >
+          <div className="p-4 xs:p-6 border-b border-[#d4af37]/30 flex justify-between items-center bg-[#1a0f0a] shrink-0">
+            <h2 className="text-lg xs:text-2xl font-serif font-bold text-[#d4af37] uppercase tracking-widest">Crônicas do Reino</h2>
+            <button onClick={onClose} className="text-[#f5f2ed]/60 hover:text-white transition-colors">
+              <X size={20} className="xs:w-6 xs:h-6" />
+            </button>
+          </div>
+
+          <div className="p-4 xs:p-6 overflow-y-auto custom-scrollbar flex-1">
+            {canSave && (
+              <div className="mb-6 xs:mb-8">
+                <label className="block text-[#f5f2ed]/60 text-[10px] xs:text-sm mb-1.5 xs:mb-2 uppercase tracking-wider font-bold">Novo Registro</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={saveName}
+                    onChange={(e) => setSaveName(e.target.value)}
+                    placeholder="Nome do registro..."
+                    className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-lg xs:rounded-xl px-3 xs:px-4 py-2 xs:py-3 text-white focus:outline-none focus:border-[#d4af37] text-xs xs:text-base"
                   />
-                  <button onClick={() => { onSave(saveName); setSaveName(''); }} className="px-4 py-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black uppercase text-[10px] md:text-xs rounded transition-all">Novo Save</button>
-               </div>
-               
-               <div className="space-y-2">
-                  {saves.map(save => (
-                     <div key={save.id} className="p-3 bg-stone-800/40 border border-white/10 rounded flex items-center justify-between hover:bg-amber-600/10 hover:border-amber-600/40 transition-all cursor-pointer group" onClick={() => onLoad(save.id)}>
-                        <div className="flex items-center gap-3">
-                           <History size={16} className="text-stone-500 group-hover:text-amber-500 transition-colors" />
-                           <div>
-                              <p className="text-xs md:text-sm font-black text-amber-50 uppercase tracking-widest">{save.name}</p>
-                              <div className="flex items-center gap-2 text-[8px] md:text-[10px] text-stone-500">
-                                 <span>Turno {save.state.turn}</span>
-                                 <span>{new Date(save.date).toLocaleString()}</span>
-                              </div>
-                           </div>
-                        </div>
-                        <button onClick={(e) => { e.stopPropagation(); onDelete(save.id); }} className="p-2 text-stone-600 hover:text-red-500 transition-colors"><Trash2 size={16}/></button>
-                     </div>
-                  ))}
-               </div>
+                  <button
+                    onClick={() => {
+                      if (saveName.trim()) {
+                        onSave(saveName);
+                        setSaveName('');
+                      }
+                    }}
+                    className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-3 xs:px-5 py-2 xs:py-3 rounded-lg xs:rounded-xl font-bold flex items-center gap-1.5 xs:gap-2 transition-colors active:scale-95 shrink-0 text-xs xs:text-base"
+                  >
+                    <Save size={16} className="xs:w-5 xs:h-5" />
+                    Salvar
+                  </button>
+                </div>
+              </div>
+            )}
+
+            <div className="space-y-2 xs:space-y-3">
+              <label className="block text-[#f5f2ed]/60 text-[10px] xs:text-sm mb-1.5 xs:mb-2 uppercase tracking-wider font-bold">Registros Existentes</label>
+              {saves.length === 0 ? (
+                <p className="text-[#f5f2ed]/40 italic text-center py-6 xs:py-8 text-xs xs:text-sm">Nenhum registro encontrado nas crônicas.</p>
+              ) : (
+                saves.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((save) => (
+                  <div key={save.id} className="bg-black/20 border border-white/5 rounded-xl xs:rounded-2xl p-3 xs:p-4 flex justify-between items-center hover:border-[#d4af37]/30 transition-all group">
+                    <div className="min-w-0 flex-1 mr-2">
+                      <h3 className="text-[#f5f2ed] font-bold text-sm xs:text-lg truncate">{save.name}</h3>
+                      <div className="text-[#f5f2ed]/60 text-[9px] xs:text-sm flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5 xs:mt-1">
+                        <span>Turno {save.state?.turn ?? 0}</span>
+                        <span>{new Date(save.date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex gap-1.5 xs:gap-2 shrink-0">
+                      <button
+                        onClick={() => onLoad(save.id)}
+                        className="p-2 xs:p-3 bg-blue-500/20 hover:bg-blue-500 text-blue-400 hover:text-white rounded-lg xs:rounded-xl transition-all active:scale-90"
+                        title="Carregar"
+                      >
+                        <Download size={16} className="xs:w-5 xs:h-5" />
+                      </button>
+                      <button
+                        onClick={() => onDelete(save.id)}
+                        className="p-2 xs:p-3 bg-red-500/20 hover:bg-red-500 text-red-400 hover:text-white rounded-lg xs:rounded-xl transition-all active:scale-90"
+                        title="Excluir"
+                      >
+                        <Trash2 size={16} className="xs:w-5 xs:h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
-          </motion.div>
-        </div>
-      )}
+          </div>
+        </motion.div>
+      </div>
     </AnimatePresence>
   );
 };

@@ -9,7 +9,7 @@ interface MapProps {
   onProvinceClick: (id: string) => void;
   viewMode: ViewMode;
   previewPath: string[];
-  marchAnimations: any[];
+  marchAnimations: { id: string; from: [number, number]; to: [number, number]; troops: { infantry: number; archers: number; cavalry: number; scouts: number }; kind?: 'move' | 'attack' | 'scout'; realmId?: string }[];
   triggerMarchAnimation: any;
   actionState: ActionType;
   actionSourceId: string | null;
@@ -242,6 +242,11 @@ export const Map: React.FC<MapProps> = ({
           const midX = (currentProv.center[0] + nextProv.center[0]) / 2;
           const midY = (currentProv.center[1] + nextProv.center[1]) / 2;
           const totalTroops = order.troops.infantry + order.troops.archers + order.troops.cavalry + order.troops.scouts;
+          const isAttack = order.kind === 'attack';
+          const isScout = order.kind === 'scout';
+          const lineColor = isAttack ? '#ef4444' : isScout ? '#38bdf8' : '#fbbf24';
+          const fillColor = isAttack ? '#dc2626' : isScout ? '#0ea5e9' : '#f59e0b';
+          const label = isAttack ? 'em ataque' : isScout ? 'reconhecimento' : 'em marcha';
 
           return (
             <g key={`order-${order.id}`}>
@@ -251,7 +256,7 @@ export const Map: React.FC<MapProps> = ({
                 y1={currentProv.center[1]}
                 x2={nextProv.center[0]}
                 y2={nextProv.center[1]}
-                stroke="#fbbf24"
+                stroke={lineColor}
                 strokeWidth={3}
                 strokeDasharray="8 4"
                 opacity={0.8}
@@ -261,7 +266,7 @@ export const Map: React.FC<MapProps> = ({
                 cx={midX}
                 cy={midY}
                 r={8}
-                fill="#f59e0b"
+                fill={fillColor}
                 stroke="#1e293b"
                 strokeWidth={2}
               />
@@ -284,12 +289,12 @@ export const Map: React.FC<MapProps> = ({
                 textAnchor="middle"
                 fontSize={7}
                 fontWeight={700}
-                fill="#fbbf24"
+                fill={lineColor}
                 paintOrder="stroke"
                 stroke="black"
                 strokeWidth={1.5}
               >
-                em marcha
+                {label}
               </text>
             </g>
           );
@@ -302,6 +307,9 @@ export const Map: React.FC<MapProps> = ({
           const [x1, y1] = anim.from;
           const [x2, y2] = anim.to;
           const totalTroops = anim.troops.infantry + anim.troops.archers + anim.troops.cavalry + anim.troops.scouts;
+          const isAttack = anim.kind === 'attack';
+          const lineColor = isAttack ? '#ef4444' : '#fbbf24';
+          const circleColor = isAttack ? '#dc2626' : '#f59e0b';
           return (
             <g key={anim.id}>
               {/* Animated march line */}
@@ -310,7 +318,7 @@ export const Map: React.FC<MapProps> = ({
                 y1={y1}
                 x2={x2}
                 y2={y2}
-                stroke="#fbbf24"
+                stroke={lineColor}
                 strokeWidth="3"
                 strokeDasharray="8 4"
                 initial={{ opacity: 0 }}
@@ -322,7 +330,7 @@ export const Map: React.FC<MapProps> = ({
                 cx={x1}
                 cy={y1}
                 r="12"
-                fill="#f59e0b"
+                fill={circleColor}
                 initial={{ opacity: 0 }}
                 animate={{
                   cx: [x1, x2],

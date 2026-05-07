@@ -196,7 +196,7 @@ export const HUD: React.FC<HUDProps> = ({
   const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= 100 && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
 
   return (
-    <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:fixed max-md:inset-0 max-md:w-full max-md:bg-black/70 max-md:backdrop-blur-sm ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden'}`}>
+    <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:border-l-0 max-md:border-t max-md:shadow-none max-md:rounded-t-2xl ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto max-md:h-[44vh] max-md:max-h-[44vh] max-md:overflow-y-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden max-md:h-0'}`}>
       {/* Top Bar - Recurso */}
       <div className="p-2 md:p-4 bg-black/40 border-b border-amber-900/20">
         <div className="flex justify-between items-center mb-2">

@@ -364,10 +364,10 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="w-full h-full bg-stone-950 text-white flex flex-row overflow-hidden font-serif select-none relative">
+    <div className="w-full h-full bg-stone-950 text-white flex flex-col md:flex-row overflow-hidden font-serif select-none relative">
       <ErrorBoundary>
         <div
-          className="flex-1 relative overflow-hidden bg-[#1e293b] touch-none h-full"
+          className="flex-1 min-h-0 relative overflow-hidden bg-[#1e293b] touch-none h-full"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
           onMouseUp={ctrl.handleMouseUp}
@@ -568,7 +568,16 @@ export default function App() {
           {ui.showTurnSummary && ui.turnSummaryData && (
             <TurnResultModal
               isOpen={ui.showTurnSummary}
-              data={ui.turnSummaryData}
+              data={{
+                turnNumber: gameState.turn,
+                results: {
+                  goldChange: ui.turnSummaryData.goldNet,
+                  foodChange: ui.turnSummaryData.foodNet,
+                  materialsChange: ui.turnSummaryData.materialsNet,
+                  populationChange: 0,
+                  events: ui.turnSummaryData.events,
+                },
+              }}
               onClose={() => ui.setShowTurnSummary(false)}
             />
           )}
@@ -586,7 +595,14 @@ export default function App() {
           {ui.showBattleResult && ui.battleResultData && ui.battleResultMeta && (
             <BattleOutcomeModal
               isOpen={ui.showBattleResult}
-              result={ui.battleResultData}
+              result={{
+                winner: ui.battleResultData.won
+                  ? ui.battleResultMeta.attackerName
+                  : ui.battleResultMeta.defenderName,
+                attackerLosses: ui.battleResultData.attackerLosses,
+                defenderLosses: ui.battleResultData.defenderLosses,
+                isPlayerWinner: ui.battleResultData.won,
+              }}
               attackerName={ui.battleResultMeta.attackerName}
               defenderName={ui.battleResultMeta.defenderName}
               provinceName={ui.battleResultMeta.provinceName}
@@ -596,6 +612,8 @@ export default function App() {
           )}
           {gameState.gameOver && (
             <GameEndModal
+              isOpen={!!gameState.gameOver}
+              onClose={() => { ui.setShowMenu(true); setGameState(null); }}
               gameState={gameState}
               onRestart={() => { ui.setShowMenu(true); setGameState(null); }}
             />
