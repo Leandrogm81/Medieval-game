@@ -196,23 +196,23 @@ export const HUD: React.FC<HUDProps> = ({
   const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= 100 && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
 
   return (
-    <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:border-l-0 max-md:border-t max-md:shadow-none max-md:rounded-t-2xl ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto max-md:h-[70vh] max-md:max-h-[70vh] max-md:overflow-y-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden max-md:h-0'}`}>
+    <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:border-l-0 max-md:border-t max-md:shadow-none max-md:rounded-t-2xl ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto max-md:h-[58vh] max-md:max-h-[58vh] max-md:overflow-y-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden max-md:h-0'}`}>
       {/* Top Bar - Recurso */}
-      <div className="p-2 md:p-4 bg-black/40 border-b border-amber-900/20">
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full flex items-center justify-center`} style={{ backgroundColor: playerRealm.color }}>
+      <div className="p-1.5 md:p-4 bg-black/40 border-b border-amber-900/20">
+        <div className="flex justify-between items-center mb-1 md:mb-2">
+          <div className="flex items-center gap-1.5 md:gap-2">
+            <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center`} style={{ backgroundColor: playerRealm.color }}>
                <Crown size={16} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xs md:text-sm font-black text-amber-50 tracking-widest uppercase">{playerRealm.name}</h2>
-              <p className="text-[10px] md:text-[11px] text-amber-500/60 font-serif italic">Turno {gameState.turn}</p>
+              <h2 className="text-[11px] md:text-sm font-black text-amber-50 tracking-wide md:tracking-widest uppercase leading-tight">{playerRealm.name}</h2>
+              <p className="text-[9px] md:text-[11px] text-amber-500/60 font-serif italic leading-tight">Turno {gameState.turn}</p>
             </div>
           </div>
           <div className="flex gap-1">
-             <button onClick={onSave} className="p-1 px-2 border border-stone-700 bg-stone-800 text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors">Salvar</button>
-             <button onClick={onMenu} className="p-1 px-2 border border-stone-700 bg-stone-800 text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors">Menu</button>
-             <button onClick={onToggleInstructions} className="p-1 px-2 border border-stone-700 bg-stone-800 text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors flex items-center gap-1">
+             <button onClick={onSave} className="px-1.5 py-0.5 md:p-1 md:px-2 border border-stone-700 bg-stone-800 text-[9px] md:text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors">Salvar</button>
+             <button onClick={onMenu} className="px-1.5 py-0.5 md:p-1 md:px-2 border border-stone-700 bg-stone-800 text-[9px] md:text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors">Menu</button>
+             <button onClick={onToggleInstructions} className="px-1.5 py-0.5 md:p-1 md:px-2 border border-stone-700 bg-stone-800 text-[9px] md:text-[10px] font-bold uppercase rounded hover:bg-stone-700 transition-colors flex items-center gap-1">
                <HelpCircle size={12} />
                <span className="hidden md:inline">Instruções</span>
              </button>
@@ -931,49 +931,49 @@ export const HUD: React.FC<HUDProps> = ({
       )}
 
       {/* Actions Bottom */}
-      <div className="p-4 bg-black/60 border-t border-amber-900/30 space-y-2">
+      <div className="p-2 md:p-4 bg-black/60 border-t border-amber-900/30 space-y-1.5 md:space-y-2">
          <button 
            onClick={onEndTurn}
-           className="w-full h-12 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-sm md:text-lg uppercase tracking-widest transition-all rounded-sm shadow-[0_4px_20px_rgba(245,158,11,0.3)] active:scale-[0.98] flex items-center justify-center gap-3"
+           className="w-full h-10 md:h-12 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-lg uppercase tracking-[0.12em] md:tracking-widest transition-all rounded-sm shadow-[0_4px_20px_rgba(245,158,11,0.3)] active:scale-[0.98] flex items-center justify-center gap-2 md:gap-3"
          >
-            <Play size={20} className="fill-stone-950" /> Encerrar Turno
+            <Play size={16} className="fill-stone-950 md:w-5 md:h-5" /> Encerrar Turno
          </button>
          
          <div className="grid grid-cols-5 gap-2">
             <button 
               onClick={() => onToggleMode('political')}
-              className={`flex flex-col items-center justify-center py-2 rounded-sm border transition-all ${viewMode === 'political' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+              className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'political' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
             >
-               <MapIcon size={16} />
-               <span className="text-[10px] font-bold uppercase mt-1">Político</span>
+               <MapIcon size={14} className="md:w-4 md:h-4" />
+               <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Político</span>
             </button>
             <button 
               onClick={() => onToggleMode('economic')}
-              className={`flex flex-col items-center justify-center py-2 rounded-sm border transition-all ${viewMode === 'economic' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+              className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'economic' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
             >
-               <Landmark size={16} />
-               <span className="text-[10px] font-bold uppercase mt-1">Economia</span>
+               <Landmark size={14} className="md:w-4 md:h-4" />
+               <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Economia</span>
             </button>
             <button 
               onClick={() => onToggleMode('military')}
-              className={`flex flex-col items-center justify-center py-2 rounded-sm border transition-all ${viewMode === 'military' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+              className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'military' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
             >
-               <Shield size={16} />
-               <span className="text-[10px] font-bold uppercase mt-1">Militar</span>
+               <Shield size={14} className="md:w-4 md:h-4" />
+               <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Militar</span>
             </button>
             <button 
               onClick={() => onToggleMode('trade')}
-              className={`flex flex-col items-center justify-center py-2 rounded-sm border transition-all ${viewMode === 'trade' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+              className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'trade' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
             >
-               <Handshake size={16} />
-               <span className="text-[10px] font-bold uppercase mt-1">Comércio</span>
+               <Handshake size={14} className="md:w-4 md:h-4" />
+               <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Comércio</span>
             </button>
             <button 
               onClick={onToggleChronicles}
-              className="flex flex-col items-center justify-center py-2 bg-stone-800/40 border border-stone-700 text-stone-500 hover:text-amber-200 rounded-sm transition-all"
+              className="flex flex-col items-center justify-center py-1.5 md:py-2 bg-stone-800/40 border border-stone-700 text-stone-500 hover:text-amber-200 rounded-sm transition-all"
             >
-               <Scroll size={16} />
-               <span className="text-[10px] font-bold uppercase mt-1">Crônicas</span>
+               <Scroll size={14} className="md:w-4 md:h-4" />
+               <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Crônicas</span>
             </button>
          </div>
       </div>
