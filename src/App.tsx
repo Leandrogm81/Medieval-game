@@ -194,7 +194,7 @@ export default function App() {
           {/* New Game Panel */}
           <motion.div
             initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
-            className="menu-panel flex-1 flex flex-col items-center p-3 xs:p-6 rounded-sm group hover:scale-[1.02] transition-transform duration-500"
+            className="menu-panel w-full lg:flex-1 flex flex-col items-center p-3 xs:p-6 rounded-sm group hover:scale-[1.02] transition-transform duration-500"
           >
             <div className="mb-4 text-center">
               <h2 className="text-lg xs:text-xl md:text-2xl font-bold text-amber-100/90 tracking-widest uppercase mb-1">Novo Reinado</h2>
@@ -253,7 +253,7 @@ export default function App() {
           {/* Resume Game Panel */}
           <motion.div
             initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}
-            className="menu-panel flex-1 flex flex-col p-6 rounded-sm hover:scale-[1.02] transition-transform duration-500"
+            className="menu-panel w-full lg:flex-1 flex flex-col p-6 rounded-sm hover:scale-[1.02] transition-transform duration-500"
           >
             <div className="mb-4 text-center">
               <h2 className="text-xl md:text-2xl font-bold text-amber-100/90 tracking-widest uppercase mb-1">Retomar Partida</h2>

@@ -190,14 +190,14 @@ body,
 input[type="range"].menu-range {
   -webkit-appearance: none;
   appearance: none;
-  background: linear-gradient(90deg, rgba(251, 191, 36, 0.95) 0%, rgba(251, 191, 36, 0.95) 50%, rgba(68, 64, 60, 0.9) 50%, rgba(68, 64, 60, 0.9) 100%);
+  background: rgba(68, 64, 60, 0.9);
   border-radius: 9999px;
   overflow: hidden;
 }
 
 input[type="range"].menu-range::-webkit-slider-runnable-track {
   height: 0.5rem;
-  background: transparent;
+  background: rgba(68, 64, 60, 0.9);
   border-radius: 9999px;
 }
 
