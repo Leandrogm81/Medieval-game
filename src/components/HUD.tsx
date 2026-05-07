@@ -635,18 +635,18 @@ export const HUD: React.FC<HUDProps> = ({
                 {selectedProvince.ownerId === gameState.playerRealmId && (
                   <div className="mt-4 space-y-2">
                      <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase border-b border-stone-700 pb-1 mb-2">Comandos Militares</p>
-                     <div className="grid grid-cols-2 gap-2">
+                     <div className="grid grid-cols-2 gap-1.5 md:gap-2">
                         <button
                           onClick={() => onMapAction?.('move')}
-                          className="flex items-center justify-center gap-2 py-3 min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-amber-600/10 hover:border-amber-600/50 rounded-sm text-[10px] font-bold uppercase transition-all"
+                          className="flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-3 min-h-[36px] md:min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-amber-600/10 hover:border-amber-600/50 rounded-sm text-[9px] md:text-[10px] font-bold uppercase transition-all"
                         >
-                           <Swords size={14} className="text-amber-500" /> Marchar
+                           <Swords size={12} className="text-amber-500 md:w-[14px] md:h-[14px]" /> Marchar
                         </button>
                         <button
                           onClick={() => onMapAction?.('attack')}
-                          className="flex items-center justify-center gap-2 py-3 min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-red-600/10 hover:border-red-600/50 rounded-sm text-[10px] font-bold uppercase transition-all"
+                          className="flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-3 min-h-[36px] md:min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-red-600/10 hover:border-red-600/50 rounded-sm text-[9px] md:text-[10px] font-bold uppercase transition-all"
                         >
-                           <Zap size={14} className="text-red-500" /> Atacar
+                           <Zap size={12} className="text-red-500 md:w-[14px] md:h-[14px]" /> Atacar
                         </button>
                      </div>
                      {/* Disband Button */}
@@ -659,10 +659,10 @@ export const HUD: React.FC<HUDProps> = ({
                            onPreviewPath?.([]);
                            onActionBannerMessage?.(null);
                          }}
-                         className={`w-full flex items-center justify-center gap-2 py-3 min-h-[44px] border rounded-sm text-[10px] font-bold uppercase transition-all
+                         className={`w-full flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-3 min-h-[36px] md:min-h-[44px] border rounded-sm text-[9px] md:text-[10px] font-bold uppercase transition-all
                            ${isDisbandMode ? 'bg-red-900/30 border-red-500 text-red-300' : 'bg-stone-800 border-stone-700 text-stone-400 hover:bg-red-600/10 hover:border-red-600/50 hover:text-red-300'}`}
                        >
-                          <Users size={14} className={isDisbandMode ? 'text-red-400' : 'text-stone-400'} />
+                          <Users size={12} className={`${isDisbandMode ? 'text-red-400' : 'text-stone-400'} md:w-[14px] md:h-[14px]`} />
                           {isDisbandMode ? 'Modo Dispensar' : 'Dispensar Tropas'}
                        </button>
                      )}
@@ -932,9 +932,17 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* Actions Bottom */}
       <div className="p-2 md:p-4 bg-black/60 border-t border-amber-900/30 space-y-1.5 md:space-y-2">
+         <div className="flex justify-end md:hidden">
+           <button
+             onClick={onEndTurn}
+             className="h-8 px-2.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-[10px] uppercase tracking-[0.08em] rounded-sm border border-amber-700 active:scale-[0.98] flex items-center justify-center gap-1.5"
+           >
+             <Play size={12} className="fill-stone-950" /> Turno
+           </button>
+         </div>
          <button 
            onClick={onEndTurn}
-           className="w-full h-10 md:h-12 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-lg uppercase tracking-[0.12em] md:tracking-widest transition-all rounded-sm shadow-[0_4px_20px_rgba(245,158,11,0.3)] active:scale-[0.98] flex items-center justify-center gap-2 md:gap-3"
+           className="hidden md:flex w-full h-10 md:h-12 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-lg uppercase tracking-[0.12em] md:tracking-widest transition-all rounded-sm shadow-[0_4px_20px_rgba(245,158,11,0.3)] active:scale-[0.98] items-center justify-center gap-2 md:gap-3"
          >
             <Play size={16} className="fill-stone-950 md:w-5 md:h-5" /> Encerrar Turno
          </button>

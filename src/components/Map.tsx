@@ -136,17 +136,17 @@ export const Map: React.FC<MapProps> = ({
 
           // Determine label content based on view mode
           let labelText = prov.name;
-          let labelFontSize = 10;
-          let labelFontWeight = 700;
+          let labelFontSize = 20;
+          let labelFontWeight = 900;
           
           if (viewMode === 'economic') {
             const totalProd = (prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0);
             labelText = `${totalProd}`;
-            labelFontSize = 12;
+            labelFontSize = 24;
             labelFontWeight = 900;
           } else if (viewMode === 'military') {
             labelText = `${prov.troops || 0}`;
-            labelFontSize = 12;
+            labelFontSize = 24;
             labelFontWeight = 900;
           }
 
@@ -164,7 +164,7 @@ export const Map: React.FC<MapProps> = ({
               fill="rgba(255,255,255,0.9)"
               paintOrder="stroke"
               stroke="rgba(0,0,0,0.6)"
-              strokeWidth="2"
+              strokeWidth="3"
               pointerEvents="none"
             >
               {labelText}
