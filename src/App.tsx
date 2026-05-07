@@ -137,7 +137,7 @@ export default function App() {
         infantry: prov.army.infantry,
         archers: prov.army.archers,
         cavalry: prov.army.cavalry,
-        scouts: 0
+        scouts: prov.army.scouts
       });
       ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
     } else if (type === 'attack') {
@@ -686,7 +686,7 @@ export default function App() {
                 infantry: prov.army.infantry,
                 archers: prov.army.archers,
                 cavalry: prov.army.cavalry,
-                scouts: 0
+                scouts: prov.army.scouts
               });
               ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
             } else if (type === 'attack') {

@@ -9,7 +9,7 @@ const TRADE_BASE_RATES: Record<'gold' | 'food' | 'materials', Record<'gold' | 'f
 
 const COMFORT_STOCK = 500;
 const MAX_TRADES_PER_TURN = 3;
-const MAX_TRADE_AMOUNT = 100;
+export const MAX_TRADE_AMOUNT = 10000;
 
 export type MassActionType = 'assimilate' | 'invest' | 'buildFarms' | 'buildMines' | 'buildWorkshops' | 'buildCourts';
 

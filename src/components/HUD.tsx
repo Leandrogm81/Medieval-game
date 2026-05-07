@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { ACTION_COSTS, BUILDING_PRODUCTION, BUILDING_STATS, REALM_COLORS, UNIT_STATS } from '../logic/game-constants';
-import { estimateMassActionCost, getTradeRate, MassActionType } from '../logic/economyLogic';
+import { estimateMassActionCost, getTradeRate, MassActionType, MAX_TRADE_AMOUNT } from '../logic/economyLogic';
 import { getSfxEnabled, toggleSfx } from '../logic/sfxLogic';
 
 const RESOURCE_META: Record<string, { label: string; icon: string }> = {
@@ -218,7 +218,7 @@ export const HUD: React.FC<HUDProps> = ({
   const tradeRate = getTradeRate(playerRealm, tradeFrom, tradeTo);
   const tradePreview = Math.floor(tradeAmount * tradeRate);
   const tradeAvailable = playerRealm[tradeFrom];
-  const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= 100 && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
+  const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= MAX_TRADE_AMOUNT && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
   const massActionOptions = [
     { key: 'assimilate', label: 'Assimilar Todas', action: 'assimilate' as MassActionType, costGold: 50, costMaterials: 0 },
     { key: 'invest', label: 'Investir em Todas', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
@@ -416,7 +416,7 @@ export const HUD: React.FC<HUDProps> = ({
                   <input
                     type="range"
                     min={1}
-                    max={Math.min(100, Math.max(1, tradeAvailable))}
+                    max={Math.min(MAX_TRADE_AMOUNT, Math.max(1, tradeAvailable))}
                     value={Math.min(tradeAmount, Math.max(1, tradeAvailable))}
                     onChange={(e) => setTradeAmount(parseInt(e.target.value))}
                     title="Quantidade de origem"
@@ -426,7 +426,7 @@ export const HUD: React.FC<HUDProps> = ({
                   <div className="flex justify-between mt-2 text-[10px] text-stone-400">
                     <span>1</span>
                     <span className="font-black text-amber-200">{tradeAmount}</span>
-                    <span>100</span>
+                    <span>{MAX_TRADE_AMOUNT}</span>
                   </div>
                 </div>
 
@@ -699,10 +699,10 @@ export const HUD: React.FC<HUDProps> = ({
               {selectingMoveComposition && selectedProvince.ownerId === gameState.playerRealmId && (
                 <div className="mt-4 p-3 bg-amber-950/20 border border-amber-700/30 rounded-sm">
                   <p className="text-[10px] md:text-[11px] text-amber-500 font-black uppercase mb-3">Composição das Tropas</p>
-                  {(['infantry', 'archers', 'cavalry'] as const).map(type => {
+                  {(['infantry', 'archers', 'cavalry', 'scouts'] as const).map(type => {
                     const maxAvailable = selectedProvince.army[type];
                     if (maxAvailable <= 0) return null;
-                    const labels: Record<string, string> = { infantry: 'Infantaria', archers: 'Arqueiros', cavalry: 'Cavalaria' };
+                    const labels: Record<string, string> = { infantry: 'Infantaria', archers: 'Arqueiros', cavalry: 'Cavalaria', scouts: 'Batedores' };
                     return (
                       <div key={type} className="mb-2">
                         <div className="flex justify-between text-[10px] text-stone-400 mb-1">
@@ -727,7 +727,7 @@ export const HUD: React.FC<HUDProps> = ({
                   })}
                   <div className="flex justify-between text-[10px] font-bold mt-2">
                     <span className="text-stone-400">Total:</span>
-                    <span className="text-amber-200">{moveComposition.infantry + moveComposition.archers + moveComposition.cavalry}</span>
+                    <span className="text-amber-200">{moveComposition.infantry + moveComposition.archers + moveComposition.cavalry + moveComposition.scouts}</span>
                   </div>
                 </div>
               )}
