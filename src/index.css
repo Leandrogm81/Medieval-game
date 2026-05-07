@@ -187,6 +187,52 @@ body,
   }
 }
 
+input[type="range"].menu-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: linear-gradient(90deg, rgba(251, 191, 36, 0.95) 0%, rgba(251, 191, 36, 0.95) 50%, rgba(68, 64, 60, 0.9) 50%, rgba(68, 64, 60, 0.9) 100%);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+
+input[type="range"].menu-range::-webkit-slider-runnable-track {
+  height: 0.5rem;
+  background: transparent;
+  border-radius: 9999px;
+}
+
+input[type="range"].menu-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 9999px;
+  background: #f59e0b;
+  border: 2px solid #2c1810;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+}
+
+input[type="range"].menu-range::-moz-range-track {
+  height: 0.5rem;
+  background: rgba(68, 64, 60, 0.9);
+  border-radius: 9999px;
+}
+
+input[type="range"].menu-range::-moz-range-progress {
+  height: 0.5rem;
+  background: rgba(251, 191, 36, 0.95);
+  border-radius: 9999px;
+}
+
+input[type="range"].menu-range::-moz-range-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 9999px;
+  background: #f59e0b;
+  border: 2px solid #2c1810;
+  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.15);
+}
+
 /* Safe area insets for notched phones */
 @supports (padding: max(0px)) {
   .safe-area-inset {

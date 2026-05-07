@@ -150,7 +150,7 @@ export default function App() {
       <div className="h-screen bg-black text-stone-200 flex flex-col items-center justify-start md:justify-center p-2 xs:p-4 py-4 md:py-8 relative overflow-y-auto overflow-x-hidden select-none menu-background">
 
         {/* Overlay for better readability */}
-        <div className="absolute inset-0 bg-black/40 z-0"></div>
+        <div className="absolute inset-0 bg-black/40 z-0 pointer-events-none"></div>
 
         <button
           onClick={() => ui.setShowInstructionsModal(true)}
@@ -164,7 +164,7 @@ export default function App() {
         <motion.div
           initial={{ opacity: 0, y: -50 }}
           animate={{ opacity: 1, y: 0 }}
-          className="z-10 flex justify-center mb-2 mt-6 md:mt-0"
+          className="relative z-10 flex justify-center mb-2 mt-6 md:mt-0"
         >
           <div className="relative flex justify-center items-center">
             <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-75"></div>
@@ -180,7 +180,7 @@ export default function App() {
           initial={{ opacity: 0, y: -30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="z-10 text-center mb-4 md:mb-6 w-full max-w-full px-2"
+          className="relative z-10 text-center mb-4 md:mb-6 w-full max-w-full px-2"
         >
           <h1 className="text-[clamp(1.8rem,8.5vw,4.25rem)] leading-none font-black tracking-[0.07em] sm:tracking-[0.12em] md:tracking-[0.2em] mb-1 gold-gradient-text uppercase">
             Reinos Medievais
@@ -190,7 +190,7 @@ export default function App() {
           </p>
         </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-3 xs:gap-4 w-full max-w-4xl z-10 px-2 xs:px-4 pb-6">
+        <div className="relative z-10 flex flex-col lg:flex-row gap-3 xs:gap-4 w-full max-w-4xl px-2 xs:px-4 pb-6">
           {/* New Game Panel */}
           <motion.div
             initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}
@@ -210,7 +210,7 @@ export default function App() {
                   type="range" min="15" max="40" step="1"
                   value={ui.gameSettings.numProvinces}
                   onChange={e => ui.setGameSettings({ ...ui.gameSettings, numProvinces: parseInt(e.target.value) })}
-                  className="w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
+                  className="menu-range w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
                   title="Ajustar número de províncias no mapa"
                 />
                 <div className="flex justify-between text-[8px] xs:text-[10px] text-stone-500 mt-2 font-serif italic">
@@ -243,7 +243,7 @@ export default function App() {
 
             <button
               onClick={ctrl.startNewGame}
-              className="w-full btn-premium-gold h-12 rounded-sm font-black text-stone-950 tracking-[0.15em] flex items-center justify-center gap-3 active:scale-95 group/btn"
+              className="relative z-20 w-full btn-premium-gold h-12 rounded-sm font-black text-stone-950 tracking-[0.15em] flex items-center justify-center gap-3 active:scale-95 group/btn"
             >
               <Swords className="w-5 h-5 group-hover/btn:rotate-12 transition-transform" />
               INICIAR JORNADA
