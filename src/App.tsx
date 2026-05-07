@@ -131,7 +131,7 @@ export default function App() {
       ui.setActionSourceId(ui.selectedProvinceId);
       ui.setActionState('moving');
       ui.setSelectingMoveComposition(true);
-      ui.setActionBannerMessage('Modo Marcha — selecione o destino no mapa');
+      ui.setActionBannerMessage('Modo Marcha — selecione uma província sua no mapa');
       ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'move'));
       ui.setMoveComposition({
         infantry: prov.army.infantry,
@@ -680,7 +680,7 @@ export default function App() {
               ui.setActionSourceId(ui.selectedProvinceId);
               ui.setActionState('moving');
               ui.setSelectingMoveComposition(true);
-              ui.setActionBannerMessage('Modo Marcha — selecione o destino no mapa');
+              ui.setActionBannerMessage('Modo Marcha — selecione uma província sua no mapa');
               ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'move'));
               ui.setMoveComposition({
                 infantry: prov.army.infantry,

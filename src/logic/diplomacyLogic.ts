@@ -128,7 +128,7 @@ function markAggressionMemories(state: GameState, defenderId: string, aggressorI
   });
 }
 
-function isWarBetween(state: GameState, aId: string, bId: string): boolean {
+export function isWarBetween(state: GameState, aId: string, bId: string): boolean {
   const a = getRealm(state, aId);
   const b = getRealm(state, bId);
   if (!a || !b) return false;

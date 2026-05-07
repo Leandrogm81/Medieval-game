@@ -105,6 +105,7 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
                     <div className="flex justify-between text-red-400"><span>Infantaria:</span> <span>-{battleResult.attackerLosses.infantry}</span></div>
                     <div className="flex justify-between text-red-400"><span>Arqueiros:</span> <span>-{battleResult.attackerLosses.archers}</span></div>
                     <div className="flex justify-between text-red-400"><span>Cavalaria:</span> <span>-{battleResult.attackerLosses.cavalry}</span></div>
+                    <div className="flex justify-between text-red-400"><span>Batedores:</span> <span>-{battleResult.attackerLosses.scouts}</span></div>
                   </div>
                 </div>
                 <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-700/50">
@@ -113,6 +114,7 @@ export const BattleOutcomeModal: React.FC<BattleOutcomeModalProps> = ({
                     <div className="flex justify-between text-red-400"><span>Infantaria:</span> <span>-{battleResult.defenderLosses.infantry}</span></div>
                     <div className="flex justify-between text-red-400"><span>Arqueiros:</span> <span>-{battleResult.defenderLosses.archers}</span></div>
                     <div className="flex justify-between text-red-400"><span>Cavalaria:</span> <span>-{battleResult.defenderLosses.cavalry}</span></div>
+                    <div className="flex justify-between text-red-400"><span>Batedores:</span> <span>-{battleResult.defenderLosses.scouts}</span></div>
                   </div>
                 </div>
               </div>

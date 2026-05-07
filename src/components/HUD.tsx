@@ -210,6 +210,14 @@ export const HUD: React.FC<HUDProps> = ({
 
   const provinceStability = selectedProvince?.stability ?? 70;
   const provinceStabilityState = provinceStability >= 80 ? 'Estável' : provinceStability >= 50 ? 'Resiliente' : provinceStability >= 20 ? 'Instável' : 'Crítica';
+  const selectedProvinceGrowthPerTurn = selectedProvince
+    ? (() => {
+      const loyaltyFactor = 0.5 + (selectedProvince.loyalty / 200);
+      const stabilityFactor = provinceStability >= 80 ? 1 : provinceStability >= 50 ? 0.85 : provinceStability >= 20 ? 0.65 : 0.4;
+      const efficiency = (0.5 + (selectedProvince.population / selectedProvince.maxPopulation) * 0.5) * loyaltyFactor * stabilityFactor;
+      return Math.floor(selectedProvince.population * 0.07 * efficiency);
+    })()
+    : 0;
 
   const [tradeFrom, setTradeFrom] = useState<TradeResource>('gold');
   const [tradeTo, setTradeTo] = useState<TradeResource>('food');
@@ -221,7 +229,7 @@ export const HUD: React.FC<HUDProps> = ({
   const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= MAX_TRADE_AMOUNT && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
   const massActionOptions = [
     { key: 'assimilate', label: 'Assimilar Todas', action: 'assimilate' as MassActionType, costGold: 50, costMaterials: 0 },
-    { key: 'invest', label: 'Investir em Todas', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
+    { key: 'invest', label: 'Investir em Todas', description: 'Aplica em todas as províncias do reino.', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
     { key: 'buildFarms', label: 'Construir Farms', action: 'buildFarms' as MassActionType, costGold: 100, costMaterials: 50 },
     { key: 'buildMines', label: 'Construir Mines', action: 'buildMines' as MassActionType, costGold: 150, costMaterials: 75 },
     { key: 'buildWorkshops', label: 'Construir Workshops', action: 'buildWorkshops' as MassActionType, costGold: 200, costMaterials: 100 },
@@ -504,6 +512,9 @@ export const HUD: React.FC<HUDProps> = ({
                                   : 'bg-stone-900/20 border-stone-800 text-stone-500 cursor-not-allowed'}`}
                             >
                               <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">{option.label}</span>
+                              {'description' in option && option.description && (
+                                <span className="text-[9px] text-amber-300/80">{option.description}</span>
+                              )}
                               <span className="text-[9px] text-stone-400">{option.costGold} ouro/prov{option.costMaterials > 0 ? ` + ${option.costMaterials} materiais/prov` : ''}</span>
                               <span className="text-[9px] text-stone-500">Estimativa: {estimate.affectedCount} prov. | {costParts.join(' / ')}</span>
                             </button>
@@ -610,6 +621,17 @@ export const HUD: React.FC<HUDProps> = ({
                       <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Comida</span><span className="font-black text-amber-50">+{selectedProvinceProduction?.food}</span></div>
                       <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Materiais</span><span className="font-black text-amber-50">+{selectedProvinceProduction?.materials}</span></div>
                     </div>
+                  </div>
+
+                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
+                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Crescimento populacional</p>
+                    <div className="flex items-center justify-between bg-black/20 rounded px-2 py-2">
+                      <span className="text-[10px] font-bold uppercase text-stone-300">Por turno</span>
+                      <span className={`font-black ${selectedProvinceGrowthPerTurn >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                        {selectedProvinceGrowthPerTurn >= 0 ? '+' : ''}{selectedProvinceGrowthPerTurn}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[9px] text-stone-500">Baseado em população, lealdade e estabilidade.</p>
                   </div>
                 </div>
 

@@ -3,6 +3,7 @@ import { ACTION_COSTS, UNIT_STATS, BUILDING_PRODUCTION } from './game-constants'
 import { handleResourceDeficit, normalizeNaturalAmount } from './economyLogic';
 import { calculateRetreat, getRetreatDestination, resolveCombat } from './combatLogic';
 import { playConquestSound } from './sfxLogic';
+import { declareWar, isWarBetween } from './diplomacyLogic';
 import { deepClone } from '../utils/deepClone';
 
 export function calculateVisibility(state: GameState): string[] {
@@ -90,7 +91,8 @@ export function findPath(
   fromId: string,
   toId: string,
   realmId: string,
-  isScout = false
+  isScout = false,
+  allowEnemyDestination = false
 ): string[] {
 
   if (fromId === toId) return [];
@@ -105,12 +107,11 @@ export function findPath(
   if (isAdjacent) {
     const targetProv = state.provinces[toId];
     if (!targetProv) return [];
-    // Scouts can traverse anything; regular troops can march to adjacent enemy/neutral
-    if (isScout || targetProv.ownerId === realmId || targetProv.ownerId === 'neutral') {
+    // Scouts can traverse anything; regular troops can only march to their own land
+    if (isScout || targetProv.ownerId === realmId || allowEnemyDestination) {
       return [toId];
     }
-    // For adjacent enemy territory, also allow - will trigger combat on arrival
-    return [toId];
+    return [];
   }
 
   // For non-adjacent targets, use BFS but still allow traversing to adjacent enemies
@@ -137,7 +138,7 @@ export function findPath(
       }
 
       // For non-scouts: allow if friendly, neutral, or if it's the destination
-      const canTraverse = neighbor.ownerId === realmId || nId === toId;
+      const canTraverse = neighbor.ownerId === realmId || (allowEnemyDestination && nId === toId);
       if (!canTraverse) continue;
 
       const newPath = [...path, nId];
@@ -155,7 +156,8 @@ function processMarchOrders(state: GameState) {
   if (!state.marchOrders) { state.marchOrders = []; return; }
   state.lastTurnMovements = [];
   state.pendingBattleResults = [];
-  const toRemove: string[] = [];
+  const toRemove = new Set<string>();
+  const arrivedOrders: { order: (typeof state.marchOrders)[number]; prov: Province }[] = [];
   const recalcTroops = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
     army.infantry + army.archers + army.cavalry + army.scouts;
 
@@ -192,44 +194,96 @@ function processMarchOrders(state: GameState) {
     }
   };
 
-  const finishAttack = (order: (typeof state.marchOrders)[number], prov: Province) => {
-    const defenderName = state.realms[prov.ownerId]?.name || 'Neutral';
-    const defenderRealmId = prov.ownerId;
-    const result = resolveCombat(order.troops, prov.army, prov.terrain, prov.defense, state, prov.id);
-    const recalcRetreatTotal = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
-      army.infantry + army.archers + army.cavalry + army.scouts;
-    const applyRetreat = (realmId: string, remainingArmy: { infantry: number; archers: number; cavalry: number; scouts: number }) => {
-      const retreatDest = getRetreatDestination(state, prov.id, realmId);
-      if (!retreatDest) return null;
+  state.marchOrders.forEach(order => {
+    const nextProvId = order.remainingPath[0];
+    const nextProv = nextProvId ? state.provinces[nextProvId] : state.provinces[order.currentProvId];
 
-      const retreating = calculateRetreat(remainingArmy);
-      const retreatCount = recalcRetreatTotal(retreating);
-      if (retreatCount <= 0) return null;
+    if (!nextProv) {
+      toRemove.add(order.id);
+      return;
+    }
 
-      const destProv = state.provinces[retreatDest];
-      if (!destProv) return null;
+    if (order.remainingPath.length > 0) {
+      const fromProvId = order.currentProvId;
+      order.currentProvId = nextProvId;
+      order.remainingPath.shift();
+      state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
+    }
 
-      destProv.army.infantry += retreating.infantry;
-      destProv.army.archers += retreating.archers;
-      destProv.army.cavalry += retreating.cavalry;
-      destProv.army.scouts += retreating.scouts;
-      destProv.troops = recalcTroops(destProv.army);
+    if (order.currentProvId === order.destinationId) {
+      arrivedOrders.push({ order, prov: nextProv });
+    }
+  });
 
-      if (realmId === state.playerRealmId) {
-        state.logs.push(`DERROTA! ${retreatCount} tropas recuaram para ${destProv.name}.`);
-      }
+  const attackGroups = new Map<string, { orders: (typeof state.marchOrders)[number][]; prov: Province }>();
+  const applyRetreat = (realmId: string, provinceId: string, remainingArmy: { infantry: number; archers: number; cavalry: number; scouts: number }) => {
+    const retreatDest = getRetreatDestination(state, provinceId, realmId);
+    if (!retreatDest) return null;
 
-      return {
-        count: retreatCount,
-        destinationName: destProv.name,
-        composition: retreating
-      };
+    const retreating = calculateRetreat(remainingArmy);
+    const retreatCount = recalcTroops(retreating);
+    if (retreatCount <= 0) return null;
+
+    const destProv = state.provinces[retreatDest];
+    if (!destProv) return null;
+
+    destProv.army.infantry += retreating.infantry;
+    destProv.army.archers += retreating.archers;
+    destProv.army.cavalry += retreating.cavalry;
+    destProv.army.scouts += retreating.scouts;
+    destProv.troops = recalcTroops(destProv.army);
+
+    if (realmId === state.playerRealmId) {
+      state.logs.push(`DERROTA! ${retreatCount} tropas recuaram para ${destProv.name}.`);
+    }
+
+    return {
+      count: retreatCount,
+      destinationName: destProv.name,
+      composition: retreating
     };
+  };
+
+  arrivedOrders.forEach(({ order, prov }) => {
+    if (order.kind === 'attack') {
+      const key = `${order.realmId}:${order.destinationId}`;
+      const existing = attackGroups.get(key);
+      if (existing) {
+        existing.orders.push(order);
+      } else {
+        attackGroups.set(key, { orders: [order], prov });
+      }
+      return;
+    }
+
+    if (order.kind === 'scout') finishScout(order, prov);
+    else finishMove(order, prov);
+    toRemove.add(order.id);
+  });
+
+  attackGroups.forEach(({ orders, prov }) => {
+    const baseOrder = orders[0];
+    const defenderRealmId = prov.ownerId;
+    const defenderName = state.realms[defenderRealmId]?.name || 'Neutral';
+    const attackerName = state.realms[baseOrder.realmId]?.name || 'Reino';
+
+    if (defenderRealmId !== 'neutral' && !isWarBetween(state, baseOrder.realmId, defenderRealmId)) {
+      declareWar(state, baseOrder.realmId, defenderRealmId);
+    }
+
+    const combinedTroops = orders.reduce((army, current) => ({
+      infantry: army.infantry + current.troops.infantry,
+      archers: army.archers + current.troops.archers,
+      cavalry: army.cavalry + current.troops.cavalry,
+      scouts: army.scouts + current.troops.scouts
+    }), { infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+
+    const result = resolveCombat(combinedTroops, prov.army, prov.terrain, prov.defense, state, prov.id);
     let retreatInfo = null;
 
     if (result.won) {
-      retreatInfo = applyRetreat(defenderRealmId, result.defenderRemaining);
-      prov.ownerId = order.realmId;
+      retreatInfo = applyRetreat(defenderRealmId, prov.id, result.defenderRemaining);
+      prov.ownerId = baseOrder.realmId;
       prov.loyalty = 40;
       prov.recentlyConquered = 3;
       prov.army = result.attackerRemaining;
@@ -244,54 +298,31 @@ function processMarchOrders(state: GameState) {
         startTime: Date.now(),
         duration: 1200
       });
-      if (order.realmId === state.playerRealmId) {
+      if (baseOrder.realmId === state.playerRealmId) {
         state.logs.push(`VITORIA! Suas tropas conquistaram ${prov.name}!`);
       }
     } else {
-      retreatInfo = applyRetreat(order.realmId, result.attackerRemaining);
+      retreatInfo = applyRetreat(baseOrder.realmId, prov.id, result.attackerRemaining);
       prov.army = result.defenderRemaining;
       prov.troops = recalcTroops(prov.army);
-      if (order.realmId === state.playerRealmId) {
+      if (baseOrder.realmId === state.playerRealmId) {
         state.logs.push(`DERROTA! Seu exercito foi destruido em ${prov.name}!`);
       }
     }
 
     state.pendingBattleResults?.push({
-      attackerName: state.realms[order.realmId]?.name || 'Reino',
+      attackerName,
       defenderName,
       provinceName: prov.name,
       conquered: result.won,
       result,
       retreatInfo: retreatInfo || undefined
     });
-  };
 
-  state.marchOrders.forEach(order => {
-    const nextProvId = order.remainingPath[0];
-    const nextProv = nextProvId ? state.provinces[nextProvId] : state.provinces[order.currentProvId];
-
-    if (!nextProv) {
-      toRemove.push(order.id);
-      return;
-    }
-
-    if (order.remainingPath.length > 0) {
-      const fromProvId = order.currentProvId;
-      order.currentProvId = nextProvId;
-      order.remainingPath.shift();
-      state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
-    }
-
-    if (order.currentProvId !== order.destinationId) return;
-
-    if (order.kind === 'attack') finishAttack(order, nextProv);
-    else if (order.kind === 'scout') finishScout(order, nextProv);
-    else finishMove(order, nextProv);
-
-    toRemove.push(order.id);
+    orders.forEach(order => toRemove.add(order.id));
   });
 
-  state.marchOrders = state.marchOrders.filter(o => !toRemove.includes(o.id));
+  state.marchOrders = state.marchOrders.filter(o => !toRemove.has(o.id));
 }
 
 function getStabilityFactor(stability: number): number {

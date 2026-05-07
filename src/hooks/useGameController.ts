@@ -42,7 +42,8 @@ import {
   proposeNonAggressionPact,
   resolveCallToArms,
   sendInsult,
-  autoResolveCallToArms
+  autoResolveCallToArms,
+  isWarBetween
 } from '../logic/diplomacyLogic';
 import { persistence } from '../persistence';
 import { useUI } from './useUI';
@@ -587,7 +588,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         // Use setTimeout to ensure toast is shown after React state batch
         setTimeout(() => ui.showToast(`Tropas marchando para ${gameState!.provinces[id].name}!`, "success"), 0);
       } else {
-        setTimeout(() => ui.showToast("Destino inacessível! Apenas províncias vizinhas ou conectadas por território amigo.", "error"), 0);
+        setTimeout(() => ui.showToast("Destino inacessível! A marcha só pode ocorrer entre províncias do seu reino.", "error"), 0);
       }
       return;
     }
@@ -628,7 +629,30 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       if (!atkProv || !defProv || !next.realms[next.playerRealmId]) return prev;
 
       const sentArmy = ui.combatAttackingArmy!;
-      const path = findPath(next, ui.combatAttackerProvId!, ui.combatDefenderProvId!, next.playerRealmId);
+      const targetOwnerId = defProv.ownerId;
+      if (targetOwnerId === next.playerRealmId) {
+        ui.showToast('Você não pode atacar suas próprias províncias!', 'error');
+        return prev;
+      }
+
+      const hasExistingWar = targetOwnerId !== 'neutral' && isWarBetween(next, next.playerRealmId, targetOwnerId);
+      if (targetOwnerId !== 'neutral' && !hasExistingWar) {
+        const warCheck = canDeclareWar(next, next.playerRealmId, targetOwnerId);
+        if (!warCheck.valid) {
+          ui.showToast(warCheck.reason || 'Não foi possível iniciar a guerra.', 'error');
+          return prev;
+        }
+
+        const warResult = declareWar(next, next.playerRealmId, targetOwnerId);
+        warResult.callsToResolve.forEach(call => {
+          const accepted = autoResolveCallToArms(next, call);
+          resolveCallToArms(next, call.id, accepted);
+        });
+        playWarDeclaredSound();
+        next.logs.unshift(`GUERRA: ${next.realms[next.playerRealmId].name} declarou guerra contra ${next.realms[targetOwnerId]?.name || 'o alvo'}.`);
+      }
+
+      const path = findPath(next, ui.combatAttackerProvId!, ui.combatDefenderProvId!, next.playerRealmId, false, true);
       if (path.length === 0) return prev;
       const order = {
         id: `march_${Date.now()}`,
@@ -660,7 +684,12 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       ui.setActionSourceId(null);
       ui.setPreviewPath([]);
       ui.setActionBannerMessage(null);
-      ui.showToast('Ataque enviado. O combate será resolvido na chegada.', 'info');
+      const attackToast = targetOwnerId === 'neutral'
+        ? 'Ataque enviado. O combate sera resolvido na chegada.'
+        : hasExistingWar
+          ? 'Ataque enviado. A guerra ja estava ativa e o combate sera resolvido na chegada.'
+          : 'Ataque enviado. A guerra foi declarada e o combate sera resolvido na chegada.';
+      ui.showToast(attackToast, 'info');
 
       return next;
     });
@@ -797,4 +826,5 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleTouchEnd
   };
 }
+
 
