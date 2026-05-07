@@ -26,6 +26,11 @@ interface MassActionConfig {
   apply: (province: Province, realm: Realm) => void;
 }
 
+export function normalizeNaturalAmount(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
 function getProvinceDistances(state: GameState, startId?: string): Record<string, number> {
   if (!startId) return {};
 
@@ -80,7 +85,7 @@ function runMassAction(state: GameState, realmId: string, config: MassActionConf
 
     config.apply(province, realm);
     realm.gold -= config.goldCost;
-    realm.materials -= config.materialsCost;
+    realm.materials = normalizeNaturalAmount(realm.materials - config.materialsCost);
     count++;
   }
 
@@ -227,6 +232,7 @@ export function executeTradeExchange(
 
   realm[from] -= amount;
   realm[to] += targetGain;
+  realm.materials = normalizeNaturalAmount(realm.materials);
   realm.actionPoints -= 1;
   realm.tradesThisTurn = (realm.tradesThisTurn || 0) + 1;
 
@@ -314,7 +320,7 @@ export function executeRecruitmentWithComposition(
       prov.population -= cost.pop;
       realm.gold -= cost.gold;
       realm.food -= cost.food;
-      realm.materials -= cost.materials;
+      realm.materials = normalizeNaturalAmount(realm.materials - cost.materials);
       recruited[type] = actualAmount;
       anySuccess = true;
     }
@@ -338,7 +344,7 @@ export function executeRecruitment(state: GameState, realm: Realm, prov: Provinc
       prov.population -= cost.pop;
       realm.gold -= cost.gold;
       realm.food -= cost.food;
-      realm.materials -= cost.materials;
+      realm.materials = normalizeNaturalAmount(realm.materials - cost.materials);
       return true;
     }
   }
@@ -357,7 +363,7 @@ export function executeBuilding(state: GameState, realm: Realm, prov: Province, 
       if (prov.defense < 5) {
         prov.defense += 1;
         realm.gold -= goldCost;
-        realm.materials -= matCost;
+        realm.materials = normalizeNaturalAmount(realm.materials - matCost);
         state.visualEffects = state.visualEffects || [];
         state.visualEffects.push({
           id: `build_fx_${Date.now()}_${Math.random()}`,
@@ -372,7 +378,7 @@ export function executeBuilding(state: GameState, realm: Realm, prov: Province, 
     } else {
       prov.buildings[type] += 1;
       realm.gold -= goldCost;
-      realm.materials -= matCost;
+      realm.materials = normalizeNaturalAmount(realm.materials - matCost);
       state.visualEffects = state.visualEffects || [];
       state.visualEffects.push({
         id: `build_fx_${Date.now()}_${Math.random()}`,
@@ -411,7 +417,9 @@ export function executeDisband(
     const cost = UNIT_STATS[type].cost;
     realm.gold += Math.floor(cost.gold * 0.5 * amount);
     realm.food += Math.floor(cost.food * 0.5 * amount);
-    realm.materials += Math.floor(cost.materials * 0.5 * amount);
+    realm.materials = normalizeNaturalAmount(
+      realm.materials + Math.floor(cost.materials * 0.5 * amount)
+    );
 
     prov.army[type] -= amount;
     prov.troops -= amount;

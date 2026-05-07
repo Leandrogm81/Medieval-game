@@ -327,6 +327,9 @@ export const HUD: React.FC<HUDProps> = ({
               <span className="hidden md:inline text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Obra</span>
             </div>
             <p className="text-[11px] md:text-lg font-black text-amber-50">{playerRealm.materials}</p>
+            <span className={`text-[10px] font-bold ${netMaterials >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+              {netMaterials >= 0 ? '+' : ''}{netMaterials}
+            </span>
             {/* Tooltip */}
             <div className="absolute left-0 bottom-full mb-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
               <p className="font-bold text-blue-400 mb-1 border-b border-stone-700 pb-1">Obra</p>

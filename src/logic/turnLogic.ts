@@ -1,6 +1,6 @@
 import { GameState, Realm, Province, War } from '../types';
 import { ACTION_COSTS, UNIT_STATS, BUILDING_PRODUCTION } from './game-constants';
-import { handleResourceDeficit } from './economyLogic';
+import { handleResourceDeficit, normalizeNaturalAmount } from './economyLogic';
 import { calculateRetreat, getRetreatDestination, resolveCombat } from './combatLogic';
 import { playConquestSound } from './sfxLogic';
 import { deepClone } from '../utils/deepClone';
@@ -461,7 +461,7 @@ function handleRandomEvents(state: GameState) {
       type: "negative",
       action: (s) => {
         const player = s.realms[s.playerRealmId];
-        if (player) player.materials = Math.max(0, player.materials - 150);
+        if (player) player.materials = normalizeNaturalAmount(player.materials - 150);
       }
     }
   ];
@@ -599,9 +599,9 @@ export function processEndOfTurn(state: GameState): GameState {
     const foodRevenue = Math.floor(foodIncome * oePenalty);
     const materialRevenue = Math.floor(materialIncome * oePenalty);
 
-    realm.gold += goldRevenue;
-    realm.food += foodRevenue;
-    realm.materials += materialRevenue;
+    realm.gold = normalizeNaturalAmount(realm.gold + goldRevenue);
+    realm.food = normalizeNaturalAmount(realm.food + foodRevenue);
+    realm.materials = normalizeNaturalAmount(realm.materials + materialRevenue);
 
     Object.entries({ ...realm.tributeTo }).forEach(([targetId, rawAmount]) => {
       const amount = Number(rawAmount) || 0;
@@ -640,8 +640,8 @@ export function processEndOfTurn(state: GameState): GameState {
       newState.logs.push(`O Pacto de Não-Agressão com ${targetRealm.name} expirou.`);
     });
 
-    realm.gold -= goldMaintenance;
-    realm.food -= foodMaintenance;
+    realm.gold = normalizeNaturalAmount(realm.gold - goldMaintenance);
+    realm.food = normalizeNaturalAmount(realm.food - foodMaintenance);
 
     realm.goldIncome = goldIncome + tradeIncome;
     realm.goldMaintenance = goldMaintenance;
