@@ -151,7 +151,7 @@ export default function App() {
       ui.setMultiSelectedProvinceIds([]);
       ui.setActionSourceId(ui.selectedProvinceId);
       ui.setActionState('dispatching_scouts');
-      ui.setActionBannerMessage('Modo Reconhecimento — selecione o destino');
+      ui.setActionBannerMessage('Modo Reconhecimento — selecione qualquer província no mapa');
       ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'scout'));
       ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
     }
@@ -164,6 +164,10 @@ export default function App() {
 
     if (type === 'attack') {
       return source.neighbors.slice();
+    }
+
+    if (type === 'scout') {
+      return Object.keys(gameState.provinces).filter(id => id !== provinceId);
     }
 
     if (type === 'move') {
@@ -194,6 +198,10 @@ export default function App() {
 
       reachable.delete(provinceId);
       return Array.from(reachable);
+    }
+
+    if (type === 'scout') {
+      return Object.keys(gameState.provinces).filter(id => id !== provinceId);
     }
 
     return source.neighbors.slice();
@@ -314,10 +322,7 @@ export default function App() {
   }
 
   if (ui.showMenu) {
-    const saves = [
-      ...(ui.autosave ? [ui.autosave] : []),
-      ...persistence.listSaves()
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
+    const saves = persistence.listSaves().slice(0, 3);
 
     return (
       <div className="h-screen bg-black text-stone-200 flex flex-col items-center justify-start md:justify-center p-2 xs:p-4 py-4 md:py-8 relative overflow-y-auto overflow-x-hidden select-none menu-background">
@@ -698,7 +703,7 @@ export default function App() {
             } else if (type === 'scout') {
               ui.setActionSourceId(ui.selectedProvinceId);
               ui.setActionState('dispatching_scouts');
-              ui.setActionBannerMessage('Modo Reconhecimento — selecione o destino');
+              ui.setActionBannerMessage('Modo Reconhecimento — selecione qualquer província no mapa');
               ui.setPreviewPath(getActionPreviewPath(ui.selectedProvinceId, 'scout'));
               ctrl.addLog(`Missão de reconhecimento: selecione batedores e o alvo distante.`);
             }
@@ -716,6 +721,7 @@ export default function App() {
           onRoute={() => ui.setActionState('routing')}
           onDiplomacy={openDiplomacy}
           onMassAction={ctrl.handleMassAction}
+          onProvinceAction={ctrl.handleProvinceAction}
           onToggleFullScreen={toggleFullScreen}
           isDisbandMode={ui.isDisbandMode}
           onIsDisbandMode={(v) => {
@@ -848,3 +854,4 @@ export default function App() {
     </div>
   );
 }
+

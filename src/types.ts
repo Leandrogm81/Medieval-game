@@ -100,6 +100,7 @@ export interface MarchOrder {
   realmId: string;
   currentProvId: string;
   destinationId: string;
+  originProvinceId?: string;
   remainingPath: string[];
   troops: Army;
   kind: 'move' | 'attack' | 'scout';

@@ -8,6 +8,8 @@ import {
   executeBuilding,
   executeDisband,
   executeTradeExchange,
+  assimilateProvince,
+  investProvince,
   massAssimilate,
   massBuildCourts,
   massBuildFarms,
@@ -293,6 +295,40 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       if (costMaterials > 0) costParts.push(`${costMaterials}m`);
       ui.showToast(`${actionLabel} concluída em ${count} províncias. Custo: ${costParts.join(' ')}.`, count > 0 ? 'success' : 'info');
     }, 0);
+  }, [gameState, setGameState, ui]);
+
+  const handleProvinceAction = useCallback((actionType: 'assimilate' | 'invest', provinceId: string) => {
+    if (!gameState) return;
+
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    const province = clone.provinces[provinceId];
+    if (!realm || !province || province.ownerId !== realm.id) {
+      ui.showToast('Ação indisponível para esta província.', 'error');
+      return;
+    }
+
+    const result = actionType === 'assimilate'
+      ? assimilateProvince(clone, realm.id, provinceId)
+      : investProvince(clone, realm.id, provinceId);
+
+    if (!result.success) {
+      ui.showToast(
+        actionType === 'assimilate'
+          ? 'Não foi possível assimilar esta província.'
+          : 'Não foi possível investir nesta província.',
+        'error'
+      );
+      return;
+    }
+
+    setGameState(clone);
+    ui.showToast(
+      actionType === 'assimilate'
+        ? `Assimilação concluída em ${province.name}.`
+        : `Investimento concluído em ${province.name}.`,
+      'success'
+    );
   }, [gameState, setGameState, ui]);
 
   const handleDiplomacyAction = useCallback((action: DiplomacyAction, payload?: { amount?: number }) => {
@@ -615,6 +651,59 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       return;
     }
 
+    if (ui.actionState === 'dispatching_scouts' && ui.actionSourceId) {
+      if (id === ui.actionSourceId) return;
+
+      const sourceProvince = gameState!.provinces[ui.actionSourceId];
+      if (!sourceProvince || sourceProvince.ownerId !== gameState!.playerRealmId) return;
+
+      const scoutsAvailable = sourceProvince.army.scouts || 0;
+      if (scoutsAvailable <= 0) {
+        ui.showToast('Selecione pelo menos um batedor para reconhecimento!', 'error');
+        return;
+      }
+
+      const path = findPath(gameState!, ui.actionSourceId, id, gameState!.playerRealmId, true, true);
+      if (path.length > 0) {
+        setGameState(prev => {
+          if (!prev) return prev;
+          const next = deepClone(prev);
+          const src = next.provinces[ui.actionSourceId!];
+          if (!src || !next.realms[next.playerRealmId]) return prev;
+          const order = {
+            id: `march_${Date.now()}`,
+            realmId: next.playerRealmId,
+            currentProvId: ui.actionSourceId!,
+            destinationId: id,
+            originProvinceId: ui.actionSourceId!,
+            remainingPath: path,
+            troops: { infantry: 0, archers: 0, cavalry: 0, scouts: src.army.scouts },
+            kind: 'scout' as const
+          };
+
+          src.army.scouts = 0;
+          src.troops = src.army.infantry + src.army.archers + src.army.cavalry + src.army.scouts;
+          next.marchOrders.push(order);
+          next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.move;
+
+          const from = src.center as [number, number];
+          const destProv = next.provinces[id];
+          const to = destProv ? (destProv.center as [number, number]) : from;
+          ui.triggerMarchAnimation(from, to, order.troops, 'scout');
+
+          ui.setActionState('idle');
+          ui.setActionSourceId(null);
+          ui.setPreviewPath([]);
+          ui.setActionBannerMessage(null);
+          ui.showToast(`Batedores enviados para ${gameState!.provinces[id].name}.`, 'success');
+          return next;
+        });
+      } else {
+        ui.showToast('Destino inacessível para batedores.', 'error');
+      }
+      return;
+    }
+
     ui.setSelectedProvinceId(id);
   }, [gameState, ui, setGameState]);
 
@@ -806,6 +895,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleEndTurn,
     handleAction,
     handleMassAction,
+    handleProvinceAction,
     handleDiplomacyAction,
     handleCallToArmsResponse,
     handleDisband,

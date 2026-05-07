@@ -184,10 +184,14 @@ function processMarchOrders(state: GameState) {
     const friendlyNeighbor = prov.neighbors
       .map(nId => state.provinces[nId])
       .find(n => n && n.ownerId === order.realmId);
-    const depositProv = friendlyNeighbor || prov;
+    const fallbackHome = order.originProvinceId ? state.provinces[order.originProvinceId] : null;
+    const depositProv = friendlyNeighbor || fallbackHome || prov;
     if (depositProv.ownerId === order.realmId) {
       depositProv.army.scouts += order.troops.scouts;
       depositProv.troops = recalcTroops(depositProv.army);
+    } else if (depositProv === prov) {
+      prov.army.scouts += order.troops.scouts;
+      prov.troops = recalcTroops(prov.army);
     }
     if (order.realmId === state.playerRealmId) {
       state.logs.push(`Batedores completaram missao de reconhecimento.`);

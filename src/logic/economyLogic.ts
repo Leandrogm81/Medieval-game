@@ -140,6 +140,22 @@ export function massAssimilate(state: GameState, realmId: string): { count: numb
   return { count: result.count, cost: result.costGold };
 }
 
+export function assimilateProvince(state: GameState, realmId: string, provinceId: string): { success: boolean; cost: number } {
+  const realm = state.realms[realmId];
+  const province = state.provinces[provinceId];
+  if (!realm || !province || province.ownerId !== realmId) return { success: false, cost: 0 };
+  const cost = 50;
+  if (realm.gold < cost || province.loyalty >= 100) return { success: false, cost: 0 };
+
+  realm.gold = normalizeNaturalAmount(realm.gold - cost);
+  province.loyalty = Math.min(100, province.loyalty + 5);
+  if (realm.isPlayer) {
+    state.logs.push(`ASSIMILAÇÃO: ${province.name} recebeu reforço administrativo.`);
+  }
+
+  return { success: true, cost };
+}
+
 export function massInvest(state: GameState, realmId: string): { count: number; cost: number } {
   const result = runMassAction(state, realmId, {
     goldCost: 100,
@@ -151,6 +167,22 @@ export function massInvest(state: GameState, realmId: string): { count: number; 
   });
 
   return { count: result.count, cost: result.costGold };
+}
+
+export function investProvince(state: GameState, realmId: string, provinceId: string): { success: boolean; cost: number } {
+  const realm = state.realms[realmId];
+  const province = state.provinces[provinceId];
+  if (!realm || !province || province.ownerId !== realmId) return { success: false, cost: 0 };
+  const cost = 100;
+  if (realm.gold < cost) return { success: false, cost: 0 };
+
+  realm.gold = normalizeNaturalAmount(realm.gold - cost);
+  province.wealth += 10;
+  if (realm.isPlayer) {
+    state.logs.push(`INVESTIMENTO: ${province.name} recebeu apoio econômico.`);
+  }
+
+  return { success: true, cost };
 }
 
 export function massBuildFarms(state: GameState, realmId: string): { count: number; costGold: number; costMaterials: number } {

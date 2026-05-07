@@ -2,6 +2,7 @@ import React from 'react';
 import { SaveData } from '../types';
 import { motion, AnimatePresence } from 'motion/react';
 import { Save, Trash2, X, Download } from 'lucide-react';
+import { persistence } from '../persistence';
 
 interface SaveGameModalProps {
   isOpen: boolean;
@@ -22,7 +23,7 @@ export const SaveGameModal: React.FC<SaveGameModalProps> = ({
   onDelete,
   canSave = true
 }) => {
-  const [saveName, setSaveName] = React.useState('');
+  const [saveName, setSaveName] = React.useState(() => persistence.getLastSaveName());
 
   if (!isOpen) return null;
 
@@ -45,28 +46,31 @@ export const SaveGameModal: React.FC<SaveGameModalProps> = ({
           <div className="p-4 xs:p-6 overflow-y-auto custom-scrollbar flex-1">
             {canSave && (
               <div className="mb-6 xs:mb-8">
-                <label className="block text-[#f5f2ed]/60 text-[10px] xs:text-sm mb-1.5 xs:mb-2 uppercase tracking-wider font-bold">Novo Registro</label>
+                <label className="block text-[#f5f2ed]/60 text-[10px] xs:text-sm mb-1.5 xs:mb-2 uppercase tracking-wider font-bold">Salvar Registro</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
                     value={saveName}
                     onChange={(e) => setSaveName(e.target.value)}
-                    placeholder="Nome do registro..."
+                    placeholder="Nome opcional do registro..."
                     className="flex-1 bg-black/40 border border-[#d4af37]/30 rounded-lg xs:rounded-xl px-3 xs:px-4 py-2 xs:py-3 text-white focus:outline-none focus:border-[#d4af37] text-xs xs:text-base"
                   />
                   <button
                     onClick={() => {
-                      if (saveName.trim()) {
-                        onSave(saveName);
-                        setSaveName('');
-                      }
+                      const finalName = saveName.trim() || persistence.getLastSaveName() || 'Salvamento Rápido';
+                      onSave(finalName);
+                      persistence.setLastSaveName(finalName);
+                      setSaveName(finalName);
                     }}
                     className="bg-[#d4af37] hover:bg-[#b8860b] text-[#2c1810] px-3 xs:px-5 py-2 xs:py-3 rounded-lg xs:rounded-xl font-bold flex items-center gap-1.5 xs:gap-2 transition-colors active:scale-95 shrink-0 text-xs xs:text-base"
                   >
                     <Save size={16} className="xs:w-5 xs:h-5" />
-                    Salvar
+                    Salvar Rápido
                   </button>
                 </div>
+                <p className="mt-2 text-[9px] xs:text-[10px] text-[#f5f2ed]/45">
+                  Se o nome estiver vazio, o último registro será reutilizado.
+                </p>
               </div>
             )}
 

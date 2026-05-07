@@ -54,6 +54,7 @@ interface HUDProps {
   onRoute?: () => void;
   onDiplomacy?: (targetRealmId: string) => void;
   onMassAction: (actionType: MassActionType) => void;
+  onProvinceAction?: (actionType: 'assimilate' | 'invest', provinceId: string) => void;
   onToggleFullScreen: () => void;
   // Disband
   isDisbandMode?: boolean;
@@ -99,6 +100,7 @@ export const HUD: React.FC<HUDProps> = ({
   onRoute,
   onDiplomacy,
   onMassAction,
+  onProvinceAction,
   onToggleFullScreen,
   // Disband
   isDisbandMode = false,
@@ -227,6 +229,8 @@ export const HUD: React.FC<HUDProps> = ({
   const tradePreview = Math.floor(tradeAmount * tradeRate);
   const tradeAvailable = playerRealm[tradeFrom];
   const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= MAX_TRADE_AMOUNT && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
+  const canAssimilateProvince = !!selectedProvince && selectedProvince.ownerId === gameState.playerRealmId && playerRealm.gold >= 50 && selectedProvince.loyalty < 100;
+  const canInvestProvince = !!selectedProvince && selectedProvince.ownerId === gameState.playerRealmId && playerRealm.gold >= 100;
   const massActionOptions = [
     { key: 'assimilate', label: 'Assimilar Todas', action: 'assimilate' as MassActionType, costGold: 50, costMaterials: 0 },
     { key: 'invest', label: 'Investir em Todas', description: 'Aplica em todas as províncias do reino.', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
@@ -623,6 +627,31 @@ export const HUD: React.FC<HUDProps> = ({
                     </div>
                   </div>
 
+                  {selectedProvince.ownerId === gameState.playerRealmId && (
+                    <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
+                      <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Ações da Província</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          onClick={() => onProvinceAction?.('assimilate', selectedProvince.id)}
+                          disabled={!canAssimilateProvince}
+                          className={`rounded-sm border px-2 py-2 text-[10px] font-black uppercase tracking-widest transition-colors min-h-[40px]
+                            ${canAssimilateProvince ? 'bg-emerald-600/10 border-emerald-600/30 text-emerald-200 hover:bg-emerald-600/20' : 'bg-stone-800/40 border-stone-700 text-stone-500 cursor-not-allowed'}`}
+                        >
+                          Assimilar
+                        </button>
+                        <button
+                          onClick={() => onProvinceAction?.('invest', selectedProvince.id)}
+                          disabled={!canInvestProvince}
+                          className={`rounded-sm border px-2 py-2 text-[10px] font-black uppercase tracking-widest transition-colors min-h-[40px]
+                            ${canInvestProvince ? 'bg-amber-600/10 border-amber-600/30 text-amber-200 hover:bg-amber-600/20' : 'bg-stone-800/40 border-stone-700 text-stone-500 cursor-not-allowed'}`}
+                        >
+                          Investir
+                        </button>
+                      </div>
+                      <p className="mt-2 text-[9px] text-stone-500">Ações individuais desta província, sem afetar o reino inteiro.</p>
+                    </div>
+                  )}
+
                   <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
                     <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Crescimento populacional</p>
                     <div className="flex items-center justify-between bg-black/20 rounded px-2 py-2">
@@ -776,7 +805,7 @@ export const HUD: React.FC<HUDProps> = ({
               {selectedProvince.ownerId === gameState.playerRealmId && (
                 <div className="mt-4 space-y-2">
                   <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase border-b border-stone-700 pb-1 mb-2">Comandos Militares</p>
-                  <div className="grid grid-cols-2 gap-1.5 md:gap-2">
+                  <div className="grid grid-cols-3 gap-1.5 md:gap-2">
                     <button
                       onClick={() => onMapAction?.('move')}
                       title="Marchar [W]"
@@ -790,6 +819,13 @@ export const HUD: React.FC<HUDProps> = ({
                       className="flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-3 min-h-[36px] md:min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-red-600/10 hover:border-red-600/50 rounded-sm text-[9px] md:text-[10px] font-bold uppercase transition-all"
                     >
                       <Zap size={12} className="text-red-500 md:w-[14px] md:h-[14px]" /> Atacar
+                    </button>
+                    <button
+                      onClick={() => onMapAction?.('scout')}
+                      title="Reconhecer"
+                      className="flex items-center justify-center gap-1.5 md:gap-2 py-2 md:py-3 min-h-[36px] md:min-h-[44px] bg-stone-800 border border-stone-700 hover:bg-sky-600/10 hover:border-sky-600/50 rounded-sm text-[9px] md:text-[10px] font-bold uppercase transition-all"
+                    >
+                      <Eye size={12} className="text-sky-400 md:w-[14px] md:h-[14px]" /> Reconhecer
                     </button>
                   </div>
                   {/* Disband Button */}
