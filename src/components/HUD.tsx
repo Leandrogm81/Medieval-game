@@ -199,7 +199,7 @@ export const HUD: React.FC<HUDProps> = ({
     <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:border-l-0 max-md:border-t max-md:shadow-none max-md:rounded-t-2xl ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto max-md:h-[58vh] max-md:max-h-[58vh] max-md:overflow-y-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden max-md:h-0'}`}>
       {/* Top Bar - Recurso */}
       <div className="p-1.5 md:p-4 bg-black/40 border-b border-amber-900/20">
-        <div className="flex justify-between items-center mb-1 md:mb-2">
+        <div className="hidden md:flex justify-between items-center mb-1 md:mb-2">
           <div className="flex items-center gap-1.5 md:gap-2">
             <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center`} style={{ backgroundColor: playerRealm.color }}>
                <Crown size={16} className="text-white" />
@@ -231,7 +231,7 @@ export const HUD: React.FC<HUDProps> = ({
 
         <div className="grid grid-cols-4 gap-1 md:gap-2">
           {/* Tesouro */}
-          <div className="bg-stone-800/50 p-1.5 md:p-2 border border-white/5 rounded-sm relative group">
+          <div className="bg-stone-800/50 p-1 md:p-2 border border-white/5 rounded-sm relative group">
             <div className="flex items-center gap-1 mb-0.5">
               <Coins size={12} className="text-amber-500" />
               <span className="text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Tesouro</span>
@@ -279,12 +279,9 @@ export const HUD: React.FC<HUDProps> = ({
           <div className="bg-stone-800/50 p-1.5 md:p-2 border border-white/5 rounded-sm relative group">
             <div className="flex items-center gap-1 mb-0.5">
               <Hammer size={12} className="text-blue-500" />
-              <span className="text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Obra</span>
+              <span className="hidden md:inline text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Obra</span>
             </div>
-            <p className="text-xs md:text-lg font-black text-amber-50">{playerRealm.materials}</p>
-            <span className={`text-[10px] font-bold ${netMaterials >= 0 ? 'text-green-500' : 'text-red-500'}`}>
-              {netMaterials >= 0 ? '+' : ''}{netMaterials}
-            </span>
+            <p className="text-[11px] md:text-lg font-black text-amber-50">{playerRealm.materials}</p>
             {/* Tooltip */}
             <div className="absolute left-0 bottom-full mb-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
               <p className="font-bold text-blue-400 mb-1 border-b border-stone-700 pb-1">Obra</p>
@@ -296,13 +293,13 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
           </div>
 
-          <div className="bg-stone-800/50 p-1.5 md:p-2 border border-white/5 rounded-sm">
+          <div className="bg-stone-800/50 p-1 md:p-2 border border-white/5 rounded-sm">
             <div className="flex items-center gap-1 mb-0.5">
               <Zap size={12} className="text-amber-400" />
               <span className="text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Ação</span>
             </div>
-            <p className="text-xs md:text-lg font-black text-amber-50">{playerRealm.actionPoints}/{playerRealm.maxActionPoints}</p>
-            <div className="w-full bg-stone-700 h-1 mt-1 rounded-full overflow-hidden">
+            <p className="text-[11px] md:text-lg font-black text-amber-50">{playerRealm.actionPoints}/{playerRealm.maxActionPoints}</p>
+            <div className="hidden md:block w-full bg-stone-700 h-1 mt-1 rounded-full overflow-hidden">
                <div className="bg-amber-400 h-full" style={{ width: `${(playerRealm.actionPoints/playerRealm.maxActionPoints)*100}%` }}></div>
             </div>
           </div>
@@ -932,7 +929,23 @@ export const HUD: React.FC<HUDProps> = ({
 
       {/* Actions Bottom */}
       <div className="p-2 md:p-4 bg-black/60 border-t border-amber-900/30 space-y-1.5 md:space-y-2">
-         <div className="flex justify-end md:hidden">
+         <div className="md:hidden flex items-center justify-between gap-2">
+           <div className="min-w-0 flex items-center gap-1.5">
+             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0`} style={{ backgroundColor: playerRealm.color }}>
+               <Crown size={12} className="text-white" />
+             </div>
+             <div className="min-w-0">
+               <p className="text-[10px] font-black text-amber-50 uppercase leading-tight truncate">{playerRealm.name}</p>
+               <p className="text-[8px] text-amber-500/70 italic leading-tight">Turno {gameState.turn}</p>
+             </div>
+           </div>
+           <div className="flex items-center gap-1">
+             <button onClick={onSave} className="h-7 px-1.5 border border-stone-700 bg-stone-800 text-[8px] font-bold uppercase rounded">Salvar</button>
+             <button onClick={onMenu} className="h-7 px-1.5 border border-stone-700 bg-stone-800 text-[8px] font-bold uppercase rounded">Menu</button>
+             <button onClick={onToggleInstructions} className="h-7 w-7 border border-stone-700 bg-stone-800 rounded flex items-center justify-center">
+               <HelpCircle size={10} />
+             </button>
+           </div>
            <button
              onClick={onEndTurn}
              className="h-8 px-2.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-[10px] uppercase tracking-[0.08em] rounded-sm border border-amber-700 active:scale-[0.98] flex items-center justify-center gap-1.5"
