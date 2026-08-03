@@ -58,10 +58,13 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
 
   if (state.settings.victoryCondition === 'conquest') {
     for (const realmId in provinceCounts) {
+      if (realmId === 'neutral') continue; // FIX: províncias neutras não podem vencer
+      const realm = state.realms[realmId];
+      if (!realm) continue; // FIX: reino eliminado não pode vencer
       if (provinceCounts[realmId] >= totalProvinces * 0.7) {
         return {
           winnerId: realmId,
-          reason: `${state.realms[realmId].name} conquistou hegemonia militar com 70% do território!`
+          reason: `${realm.name} conquistou hegemonia militar com 70% do território!`
         };
       }
     }
@@ -69,10 +72,12 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
 
   if (state.settings.victoryCondition === 'economic') {
     for (const realmId in realmWealth) {
+      const realm = state.realms[realmId];
+      if (!realm) continue; // FIX: reino eliminado não pode vencer
       if (realmWealth[realmId] >= 10000) {
         return {
           winnerId: realmId,
-          reason: `${state.realms[realmId].name} alcançou a vitória econômica com um tesouro de 10.000 de ouro!`
+          reason: `${realm.name} alcançou a vitória econômica com um tesouro de 10.000 de ouro!`
         };
       }
     }
@@ -80,10 +85,13 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
 
   const activeRealms = Object.keys(provinceCounts).filter(id => id !== 'neutral');
   if (activeRealms.length === 1) {
-    return {
-      winnerId: activeRealms[0],
-      reason: `${state.realms[activeRealms[0]].name} é o último reino soberano.`
-    };
+    const lastRealm = state.realms[activeRealms[0]];
+    if (lastRealm) {
+      return {
+        winnerId: activeRealms[0],
+        reason: `${lastRealm.name} é o último reino soberano.`
+      };
+    }
   }
 
   return null;

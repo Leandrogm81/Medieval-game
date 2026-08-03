@@ -561,6 +561,7 @@ export function canDeclareWar(state: GameState, fromId: string, toId: string): D
   const fromRealm = getRealm(state, fromId);
   const toRealm = getRealm(state, toId);
   if (!fromRealm || !toRealm) return { valid: false, reason: 'Reino não encontrado.' };
+  if (fromId === toId) return { valid: false, reason: 'Não é possível declarar guerra contra si mesmo.' }; // FIX: validação faltante
   if (isWarBetween(state, fromId, toId)) return { valid: false, reason: 'Já existe uma guerra ativa.' };
   if (fromRealm.nonAggressionPacts.includes(toId)) return { valid: false, reason: 'Não é possível declarar guerra com NAP ativo.' };
   if (fromRealm.alliances.includes(toId)) return { valid: false, reason: 'Não é possível declarar guerra contra um aliado.' };
