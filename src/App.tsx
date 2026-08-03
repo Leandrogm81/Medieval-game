@@ -385,7 +385,7 @@ export default function App() {
                   <MapPin size={12} className="text-amber-600" /> Extensão do Mundo
                 </label>
                 <input
-                  type="range" min="15" max="40" step="1"
+                  type="range" min="20" max="70" step="1"
                   value={ui.gameSettings.numProvinces}
                   onChange={e => ui.setGameSettings({ ...ui.gameSettings, numProvinces: parseInt(e.target.value) })}
                   className="menu-range w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"

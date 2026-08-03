@@ -5,6 +5,8 @@ import { calculateRetreat, getRetreatDestination, resolveCombat } from './combat
 import { playConquestSound } from './sfxLogic';
 import { declareWar, isWarBetween } from './diplomacyLogic';
 import { deepClone } from '../utils/deepClone';
+import { calculateTechPointsPerTurn, getTechBonus } from './techLogic';
+import { processRealmLoans } from './financeLogic';
 
 export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
@@ -282,7 +284,21 @@ function processMarchOrders(state: GameState) {
       scouts: army.scouts + current.troops.scouts
     }), { infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
 
-    const result = resolveCombat(combinedTroops, prov.army, prov.terrain, prov.defense, state, prov.id);
+    const attackerRealm = state.realms[baseOrder.realmId];
+    const defenderRealm = state.realms[defenderRealmId];
+    const attackerTechBonus = attackerRealm ? getTechBonus(attackerRealm, 'military') : 0;
+    const defenderTechBonus = defenderRealm ? getTechBonus(defenderRealm, 'military') : 0;
+
+    const result = resolveCombat(
+      combinedTroops, 
+      prov.army, 
+      prov.terrain, 
+      prov.defense, 
+      state, 
+      prov.id,
+      attackerTechBonus,
+      defenderTechBonus
+    );
     let retreatInfo = null;
 
     if (result.won) {
@@ -518,6 +534,24 @@ export function processEndOfTurn(state: GameState): GameState {
     const ownedProvinces = Object.values(newState.provinces).filter(p => p.ownerId === realm.id);
     const distances = calculateDistancesFromCapital(newState, realm.capitalId);
 
+    // --- NOVO: Progressão Tecnológica ---
+    realm.techPoints = (realm.techPoints || 0) + calculateTechPointsPerTurn(realm, ownedProvinces.length);
+
+    // --- NOVO: Finanças (Empréstimos) ---
+    const { updatedRealm } = processRealmLoans(realm);
+    Object.assign(realm, updatedRealm);
+
+    // --- NOVO: Capitulação (Derrota Total) ---
+    if (ownedProvinces.length === 0 && realm.id !== 'neutral') {
+      newState.logs.push(`QUEDA: O reino ${realm.name} capitulou e deixou de existir.`);
+      // Limpar memórias e diplomacia
+      Object.values(newState.realms).forEach(r => {
+        if (r.relations[realm.id] !== undefined) delete r.relations[realm.id];
+        if (r.vassals.includes(realm.id)) r.vassals = r.vassals.filter(v => v !== realm.id);
+      });
+      return; 
+    }
+
     // Diplomacy & Internal maintenance
     if (realm.overextension > 0) {
       realm.overextension = Math.max(0, realm.overextension - 5);
@@ -585,9 +619,10 @@ export function processEndOfTurn(state: GameState): GameState {
       const stabilityFactor = getStabilityFactor(p.stability);
       const efficiency = (0.5 + (p.population / p.maxPopulation) * 0.5) * loyaltyFactor * stabilityFactor;
       
-      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency;
-      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency;
-      materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency;
+      const techEconomyBonus = getTechBonus(realm, 'economy');
+      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency * (1 + techEconomyBonus);
+      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency * (1 + techEconomyBonus);
+      materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency * (1 + techEconomyBonus);
 
       // Strategic bonuses
       if (p.strategicResource === 'iron') materialIncome += 5 * efficiency;

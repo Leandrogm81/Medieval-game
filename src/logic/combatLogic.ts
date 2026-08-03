@@ -48,19 +48,21 @@ export function resolveCombat(
   terrain: Terrain,
   defenseLevel: number,
   state?: GameState,
-  provinceId?: string
+  provinceId?: string,
+  attackerTechBonus: number = 0,
+  defenderTechBonus: number = 0
 ): BattleResult {
   playBattleSound();
 
   const atkPower =
-    attacker.infantry * UNIT_STATS.infantry.attack +
-    attacker.archers * UNIT_STATS.archers.attack +
-    attacker.cavalry * UNIT_STATS.cavalry.attack;
+    (attacker.infantry * UNIT_STATS.infantry.attack +
+      attacker.archers * UNIT_STATS.archers.attack +
+      attacker.cavalry * UNIT_STATS.cavalry.attack) * (1 + attackerTechBonus);
 
   let defPower =
-    defender.infantry * UNIT_STATS.infantry.defense +
-    defender.archers * UNIT_STATS.archers.defense +
-    defender.cavalry * UNIT_STATS.cavalry.defense;
+    (defender.infantry * UNIT_STATS.infantry.defense +
+      defender.archers * UNIT_STATS.archers.defense +
+      defender.cavalry * UNIT_STATS.cavalry.defense) * (1 + defenderTechBonus);
 
   if (terrain === 'mountain') defPower *= 1.5;
   if (terrain === 'forest') defPower *= 1.25;

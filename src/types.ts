@@ -1,17 +1,18 @@
 export type StrategicResource = 'none' | 'iron' | 'wood' | 'horse' | 'stone';
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
-export type Terrain = 'plains' | 'forest' | 'mountain';
-export type ActionType = 'idle' | 'moving' | 'attacking' | 'recruit' | 'build' | 'diplomacy' | 'scouting' | 'dispatching_scouts' | 'routing' | 'disband' | 'trade';
-export type DiplomacyAction =
-  | 'alliance'
-  | 'nonAggressionPact'
-  | 'defensivePact'
-  | 'improveRelations'
-  | 'sendInsult'
-  | 'offerTribute'
-  | 'demandTribute'
+export type Terrain = 'plains' | 'forest' | 'mountain' | 'coastal';
+export type ActionType = 'idle' | 'move' | 'attack' | 'recruit' | 'build' | 'diplomacy' | 'dispatching_scouts' | 'trade' | 'routing' | 'disband' | 'moving' | 'attacking';
+export type DiplomacyAction = 
+  | 'alliance' 
+  | 'nonAggressionPact' 
+  | 'defensivePact' 
+  | 'improveRelations' 
+  | 'sendInsult' 
+  | 'offerTribute' 
+  | 'demandTribute' 
   | 'declareWar';
+
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade';
 export type UnitType = 'infantry' | 'archers' | 'cavalry' | 'scouts';
 
@@ -26,29 +27,49 @@ export interface Province {
   id: string;
   name: string;
   ownerId: string;
+  army: Army;
+  troops: number;
   population: number;
   maxPopulation: number;
+  strategicResource: StrategicResource;
   wealth: number;
   foodProduction: number;
   materialProduction: number;
-  strategicResource: StrategicResource;
+  defense: number;
+  terrain: Terrain;
+  neighbors: string[];
+  polygon: [number, number][];
+  center: [number, number];
   buildings: {
     farms: number;
     mines: number;
     workshops: number;
     courts: number;
   };
-  army: Army;
-  troops: number;
-  defense: number;
-  terrain: Terrain;
-  neighbors: string[];
-  polygon: [number, number][];
-  center: [number, number];
-  recentlyConquered: number;
+  siegeDamage: number;
   loyalty: number;
   stability: number;
-  siegeDamage?: number;
+  recentlyConquered: number;
+}
+
+export interface Technology {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  prerequisites: string[];
+  bonus: {
+    type: 'military' | 'economy' | 'administration' | 'loyalty' | 'recruitment' | 'construction';
+    value: number;
+  };
+}
+
+export interface Loan {
+  id: string;
+  amount: number;
+  interest: number;
+  dueTurn: number;
+  remainingTurns: number;
 }
 
 export interface Realm {
@@ -59,32 +80,42 @@ export interface Realm {
   food: number;
   materials: number;
   isPlayer: boolean;
-  actionPoints: number;
-  maxActionPoints: number;
   capitalId?: string;
-  wars: string[];
-  pacts: string[];
-  alliances: string[];
-  vassals: string[];
-  vassalOf?: string;
-  tradeRoutes: { fromProvinceId: string; toProvinceId: string }[];
-  tradesThisTurn?: number;
-  overextension: number;
   personality: PersonalityType;
   objective: StrategicObjective;
-  relations: Record<string, number>;
-  nonAggressionPacts: string[];
-  defensivePacts: string[];
-  tributeFrom: Record<string, number>;
-  tributeTo: Record<string, number>;
-  napExpiryTurn: Record<string, number>;
-  memory: Record<string, RealmMemory>;
+  
+  // HUD Info
   goldIncome?: number;
   goldMaintenance?: number;
   foodIncome?: number;
   foodMaintenance?: number;
   materialsIncome?: number;
-  isCoalitionMember?: string;
+  
+  relations: Record<string, number>;
+  wars: string[];
+  alliances: string[];
+  nonAggressionPacts: string[];
+  defensivePacts: string[];
+  tributeTo: Record<string, number>;
+  tributeFrom: Record<string, number>;
+  napExpiryTurn: Record<string, number>;
+  
+  actionPoints: number;
+  maxActionPoints: number;
+  memory: Record<string, RealmMemory>;
+  overextension: number;
+  
+  tradeRoutes: { fromProvinceId: string; toProvinceId: string }[];
+  tradesThisTurn: number;
+  isCoalitionMember?: boolean;
+  vassals: string[];
+  pacts: string[];
+
+  // Novos Sistemas
+  techPoints: number;
+  unlockedTechs: string[];
+  loans: Loan[];
+  warExhaustion: number;
 }
 
 export interface RealmMemory {
@@ -104,6 +135,7 @@ export interface MarchOrder {
   remainingPath: string[];
   troops: Army;
   kind: 'move' | 'attack' | 'scout';
+  arrivalTurn?: number;
 }
 
 export interface War {
@@ -117,11 +149,11 @@ export interface War {
 }
 
 export interface GameSettings {
-  numProvinces: number;
   numRealms: number;
+  numProvinces: number;
+  resourceDensity: 'low' | 'medium' | 'high' | 'normal';
   aiDifficulty: 'easy' | 'normal' | 'hard';
-  resourceDensity: 'low' | 'normal' | 'high';
-  victoryCondition: 'conquest' | 'economic' | 'diplomatic' | 'vassalage' | 'sandbox';
+  victoryCondition: 'conquest' | 'economic' | 'sandbox';
 }
 
 export interface GameState {

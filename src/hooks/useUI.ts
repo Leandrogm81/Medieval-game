@@ -26,7 +26,7 @@ export function useUI() {
   const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean; retreatInfo?: RetreatInfo } | null>(null);
   const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
-    numProvinces: 25,
+    numProvinces: 30,
     numRealms: 6,
     aiDifficulty: 'normal',
     resourceDensity: 'normal',

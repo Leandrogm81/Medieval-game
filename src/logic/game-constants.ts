@@ -103,3 +103,83 @@ export const DIPLOMACY_FLAVOR_TEXTS: Record<DiplomacyAction, { accepted: string;
     accepted: '{from} declara guerra contra {to}.'
   }
 };
+
+export const TECH_TREE: Record<string, any> = {
+  MILITARY: [
+    {
+      id: 'iron_weapons',
+      name: 'Armas de Ferro',
+      description: 'Melhora a qualidade das armas, aumentando o poder de ataque.',
+      cost: 100,
+      prerequisites: [],
+      bonus: { type: 'military', value: 0.1 }
+    },
+    {
+      id: 'professional_training',
+      name: 'Treinamento Profissional',
+      description: 'Reduz o custo de recrutamento de tropas.',
+      cost: 150,
+      prerequisites: ['iron_weapons'],
+      bonus: { type: 'recruitment', value: 0.15 }
+    },
+    {
+      id: 'advanced_fortifications',
+      name: 'Fortificações Avançadas',
+      description: 'Melhora as defesas das províncias.',
+      cost: 200,
+      prerequisites: [],
+      bonus: { type: 'construction', value: 0.2 }
+    }
+  ],
+  ECONOMY: [
+    {
+      id: 'crop_rotation',
+      name: 'Rotação de Culturas',
+      description: 'Aumenta a produção de comida em todas as províncias.',
+      cost: 100,
+      prerequisites: [],
+      bonus: { type: 'economy', value: 0.15 }
+    },
+    {
+      id: 'deep_mining',
+      name: 'Mineração Profunda',
+      description: 'Aumenta a produção de materiais.',
+      cost: 150,
+      prerequisites: [],
+      bonus: { type: 'economy', value: 0.15 }
+    },
+    {
+      id: 'guild_system',
+      name: 'Sistema de Guildas',
+      description: 'Aumenta a renda de ouro global.',
+      cost: 200,
+      prerequisites: ['crop_rotation', 'deep_mining'],
+      bonus: { type: 'economy', value: 0.1 }
+    }
+  ],
+  ADMINISTRATION: [
+    {
+      id: 'bureaucracy',
+      name: 'Burocracia Centralizada',
+      description: 'Reduz o custo de assimilação de províncias.',
+      cost: 100,
+      prerequisites: [],
+      bonus: { type: 'administration', value: 0.2 }
+    },
+    {
+      id: 'legal_code',
+      name: 'Código de Leis',
+      description: 'Aumenta a lealdade base das províncias.',
+      cost: 150,
+      prerequisites: ['bureaucracy'],
+      bonus: { type: 'loyalty', value: 0.1 }
+    }
+  ]
+};
+
+export const LOAN_CONSTANTS = {
+  MAX_LOANS: 3,
+  INTEREST_RATE: 0.05, // 5% por turno
+  DURATION: 20, // turnos
+  LOAN_AMOUNT_FACTOR: 500 // Ouro base por província possuída
+};

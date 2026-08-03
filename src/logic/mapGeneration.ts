@@ -61,7 +61,11 @@ export function generateInitialState(width: number, height: number, settings: Ga
         tradesThisTurn: 0,
         personality: PERSONALITIES[i % PERSONALITIES.length],
         objective: OBJECTIVES[i % OBJECTIVES.length],
-        vassals: []
+        vassals: [],
+        techPoints: 0,
+        unlockedTechs: [],
+        loans: [],
+        warExhaustion: 0
       };
     }
 

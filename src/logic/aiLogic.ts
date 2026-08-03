@@ -2,33 +2,11 @@ import { GameState } from '../types';
 import { executeRecruitment, executeBuilding } from './economyLogic';
 import { resolveCombat } from './combatLogic';
 import { ACTION_COSTS } from './game-constants';
+import { canUnlockTech, unlockTech, getTechBonus } from './techLogic';
+import { canTakeLoan, takeLoan } from './financeLogic';
+import { TECH_TREE } from './game-constants';
+import { declareWar } from './diplomacyLogic';
 
-function declareWar(state: GameState, attackerId: string, defenderId: string) {
-  const attacker = state.realms[attackerId];
-  const defender = state.realms[defenderId];
-  if (!attacker || !defender) return;
-
-  if (!attacker.wars.includes(defenderId)) {
-    attacker.wars.push(defenderId);
-    defender.wars.push(attackerId);
-    state.activeWars.push({
-      id: `war_${attackerId}_${defenderId}_${state.turn}`,
-      attackerId,
-      defenderId,
-      startedAtTurn: state.turn,
-      warScore: 0,
-      attackerExhaustion: 0,
-      defenderExhaustion: 0,
-    });
-    if (attacker.isPlayer) {
-      state.logs.push(`Você declarou guerra contra ${defender.name}!`);
-    } else if (defender.isPlayer) {
-      state.logs.push(`${attacker.name} declarou guerra contra você!`);
-    } else {
-      state.logs.push(`${attacker.name} declarou guerra contra ${defender.name}!`);
-    }
-  }
-}
 
 function executeAIAttack(
   state: GameState,
@@ -48,8 +26,20 @@ function executeAIAttack(
   }
 
   // Use the troops in the province as the attacking army
-  const attackingArmy = { ...attackerProv.army, scouts: 0 };
-  const result = resolveCombat(attackingArmy, defenderProv.army, defenderProv.terrain, defenderProv.defense);
+  const attackerTechBonus = getTechBonus(realm, 'military');
+  const defenderRealm = state.realms[defenderProv.ownerId];
+  const defenderTechBonus = defenderRealm ? getTechBonus(defenderRealm, 'military') : 0;
+
+  const result = resolveCombat(
+    attackerProv.army, 
+    defenderProv.army, 
+    defenderProv.terrain, 
+    defenderProv.defense,
+    state,
+    defenderProv.id,
+    attackerTechBonus,
+    defenderTechBonus
+  );
 
   // Apply results
   attackerProv.army = result.attackerRemaining;
@@ -113,6 +103,23 @@ export function processAI(state: GameState) {
           const target = neighbors[Math.floor(Math.random() * neighbors.length)];
           executeAIAttack(state, prov.id, target.id, realm.id);
         }
+      }
+      // Decisão de Tecnologia
+      if (realm.techPoints >= 50 && Math.random() < 0.2) {
+        for (const category in TECH_TREE) {
+          const tech = TECH_TREE[category].find(t => canUnlockTech(realm, t.id).can);
+          if (tech) {
+            const updatedRealm = unlockTech(realm, tech.id);
+            Object.assign(realm, updatedRealm);
+            break;
+          }
+        }
+      }
+
+      // Decisão de Finanças
+      if (realm.gold < 50 && canTakeLoan(realm).can && Math.random() < 0.5) {
+        const updatedRealm = takeLoan(realm, state.turn, provinces.length);
+        Object.assign(realm, updatedRealm);
       }
     });
   });
