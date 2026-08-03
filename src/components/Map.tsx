@@ -33,6 +33,79 @@ function getMilitaryScore(prov: Province): number {
   return Math.min(1, (prov.troops || 0) / 100);
 }
 
+// ===== Fase 2 — Scores dos 7 novos modos de mapa (PRD-FASE-2 §4) =====
+function getPopulationScore(prov: Province): number {
+  const max = prov.maxPopulation || 1;
+  return Math.min(1, (prov.population || 0) / max);
+}
+
+function getDevelopmentScore(prov: Province): number {
+  const buildings = (prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0);
+  return Math.min(1, ((prov.wealth || 0) + buildings * 3) / 30);
+}
+
+function getIncomeScore(prov: Province): number {
+  const production = (prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0);
+  return Math.min(1, production / 25);
+}
+
+function getStabilityScore(prov: Province): number {
+  return Math.min(1, (prov.stability ?? 70) / 100);
+}
+
+function getBuildingsScore(prov: Province): number {
+  const buildings = (prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0);
+  return Math.min(1, buildings / 8);
+}
+
+function getGrowthScore(prov: Province): number {
+  const max = prov.maxPopulation || 1;
+  const ratio = (prov.population || 0) / max;
+  // Maior crescimento quando há espaço para crescer e lealdade alta
+  return Math.min(1, Math.max(0, (1 - ratio)) * ((prov.loyalty || 0) / 100));
+}
+
+function getMilitaryStrengthScore(prov: Province): number {
+  return Math.min(1, (prov.troops || 0) / 150);
+}
+
+// Mapa de cores por modo: hue fixo por modo (0=vermelho, 120=verde, 200=azul, 45=amarelo...)
+const MODE_HUES: Partial<Record<ViewMode, number>> = {
+  population: 150,      // verde
+  development: 210,     // azul
+  income: 45,           // dourado
+  stability: 0,         // vermelho (rebelde) → branco (leal) tratado separadamente
+  buildings: 270,       // roxo
+  growth: 190,          // ciano
+  military_strength: 30 // laranja
+};
+
+function getModeScore(prov: Province, viewMode: ViewMode): number {
+  switch (viewMode) {
+    case 'population': return getPopulationScore(prov);
+    case 'development': return getDevelopmentScore(prov);
+    case 'income': return getIncomeScore(prov);
+    case 'stability': return getStabilityScore(prov);
+    case 'buildings': return getBuildingsScore(prov);
+    case 'growth': return getGrowthScore(prov);
+    case 'military_strength': return getMilitaryStrengthScore(prov);
+    default: return 0;
+  }
+}
+
+function getModeLabel(prov: Province, viewMode: ViewMode): string {
+  switch (viewMode) {
+    case 'population': return `${(prov.population || 0).toLocaleString('pt-BR')}`;
+    case 'development': return `Dev: ${(prov.wealth || 0) + ((prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0))}`;
+    case 'income': return `+${(prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0)}`;
+    case 'stability': return `${prov.stability ?? 70}%`;
+    case 'buildings': return `🏘️${(prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0)}`;
+    case 'growth': return `+${Math.round(getGrowthScore(prov) * 100)}%`;
+    case 'military_strength': return `⚔️${prov.troops || 0}`;
+    default: return prov.name;
+  }
+}
+
 const MAP_WIDTH = 1280;
 const MAP_HEIGHT = 720;
 const LABEL_PADDING = 28;
@@ -462,6 +535,15 @@ export const Map: React.FC<MapProps> = ({
             } else if (viewMode === 'military') {
               const milScore = getMilitaryScore(prov) / maxMil;
               fillColor = getHeatColor(milScore, 0);
+            } else if (MODE_HUES[viewMode] !== undefined) {
+              // Fase 2 — 7 novos modos com heatmap próprio
+              const score = getModeScore(prov, viewMode);
+              if (viewMode === 'stability') {
+                // Leal (branco) → rebelde (vermelho)
+                fillColor = score > 0.7 ? '#f8fafc' : score > 0.4 ? '#fbbf24' : '#dc2626';
+              } else {
+                fillColor = getHeatColor(score, MODE_HUES[viewMode]!);
+              }
             } else if (viewMode === 'political') {
               overlayColor = factionColor;
               overlayOpacity = isSelected ? 0.92 : isHovered ? 0.8 : 0.6;
@@ -730,7 +812,9 @@ export const Map: React.FC<MapProps> = ({
                       ? `${(prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0)}`
                       : viewMode === 'military'
                         ? `${prov.troops || 0}`
-                        : prov.name}
+                        : MODE_HUES[viewMode] !== undefined
+                          ? getModeLabel(prov, viewMode)
+                          : prov.name}
                   </text>
                 </g>
               )}

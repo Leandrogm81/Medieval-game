@@ -1231,6 +1231,30 @@ export const HUD: React.FC<HUDProps> = ({
             <Landmark size={14} className="md:w-4 md:h-4" />
             <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Governo</span>
           </button>
+          <button
+            onClick={() => onToggleMode('population')}
+            title="População [6]"
+            className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'population' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+          >
+            <Users size={14} className="md:w-4 md:h-4" />
+            <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">População</span>
+          </button>
+          <button
+            onClick={() => onToggleMode('stability')}
+            title="Estabilidade [9]"
+            className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'stability' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+          >
+            <Zap size={14} className="md:w-4 md:h-4" />
+            <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Estabilidade</span>
+          </button>
+          <button
+            onClick={() => onToggleMode('military_strength')}
+            title="Força Militar [V]"
+            className={`flex flex-col items-center justify-center py-1.5 md:py-2 rounded-sm border transition-all ${viewMode === 'military_strength' ? 'bg-amber-600/20 border-amber-500 text-amber-200' : 'bg-stone-800/40 border-stone-700 text-stone-500'}`}
+          >
+            <Swords size={14} className="md:w-4 md:h-4" />
+            <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Força</span>
+          </button>
         </div>
       </div>
     </div>

@@ -288,6 +288,30 @@ export default function App() {
         case '5':
           ui.setViewMode('resources');
           return;
+        case '6':
+          ui.setViewMode('population');
+          return;
+        case '7':
+          ui.setViewMode('development');
+          return;
+        case '8':
+          ui.setViewMode('income');
+          return;
+        case '9':
+          ui.setViewMode('stability');
+          return;
+        case '0':
+          ui.setViewMode('buildings');
+          return;
+        case 'g':
+        case 'G':
+          ui.setViewMode('growth');
+          return;
+        case 'v':
+        case 'V':
+          // F conflita com fullscreen (Fase 1) — military_strength em V
+          ui.setViewMode('military_strength');
+          return;
         case 'q':
         case 'Q':
           ui.setZoom(Math.max(0.5, ui.zoom - 0.2));

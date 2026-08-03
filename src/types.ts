@@ -15,7 +15,8 @@ export type DiplomacyAction =
   | 'demandTribute' 
   | 'declareWar';
 
-export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade';
+export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade'
+  | 'population' | 'development' | 'income' | 'stability' | 'buildings' | 'growth' | 'military_strength';
 export type UnitType = 'infantry' | 'archers' | 'cavalry' | 'scouts';
 
 export interface Army {
