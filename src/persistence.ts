@@ -1,5 +1,6 @@
 import { SaveData, GameState } from './types';
 import { normalizeNaturalAmount } from './logic/economyLogic';
+import { migrateSaveGame } from './logic/saveMigration';
 
 const STORAGE_KEY = 'medieval_game_saves';
 const AUTOSAVE_KEY = 'medieval_game_autosave';
@@ -94,12 +95,12 @@ export const persistence = {
   loadSave: (id: string): GameState | null => {
     if (id === 'autosave') {
       const autoSave = persistence.loadAutoSave();
-      return autoSave ? normalizeMaterialsInState(autoSave.state) : null;
+      return autoSave ? normalizeMaterialsInState(migrateSaveGame(autoSave.state)) : null;
     }
 
     const saves = getSaveListFromStorage();
     const save = saves.find(s => s.id === id);
-    return save ? normalizeMaterialsInState(save.state) : null;
+    return save ? normalizeMaterialsInState(migrateSaveGame(save.state)) : null;
   },
 
   saveAutoSave: (state: GameState) => {
@@ -120,7 +121,7 @@ export const persistence = {
       const parsed = JSON.parse(data) as SaveData;
       return {
         ...parsed,
-        state: normalizeMaterialsInState(parsed.state)
+        state: normalizeMaterialsInState(migrateSaveGame(parsed.state))
       };
     } catch {
       return null;

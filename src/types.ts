@@ -2,6 +2,8 @@ export type StrategicResource = 'none' | 'iron' | 'wood' | 'horse' | 'stone';
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
 export type Terrain = 'plains' | 'forest' | 'mountain' | 'coastal';
+export type GovernmentType = 'monarchy' | 'republic' | 'feudal' | 'theocracy' | 'despotism' | 'oligarchy' | 'tribal';
+export type TechCategory = 'movement' | 'assimilation' | 'recruitment' | 'combat';
 export type ActionType = 'idle' | 'move' | 'attack' | 'recruit' | 'build' | 'diplomacy' | 'dispatching_scouts' | 'trade' | 'routing' | 'disband' | 'moving' | 'attacking';
 export type DiplomacyAction = 
   | 'alliance' 
@@ -51,6 +53,7 @@ export interface Province {
   stability: number;
   recentlyConquered: number;
   turnsWithoutWar?: number;
+  originalOwnerId?: string; // Fase 2: dono pré-guerra (capitulação)
 }
 
 export interface Technology {
@@ -117,6 +120,19 @@ export interface Realm {
   unlockedTechs: string[];
   loans: Loan[];
   warExhaustion: number;
+
+  // Fase 2 — Tecnologia e Governos
+  techLevels: Record<TechCategory, number>;
+  government: GovernmentType;
+  governmentChangeCooldown: number;
+  vassalLiberty: Record<string, number>;
+  vassalOf?: string;
+
+  // Fase 2 — Estatísticas de tracking (tela de derrota)
+  battlesWon: number;
+  realmsDefeated: number;
+  cumulativeGold: number;
+  maxProvincesHeld: number;
 }
 
 export interface RealmMemory {
@@ -158,6 +174,7 @@ export interface GameSettings {
 }
 
 export interface GameState {
+  schemaVersion: number; // 1 = Fase 1, 2 = Fase 2
   turn: number;
   realms: Record<string, Realm>;
   provinces: Record<string, Province>;

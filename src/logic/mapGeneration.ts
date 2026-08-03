@@ -65,7 +65,17 @@ export function generateInitialState(width: number, height: number, settings: Ga
         techPoints: 0,
         unlockedTechs: [],
         loans: [],
-        warExhaustion: 0
+        warExhaustion: 0,
+        // Fase 2 — Tecnologia e Governos
+        techLevels: { movement: 0, assimilation: 0, recruitment: 0, combat: 0 },
+        government: 'monarchy',
+        governmentChangeCooldown: 0,
+        vassalLiberty: {},
+        // Fase 2 — Estatísticas de tracking
+        battlesWon: 0,
+        realmsDefeated: 0,
+        cumulativeGold: 0,
+        maxProvincesHeld: 0
       };
     }
 
@@ -185,6 +195,7 @@ export function generateInitialState(width: number, height: number, settings: Ga
 
     const playerRealmId = 'realm_0';
     const initialState: GameState = {
+      schemaVersion: 2,
       turn: 1,
       realms,
       provinces,
