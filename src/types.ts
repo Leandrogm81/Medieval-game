@@ -171,6 +171,7 @@ export interface GameSettings {
   resourceDensity: 'low' | 'medium' | 'high' | 'normal';
   aiDifficulty: 'easy' | 'normal' | 'hard';
   victoryCondition: 'conquest' | 'economic' | 'sandbox';
+  aiAggression?: number; // 0-100, default 50 (Fase 2)
 }
 
 export interface GameState {

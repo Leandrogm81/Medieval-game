@@ -2,82 +2,116 @@ import { Realm, Loan, GameState } from '../types';
 import { LOAN_CONSTANTS } from './game-constants';
 
 /**
- * Calcula o valor máximo de empréstimo que um reino pode pegar.
+ * Fase 2 — Sistema de Empréstimos (PRD-FASE-2 §5)
+ * - Limite: maxLoan = floor(totalGoldIncome * 5)
+ * - Período: 10 turnos, juros 15% simples
+ * - Parcela: paymentPerTurn = ceil((amount * 1.15) / 10)
+ * - Default (não pagar): -10 relações globais, -5 loyalty, flag defaulted
  */
-export const calculateMaxLoanAmount = (realm: Realm, ownedProvincesCount: number): number => {
-  return ownedProvincesCount * LOAN_CONSTANTS.LOAN_AMOUNT_FACTOR;
+
+export const LOAN_TERMS = {
+  duration: 10,
+  interestRate: 0.15,
+  defaultRelationPenalty: -10,
+  defaultLoyaltyPenalty: -5,
 };
+
+/**
+ * Calcula o valor máximo de empréstimo (5x renda total por turno).
+ */
+export function getMaxLoanAmount(realm: Realm, state: GameState): number {
+  const totalIncome = (realm.goldIncome ?? 0) + (realm.goldMaintenance ?? 0); // renda bruta
+  return Math.max(100, Math.floor(Math.max(totalIncome, 0) * 5));
+}
+
+/**
+ * Calcula a parcela fixa de um empréstimo.
+ */
+export function getLoanPayment(amount: number): number {
+  return Math.ceil((amount * (1 + LOAN_TERMS.interestRate)) / LOAN_TERMS.duration);
+}
 
 /**
  * Verifica se um reino pode pegar um novo empréstimo.
  */
-export const canTakeLoan = (realm: Realm): { can: boolean; reason?: string } => {
+export function canTakeLoan(realm: Realm, state: GameState): { can: boolean; reason?: string; maxAmount?: number } {
   if (realm.loans.length >= LOAN_CONSTANTS.MAX_LOANS) {
     return { can: false, reason: 'Limite máximo de empréstimos atingido.' };
   }
-  return { can: true };
-};
+  const maxAmount = getMaxLoanAmount(realm, state);
+  if (maxAmount < 100) {
+    return { can: false, reason: 'Renda muito baixa para um empréstimo.' };
+  }
+  return { can: true, maxAmount };
+}
 
 /**
- * Gera um novo empréstimo para o reino.
+ * Contrai um empréstimo. Retorna o reino atualizado.
  */
-export const takeLoan = (realm: Realm, currentTurn: number, ownedProvincesCount: number): Realm => {
-  const validation = canTakeLoan(realm);
-  if (!validation.can) return realm;
+export function takeLoan(realm: Realm, amount: number, currentTurn: number): Realm {
+  if (amount <= 0) return realm;
 
-  const amount = calculateMaxLoanAmount(realm, ownedProvincesCount);
-  const interestTotal = Math.floor(amount * LOAN_CONSTANTS.INTEREST_RATE * LOAN_CONSTANTS.DURATION);
-  
   const newLoan: Loan = {
-    id: `loan_${realm.id}_${Date.now()}`,
-    amount: amount,
-    interest: interestTotal,
-    dueTurn: currentTurn + LOAN_CONSTANTS.DURATION,
-    remainingTurns: LOAN_CONSTANTS.DURATION
+    id: `loan_${realm.id}_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+    amount,
+    interest: Math.floor(amount * LOAN_TERMS.interestRate),
+    dueTurn: currentTurn + LOAN_TERMS.duration,
+    remainingTurns: LOAN_TERMS.duration,
   };
 
   return {
     ...realm,
     gold: realm.gold + amount,
-    loans: [...realm.loans, newLoan]
+    loans: [...realm.loans, newLoan],
   };
-};
+}
 
 /**
- * Processa os empréstimos no final do turno.
- * Paga juros e verifica vencimento.
+ * Processa os empréstimos no fim do turno (pagamento automático).
+ * Se não puder pagar a parcela: penalidade de relações/loyalty + flag defaulted.
  */
-export const processRealmLoans = (realm: Realm): { updatedRealm: Realm; totalInterestPaid: number } => {
-  let totalInterestPaid = 0;
-  const updatedLoans: Loan[] = [];
+export function processRealmLoans(realm: Realm, state: GameState): { updatedRealm: Realm; defaulted: boolean } {
+  if (realm.loans.length === 0) return { updatedRealm: realm, defaulted: false };
+
   let currentGold = realm.gold;
+  let defaulted = false;
+  const updatedLoans: Loan[] = [];
 
   for (const loan of realm.loans) {
-    // Juros por turno (interest total / duration)
-    const turnInterest = Math.floor(loan.interest / LOAN_CONSTANTS.DURATION);
-    totalInterestPaid += turnInterest;
-    currentGold -= turnInterest;
+    const payment = getLoanPayment(loan.amount);
 
-    const updatedLoan = {
-      ...loan,
-      remainingTurns: loan.remainingTurns - 1
-    };
-
-    // Se o empréstimo venceu, paga o principal
-    if (updatedLoan.remainingTurns <= 0) {
-      currentGold -= updatedLoan.amount;
-      // O empréstimo é removido (não vai para updatedLoans)
+    if (currentGold >= payment) {
+      currentGold -= payment;
+      const remaining = loan.remainingTurns - 1;
+      if (remaining > 0) {
+        updatedLoans.push({ ...loan, remainingTurns: remaining });
+      }
+      // remaining = 0 → quitado, removido
     } else {
-      updatedLoans.push(updatedLoan);
+      // Default: não pagou a parcela
+      defaulted = true;
+      updatedLoans.push({ ...loan, remainingTurns: loan.remainingTurns - 1 });
     }
   }
 
-  return {
-    updatedRealm: {
-      ...realm,
-      gold: currentGold,
-      loans: updatedLoans
-    },
-    totalInterestPaid
+  const updatedRealm: Realm = {
+    ...realm,
+    gold: Math.max(0, currentGold),
+    loans: updatedLoans.filter(l => l.remainingTurns > 0),
   };
-};
+
+  if (defaulted) {
+    // -10 relações com todos os reinos
+    Object.keys(updatedRealm.relations).forEach(targetId => {
+      updatedRealm.relations[targetId] = Math.max(-100, (updatedRealm.relations[targetId] || 0) + LOAN_TERMS.defaultRelationPenalty);
+    });
+    // -5 loyalty em todas as províncias
+    Object.values(state.provinces).forEach(p => {
+      if (p.ownerId === realm.id) {
+        p.loyalty = Math.max(0, Math.min(100, (p.loyalty || 0) + LOAN_TERMS.defaultLoyaltyPenalty));
+      }
+    });
+  }
+
+  return { updatedRealm, defaulted };
+}

@@ -30,7 +30,8 @@ export function useUI() {
     numRealms: 6,
     aiDifficulty: 'normal',
     resourceDensity: 'normal',
-    victoryCondition: 'conquest'
+    victoryCondition: 'conquest',
+    aiAggression: 50
   });
   const [zoom, setZoom] = useState(1);
   const [showChronicles, setShowChronicles] = useState(false);

@@ -432,6 +432,24 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              <div className="bg-stone-900/40 p-2 xs:p-3 rounded border border-white/5 backdrop-blur-sm">
+                <label className="block text-[8px] xs:text-[10px] text-stone-400 mb-2 font-bold uppercase tracking-widest flex items-center gap-2">
+                  <Swords size={12} className="text-amber-600" /> Agressividade da IA
+                </label>
+                <input
+                  type="range" min="0" max="100" step="5"
+                  value={ui.gameSettings.aiAggression ?? 50}
+                  onChange={e => ui.setGameSettings({ ...ui.gameSettings, aiAggression: parseInt(e.target.value) })}
+                  className="menu-range w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
+                  title="Ajustar agressividade da IA"
+                />
+                <div className="flex justify-between text-[8px] xs:text-[10px] text-stone-500 mt-2 font-serif italic">
+                  <span>Passiva</span>
+                  <span className="text-amber-500 font-bold not-italic">{ui.gameSettings.aiAggression ?? 50}%</span>
+                  <span>Belicosa</span>
+                </div>
+              </div>
             </div>
 
             <button

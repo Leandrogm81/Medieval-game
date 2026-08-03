@@ -566,8 +566,11 @@ export function processEndOfTurn(state: GameState): GameState {
     realm.techPoints = (realm.techPoints || 0) + generateTechPoints(realm, newState);
 
     // --- NOVO: Finanças (Empréstimos) ---
-    const { updatedRealm } = processRealmLoans(realm);
+    const { updatedRealm, defaulted } = processRealmLoans(realm, newState);
     Object.assign(realm, updatedRealm);
+    if (defaulted && realm.id !== state.playerRealmId) {
+      newState.logs.push(`⚠️ ${realm.name} não pagou suas parcelas de empréstimo!`);
+    }
 
     // --- NOVO: Capitulação (Derrota Total) ---
     if (ownedProvinces.length === 0 && realm.id !== 'neutral') {
