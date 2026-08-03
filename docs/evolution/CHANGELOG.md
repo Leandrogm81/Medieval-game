@@ -1,5 +1,44 @@
 # CHANGELOG
 
+## 2026-08-03 - Sprints C-H da Fase 2 + testes finais
+
+### Sprint C — Tecnologia (ffa60a0)
+
+- `technologyLogic.ts`: generateTechPoints (pop/workshops/courts, cap 20), custo triangular `10+5n(n+1)/2`, allocateTechPoints, getTechEffects.
+- Integrações: geração por turno (turnLogic), +10% recrutamento/nível (economyLogic), +5% atk/def/nível (combate).
+- `TechnologyModal.tsx` + botão no HUD + handleAllocateTech (1 AP + loyalty global +1).
+
+### Sprint D — Governos (9168035)
+
+- `governmentLogic.ts`: 7 governos (GOVERNMENT_STATS), changeGovernment (500g/200m, cooldown 20, force), isProvinceDistant (BFS ≥2 saltos), checkRevolution (10%/turno).
+- turnLogic: renda/comida/crescimento por governo, Republic penaliza províncias distantes, Tribal -1 AP (piso 2), revolução de IA.
+- Combate: ataque/defesa por governo. `GovernmentModal.tsx` + botão no HUD.
+
+### Sprint E — Capitulação (4e0ab65)
+
+- `capitulationLogic.ts`: checkCapitulation (60% ocupadas | warScore>70 | capital+>50), executeCapitulation (cede 50% mais distantes, vassalo ou eliminação, -20 loyalty, tracking realmsDefeated).
+- `originalOwnerId` na conquista de guerra; inserido em processActiveWars após war scores (correção C-01).
+
+### Sprint F — Empréstimos + IA avançada (efd158f)
+
+- financeLogic novo: maxLoan = 5× renda, parcela `ceil(amount*1.15/10)`, default (-10 relações globais, -5 loyalty).
+- aiLogic: calculateMilitaryPower, shouldAIAttack por personalidade, processAIDiplomacy, processAILoans, aiAggression (0-100) com slider no menu.
+
+### Sprint G — 13 modos de mapa (326fb63)
+
+- ViewMode +7: population, development, income, stability, buildings, growth, military_strength.
+- Hotkeys 6/7/8/9/0/G; V = força militar (F conflita com fullscreen). Botões no HUD para mobile.
+
+### Sprint H — Liberty, derrota narrativa, stats (a0eb3d9)
+
+- `vassalLogic.ts`: processVassalLiberty (fatores +/-, rebelião ≥100 via declareWar canônica, aviso ≥70), appeaseVassal.
+- tracking: cumulativeGold, maxProvincesHeld, battlesWon, realmsDefeated.
+- GameEndModal: derrota real do jogador detectada (checkGameOver), estatísticas e frases temáticas.
+
+### Testes finais
+
+- `fase2.test.ts` (+28) e `saveMigration.test.ts` (+4): **71 testes no total**, todos verdes. tsc strict limpo, build ok.
+
 ## 2026-08-03 - Sprint 00B + Sprint A (ciclo Fase 2)
 
 ### Sprint 00B — Fundacao de Testes (commit 3dc0fc2)

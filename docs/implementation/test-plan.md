@@ -27,8 +27,10 @@ npm run build            # build de produção
 | `turn.test.ts` | findPath (marcha, scouts, inimigos), visibilidade, game over | 7 |
 | `diplomacy.test.ts` | Guerra (imutabilidade!), alianças, NAPs, relações, tributos, flavor | 9 |
 | `ai.test.ts` | processAI sem crash, não age pelo jogador, estabilidade | 5 |
+| `saveMigration.test.ts` | Migração v1→v2 (defaults, idempotência, inválido, maxProvincesHeld) | 4 |
+| `fase2.test.ts` | Tech (custo triangular, alocação), Governos (7 tipos, cooldown, force), Capitulação (3 condições, vassalo/eliminação), Liberty (rebelião), Empréstimos (parcela, default), IA (military power) | 28 |
 
-**Total: 39 testes.**
+**Total: 71 testes.**
 
 ## Convenções importantes
 
