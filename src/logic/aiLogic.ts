@@ -26,9 +26,9 @@ function executeAIAttack(
   }
 
   // Use the troops in the province as the attacking army
-  const attackerTechBonus = getTechBonus(realm, 'military');
+  const attackerTechBonus = (realm.techLevels?.combat ?? 0) * 0.05;
   const defenderRealm = state.realms[defenderProv.ownerId];
-  const defenderTechBonus = defenderRealm ? getTechBonus(defenderRealm, 'military') : 0;
+  const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) : 0;
 
   const result = resolveCombat(
     attackerProv.army, 

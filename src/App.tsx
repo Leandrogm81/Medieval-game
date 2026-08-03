@@ -3,6 +3,7 @@ import { GameState, ViewMode, ActionType, UnitType, Province } from './types.ts'
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
+import { TechnologyModal } from './components/TechnologyModal';
 import { GameEndModal } from './components/GameEndModal';
 import { SaveGameModal } from './components/SaveGameModal';
 import { GameInstructionsModal } from './components/GameInstructionsModal';
@@ -682,6 +683,7 @@ export default function App() {
           onSave={() => ui.setShowSaveModal(true)}
           onMenu={() => ui.setShowMenu(true)}
           onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
+          onToggleTechnology={() => ui.setShowTechnology(!ui.showTechnology)}
           onToggleInstructions={() => ui.setShowInstructionsModal(true)}
           actionState={ui.actionState}
           onCancelAction={cancelCurrentAction}
@@ -762,6 +764,15 @@ export default function App() {
               isOpen={ui.showChronicles}
               logs={gameState.logs}
               onClose={() => ui.setShowChronicles(false)}
+            />
+          )}
+          {ui.showTechnology && (
+            <TechnologyModal
+              isOpen={ui.showTechnology}
+              gameState={gameState}
+              playerRealmId={gameState.playerRealmId}
+              onAllocate={ctrl.handleAllocateTech}
+              onClose={() => ui.setShowTechnology(false)}
             />
           )}
           {ui.showSaveModal && (

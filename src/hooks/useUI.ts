@@ -34,6 +34,7 @@ export function useUI() {
   });
   const [zoom, setZoom] = useState(1);
   const [showChronicles, setShowChronicles] = useState(false);
+  const [showTechnology, setShowTechnology] = useState(false);
   const [showMinimap, setShowMinimap] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 768;
@@ -106,6 +107,7 @@ export function useUI() {
     gameSettings, setGameSettings,
     zoom, setZoom,
     showChronicles, setShowChronicles,
+    showTechnology, setShowTechnology,
     showMinimap, setShowMinimap,
     panOffset, setPanOffset,
     isDragging, setIsDragging,

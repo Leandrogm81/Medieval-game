@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest } from '../types';
+import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest, TechCategory } from '../types';
 import { generateInitialState } from '../logic/mapGeneration';
 import { processEndOfTurn, findPath } from '../logic/turnLogic';
+import { allocateTechPoints, getTechUpgradeCost } from '../logic/technologyLogic';
 import { resolveCombat } from '../logic/combatLogic';
 import {
   executeRecruitmentWithComposition,
@@ -784,6 +785,40 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     });
   }, [ui, setGameState]);
 
+  const handleAllocateTech = useCallback((category: TechCategory) => {
+    if (!gameState) return;
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    if (!realm) return;
+
+    if (realm.actionPoints < ACTION_COSTS.recruit) {
+      ui.showToast('Pontos de ação insuficientes!', 'error');
+      return;
+    }
+
+    const currentLevel = realm.techLevels?.[category] ?? 0;
+    const cost = getTechUpgradeCost(currentLevel);
+    if ((realm.techPoints ?? 0) < cost) {
+      ui.showToast(`Faltam ${cost - (realm.techPoints ?? 0)} pontos de tecnologia.`, 'error');
+      return;
+    }
+
+    const ok = allocateTechPoints(realm, category);
+    if (!ok) {
+      ui.showToast('Não foi possível alocar tecnologia.', 'error');
+      return;
+    }
+
+    realm.actionPoints -= ACTION_COSTS.recruit;
+    // +1 loyalty em todas as províncias ao subir nível
+    Object.values(clone.provinces).forEach(p => {
+      if (p.ownerId === realm.id) p.loyalty = Math.min(100, (p.loyalty || 0) + 1);
+    });
+
+    setGameState(clone);
+    setTimeout(() => ui.showToast(`Tecnologia ${category} avançou para nível ${currentLevel + 1}!`, 'success'), 0);
+  }, [gameState, setGameState, ui]);
+
   const handleSave = useCallback((name: string) => {
     if (!gameState) return;
     persistence.saveGame(name, gameState);
@@ -899,6 +934,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleDiplomacyAction,
     handleCallToArmsResponse,
     handleDisband,
+    handleAllocateTech,
     handleProvinceClick,
     confirmAttack,
     handleSave,

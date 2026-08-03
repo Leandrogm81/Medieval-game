@@ -5,7 +5,8 @@ import { calculateRetreat, getRetreatDestination, resolveCombat } from './combat
 import { playConquestSound } from './sfxLogic';
 import { declareWar, isWarBetween } from './diplomacyLogic';
 import { deepClone } from '../utils/deepClone';
-import { calculateTechPointsPerTurn, getTechBonus } from './techLogic';
+import { generateTechPoints } from './technologyLogic';
+import { getTechBonus } from './techLogic';
 import { processRealmLoans } from './financeLogic';
 
 export function calculateVisibility(state: GameState): string[] {
@@ -295,8 +296,8 @@ function processMarchOrders(state: GameState) {
 
     const attackerRealm = state.realms[baseOrder.realmId];
     const defenderRealm = state.realms[defenderRealmId];
-    const attackerTechBonus = attackerRealm ? getTechBonus(attackerRealm, 'military') : 0;
-    const defenderTechBonus = defenderRealm ? getTechBonus(defenderRealm, 'military') : 0;
+    const attackerTechBonus = attackerRealm ? ((attackerRealm.techLevels?.combat ?? 0) * 0.05) : 0;
+    const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) : 0;
 
     const result = resolveCombat(
       combinedTroops, 
@@ -544,7 +545,7 @@ export function processEndOfTurn(state: GameState): GameState {
     const distances = calculateDistancesFromCapital(newState, realm.capitalId);
 
     // --- NOVO: Progressão Tecnológica ---
-    realm.techPoints = (realm.techPoints || 0) + calculateTechPointsPerTurn(realm, ownedProvinces.length);
+    realm.techPoints = (realm.techPoints || 0) + generateTechPoints(realm, newState);
 
     // --- NOVO: Finanças (Empréstimos) ---
     const { updatedRealm } = processRealmLoans(realm);

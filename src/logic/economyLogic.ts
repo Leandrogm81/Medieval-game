@@ -311,7 +311,10 @@ export function getMaxRecruitable(state: GameState, realm: Realm, prov: Province
   const maxByMaterials = stats.cost.materials > 0 ? Math.floor(realm.materials / stats.cost.materials) : Infinity;
   const maxByPop = stats.cost.pop > 0 ? Math.floor(prov.population / stats.cost.pop) : Infinity;
   
-  return Math.max(0, Math.min(maxByGold, maxByFood, maxByMaterials, maxByPop));
+  const base = Math.max(0, Math.min(maxByGold, maxByFood, maxByMaterials, maxByPop));
+  // Bônus de tecnologia de recrutamento: +10% por nível (Fase 2)
+  const recruitmentBonus = (realm.techLevels?.recruitment ?? 0) * 0.1;
+  return Math.floor(base * (1 + recruitmentBonus));
 }
 
 // Get cost breakdown for N units of a type

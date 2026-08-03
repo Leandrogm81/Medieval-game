@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { GameState, ViewMode, ActionType, UnitType, MarchOrder, Army } from '../types';
 import {
-  Shield, Swords, Crown, Scroll, Play, Handshake,
+  Shield, Swords, Crown, Scroll, Play, Handshake, FlaskConical,
   Coins, Carrot, Users,
   Hammer, Map as MapIcon, Eye, Zap, Landmark,
   PlusCircle, HelpCircle, ChevronLeft, ChevronRight,
@@ -33,6 +33,7 @@ interface HUDProps {
   onSave: () => void;
   onMenu: () => void;
   onToggleChronicles: () => void;
+  onToggleTechnology: () => void;
   onToggleInstructions: () => void;
   actionState: ActionType;
   onCancelAction: () => void;
@@ -79,6 +80,7 @@ export const HUD: React.FC<HUDProps> = ({
   onSave,
   onMenu,
   onToggleChronicles,
+  onToggleTechnology,
   onToggleInstructions,
   actionState,
   onCancelAction,
@@ -1210,6 +1212,14 @@ export const HUD: React.FC<HUDProps> = ({
           >
             <Scroll size={14} className="md:w-4 md:h-4" />
             <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Crônicas</span>
+          </button>
+          <button
+            onClick={onToggleTechnology}
+            title="Tecnologia"
+            className="flex flex-col items-center justify-center py-1.5 md:py-2 bg-stone-800/40 border border-stone-700 text-stone-500 hover:text-amber-200 rounded-sm transition-all"
+          >
+            <FlaskConical size={14} className="md:w-4 md:h-4" />
+            <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Tecnologia</span>
           </button>
         </div>
       </div>
