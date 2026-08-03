@@ -4,6 +4,7 @@ import { Map } from './components/Map';
 import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
 import { TechnologyModal } from './components/TechnologyModal';
+import { GovernmentModal } from './components/GovernmentModal';
 import { GameEndModal } from './components/GameEndModal';
 import { SaveGameModal } from './components/SaveGameModal';
 import { GameInstructionsModal } from './components/GameInstructionsModal';
@@ -684,6 +685,7 @@ export default function App() {
           onMenu={() => ui.setShowMenu(true)}
           onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
           onToggleTechnology={() => ui.setShowTechnology(!ui.showTechnology)}
+          onToggleGovernment={() => ui.setShowGovernment(!ui.showGovernment)}
           onToggleInstructions={() => ui.setShowInstructionsModal(true)}
           actionState={ui.actionState}
           onCancelAction={cancelCurrentAction}
@@ -773,6 +775,15 @@ export default function App() {
               playerRealmId={gameState.playerRealmId}
               onAllocate={ctrl.handleAllocateTech}
               onClose={() => ui.setShowTechnology(false)}
+            />
+          )}
+          {ui.showGovernment && (
+            <GovernmentModal
+              isOpen={ui.showGovernment}
+              gameState={gameState}
+              playerRealmId={gameState.playerRealmId}
+              onChange={ctrl.handleChangeGovernment}
+              onClose={() => ui.setShowGovernment(false)}
             />
           )}
           {ui.showSaveModal && (

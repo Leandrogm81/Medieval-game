@@ -34,6 +34,7 @@ interface HUDProps {
   onMenu: () => void;
   onToggleChronicles: () => void;
   onToggleTechnology: () => void;
+  onToggleGovernment: () => void;
   onToggleInstructions: () => void;
   actionState: ActionType;
   onCancelAction: () => void;
@@ -81,6 +82,7 @@ export const HUD: React.FC<HUDProps> = ({
   onMenu,
   onToggleChronicles,
   onToggleTechnology,
+  onToggleGovernment,
   onToggleInstructions,
   actionState,
   onCancelAction,
@@ -1220,6 +1222,14 @@ export const HUD: React.FC<HUDProps> = ({
           >
             <FlaskConical size={14} className="md:w-4 md:h-4" />
             <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Tecnologia</span>
+          </button>
+          <button
+            onClick={onToggleGovernment}
+            title="Governo"
+            className="flex flex-col items-center justify-center py-1.5 md:py-2 bg-stone-800/40 border border-stone-700 text-stone-500 hover:text-amber-200 rounded-sm transition-all"
+          >
+            <Landmark size={14} className="md:w-4 md:h-4" />
+            <span className="text-[9px] md:text-[10px] font-bold uppercase mt-0.5 md:mt-1">Governo</span>
           </button>
         </div>
       </div>

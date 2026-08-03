@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest, TechCategory } from '../types';
+import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest, TechCategory, GovernmentType } from '../types';
 import { generateInitialState } from '../logic/mapGeneration';
 import { processEndOfTurn, findPath } from '../logic/turnLogic';
 import { allocateTechPoints, getTechUpgradeCost } from '../logic/technologyLogic';
+import { changeGovernment, GOVERNMENT_CHANGE_LOYALTY_PENALTY, GOVERNMENT_CHANGE_LOYALTY_TURNS } from '../logic/governmentLogic';
 import { resolveCombat } from '../logic/combatLogic';
 import {
   executeRecruitmentWithComposition,
@@ -819,6 +820,34 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     setTimeout(() => ui.showToast(`Tecnologia ${category} avançou para nível ${currentLevel + 1}!`, 'success'), 0);
   }, [gameState, setGameState, ui]);
 
+
+  const handleChangeGovernment = useCallback((newType: GovernmentType) => {
+    if (!gameState) return;
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    if (!realm) return;
+
+    const result = changeGovernment(realm, newType, false);
+    if (!result.success) {
+      ui.showToast(result.message, 'error');
+      return;
+    }
+
+    // Instabilidade temporária: -30 loyalty por 3 turnos
+    const penalty = { amount: GOVERNMENT_CHANGE_LOYALTY_PENALTY, turnsLeft: GOVERNMENT_CHANGE_LOYALTY_TURNS };
+    Object.values(clone.provinces).forEach(p => {
+      if (p.ownerId === realm.id) {
+        p.loyalty = Math.max(0, Math.min(100, (p.loyalty || 0) + penalty.amount));
+      }
+    });
+
+    setGameState(clone);
+    setTimeout(() => {
+      ui.showToast(result.message, 'success');
+      ui.setShowGovernment(false);
+    }, 0);
+  }, [gameState, setGameState, ui]);
+
   const handleSave = useCallback((name: string) => {
     if (!gameState) return;
     persistence.saveGame(name, gameState);
@@ -935,6 +964,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleCallToArmsResponse,
     handleDisband,
     handleAllocateTech,
+    handleChangeGovernment,
     handleProvinceClick,
     confirmAttack,
     handleSave,

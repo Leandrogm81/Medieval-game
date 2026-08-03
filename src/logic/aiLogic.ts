@@ -3,6 +3,7 @@ import { executeRecruitment, executeBuilding } from './economyLogic';
 import { resolveCombat } from './combatLogic';
 import { ACTION_COSTS } from './game-constants';
 import { canUnlockTech, unlockTech, getTechBonus } from './techLogic';
+import { GOVERNMENT_STATS } from './governmentLogic';
 import { canTakeLoan, takeLoan } from './financeLogic';
 import { TECH_TREE } from './game-constants';
 import { declareWar } from './diplomacyLogic';
@@ -26,9 +27,11 @@ function executeAIAttack(
   }
 
   // Use the troops in the province as the attacking army
-  const attackerTechBonus = (realm.techLevels?.combat ?? 0) * 0.05;
+  const attackerGov = GOVERNMENT_STATS[realm.government || 'monarchy'];
+  const attackerTechBonus = (realm.techLevels?.combat ?? 0) * 0.05 + (attackerGov.attack - 1);
   const defenderRealm = state.realms[defenderProv.ownerId];
-  const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) : 0;
+  const defenderGov = defenderRealm ? GOVERNMENT_STATS[defenderRealm.government || 'monarchy'] : null;
+  const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) + (defenderGov ? defenderGov.defense - 1 : 0) : 0;
 
   const result = resolveCombat(
     attackerProv.army, 

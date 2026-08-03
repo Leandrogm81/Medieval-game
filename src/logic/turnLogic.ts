@@ -6,6 +6,8 @@ import { playConquestSound } from './sfxLogic';
 import { declareWar, isWarBetween } from './diplomacyLogic';
 import { deepClone } from '../utils/deepClone';
 import { generateTechPoints } from './technologyLogic';
+import { GOVERNMENT_STATS, checkRevolution } from './governmentLogic';
+import { isProvinceDistant } from './governmentLogic';
 import { getTechBonus } from './techLogic';
 import { processRealmLoans } from './financeLogic';
 
@@ -296,8 +298,10 @@ function processMarchOrders(state: GameState) {
 
     const attackerRealm = state.realms[baseOrder.realmId];
     const defenderRealm = state.realms[defenderRealmId];
-    const attackerTechBonus = attackerRealm ? ((attackerRealm.techLevels?.combat ?? 0) * 0.05) : 0;
-    const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) : 0;
+    const attackerGov = attackerRealm ? GOVERNMENT_STATS[attackerRealm.government || 'monarchy'] : null;
+    const defenderGov = defenderRealm ? GOVERNMENT_STATS[defenderRealm.government || 'monarchy'] : null;
+    const attackerTechBonus = attackerRealm ? ((attackerRealm.techLevels?.combat ?? 0) * 0.05) + (attackerGov ? attackerGov.attack - 1 : 0) : 0;
+    const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) + (defenderGov ? defenderGov.defense - 1 : 0) : 0;
 
     const result = resolveCombat(
       combinedTroops, 
@@ -567,6 +571,14 @@ export function processEndOfTurn(state: GameState): GameState {
       realm.overextension = Math.max(0, realm.overextension - 5);
     }
 
+    // Fase 2 — Governo: decrementar cooldown de reforma
+    if ((realm.governmentChangeCooldown || 0) > 0) {
+      realm.governmentChangeCooldown -= 1;
+    }
+
+    // Fase 2 — Governo: multiplicadores de economia
+    const govStats = GOVERNMENT_STATS[realm.government || 'monarchy'];
+
     Object.values(realm.memory || {}).forEach(mem => {
       mem.betrayal = Math.max(0, (mem.betrayal || 0) - 2);
       mem.aggression = Math.max(0, (mem.aggression || 0) - 2);
@@ -594,6 +606,11 @@ export function processEndOfTurn(state: GameState): GameState {
       const dist = distances[p.id] || 0;
       const adminPenalty = Math.max(0, (dist * 2) - (p.buildings.courts || 0));
       loyaltyChange -= adminPenalty;
+
+      // Fase 2 — Governo: Republic penaliza estabilidade em províncias distantes (>=2 saltos)
+      if ((realm.government === 'republic') && isProvinceDistant(newState, p.id, realm)) {
+        p.stability = Math.max(5, (p.stability ?? 70) - 10);
+      }
       
       loyaltyChange -= Math.floor(realm.overextension / 10);
 
@@ -630,8 +647,8 @@ export function processEndOfTurn(state: GameState): GameState {
       const efficiency = (0.5 + (p.population / p.maxPopulation) * 0.5) * loyaltyFactor * stabilityFactor;
       
       const techEconomyBonus = getTechBonus(realm, 'economy');
-      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency * (1 + techEconomyBonus);
-      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency * (1 + techEconomyBonus);
+      goldIncome += (p.wealth + (p.buildings.mines * BUILDING_PRODUCTION.mines)) * efficiency * (1 + techEconomyBonus) * govStats.goldIncome;
+      foodIncome += (p.foodProduction + (p.buildings.farms * BUILDING_PRODUCTION.farms)) * efficiency * (1 + techEconomyBonus) * govStats.foodProduction;
       materialIncome += (p.materialProduction + (p.buildings.workshops * BUILDING_PRODUCTION.workshops)) * efficiency * (1 + techEconomyBonus);
 
       // Strategic bonuses
@@ -641,7 +658,7 @@ export function processEndOfTurn(state: GameState): GameState {
       if (p.strategicResource === 'stone') materialIncome += 5 * efficiency;
 
       if (p.population < p.maxPopulation) {
-        const growth = Math.floor(p.population * 0.07 * efficiency);
+        const growth = Math.floor(p.population * 0.07 * efficiency * govStats.populationGrowth);
         p.population = Math.min(p.maxPopulation, p.population + growth);
       }
 
@@ -729,14 +746,25 @@ export function processEndOfTurn(state: GameState): GameState {
     realm.foodMaintenance = foodMaintenance;
     realm.materialsIncome = Math.floor(materialIncome);
     
-    // Reset action points
-    realm.actionPoints = realm.maxActionPoints;
+    // Reset action points (Fase 2 — governo Tribal: -1 AP; piso 2)
+    realm.maxActionPoints = Math.max(2, 10 + (realm.techLevels?.movement ?? 0) * 0.5 + (realm.government === 'tribal' ? -1 : 0));
+    realm.actionPoints = Math.floor(realm.maxActionPoints);
 
     if (realm.gold < 0) {
       handleResourceDeficit(realm, ownedProvinces, -Math.floor(realm.gold * 10), 'gold', newState);
     }
     if (realm.food < 0) {
       handleResourceDeficit(realm, ownedProvinces, -Math.floor(realm.food * 5), 'food', newState);
+    }
+  });
+
+  // Fase 2 — Governo: revolução (estabilidade <20 em >50% das províncias)
+  Object.values(newState.realms).forEach(r => {
+    if (r.id === 'neutral' || r.isPlayer) return;
+    const newGov = checkRevolution(r, newState);
+    if (newGov) {
+      r.government = newGov;
+      newState.logs.push(`REVOLUÇÃO: ${r.name} adotou o governo ${GOVERNMENT_STATS[newGov].name}.`);
     }
   });
 
