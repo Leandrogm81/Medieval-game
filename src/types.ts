@@ -50,6 +50,7 @@ export interface Province {
   loyalty: number;
   stability: number;
   recentlyConquered: number;
+  turnsWithoutWar?: number;
 }
 
 export interface Technology {

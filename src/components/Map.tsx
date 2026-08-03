@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { GameState, ViewMode, ActionType } from '../types';
+import { GameState, ViewMode, ActionType, Province } from '../types';
 import { motion } from 'motion/react';
 
 interface MapProps {
@@ -9,7 +9,7 @@ interface MapProps {
   viewMode: ViewMode;
   previewPath: string[];
   marchAnimations: { id: string; from: [number, number]; to: [number, number]; troops: { infantry: number; archers: number; cavalry: number; scouts: number }; kind?: 'move' | 'attack' | 'scout'; realmId?: string }[];
-  triggerMarchAnimation: any;
+  triggerMarchAnimation: (from: [number, number], to: [number, number], troops: { infantry: number; archers: number; cavalry: number; scouts: number }, kind?: 'move' | 'attack' | 'scout', realmId?: string) => void;
   actionState: ActionType;
   actionSourceId: string | null;
   multiSelectedProvinceIds: string[];
@@ -23,13 +23,13 @@ function getHeatColor(value: number, hue: number): string {
   return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
 }
 
-function getEconomicScore(prov: any): number {
+function getEconomicScore(prov: Province): number {
   const totalProduction = (prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0);
   const buildingBonus = (prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0);
   return Math.min(1, (totalProduction + buildingBonus * 5) / 20);
 }
 
-function getMilitaryScore(prov: any): number {
+function getMilitaryScore(prov: Province): number {
   return Math.min(1, (prov.troops || 0) / 100);
 }
 
@@ -984,7 +984,7 @@ export const Map: React.FC<MapProps> = ({
                 transform: 'translate(-50%, -50%)'
               }}
             >
-              {Array.from({ length: effect.particleCount }).map((_, index) => {
+              {Array.from({ length: effect.particleCount || 0 }).map((_, index) => {
                 const seed = `${effect.id}:${index}`;
                 const tx = Math.round((seededRandom(`${seed}:x`) * 60) - 30);
                 const ty = Math.round((seededRandom(`${seed}:y`) * 60) - 30);
@@ -1002,11 +1002,11 @@ export const Map: React.FC<MapProps> = ({
                     key={`${effect.id}-${index}`}
                     className={`particle ${effect.type === 'battle_particles' ? 'particle-battle' : effect.type === 'conquest_particles' ? 'particle-conquest' : 'particle-build'} ${className}`}
                     style={{
-                      ['--tx' as any]: `${tx}px`,
-                      ['--ty' as any]: `${ty}px`,
+                      '--tx': `${tx}px`,
+                      '--ty': `${ty}px`,
                       opacity,
                       animationDelay: `${index * 20}ms`
-                    }}
+                    } as React.CSSProperties}
                   />
                 );
               })}

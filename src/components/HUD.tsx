@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { GameState, ViewMode, ActionType, UnitType, MarchOrder } from '../types';
+import { GameState, ViewMode, ActionType, UnitType, MarchOrder, Army } from '../types';
 import {
   Shield, Swords, Crown, Scroll, Play, Handshake,
   Coins, Carrot, Users,
@@ -26,7 +26,7 @@ type TradeResource = (typeof TRADE_RESOURCES)[number];
 interface HUDProps {
   gameState: GameState;
   selectedProvinceId: string | null;
-  onAction: (type: ActionType, provinceId: string, extra?: any) => void;
+  onAction: (type: ActionType, provinceId: string, extra?: string | { from: 'gold' | 'food' | 'materials'; to: 'gold' | 'food' | 'materials'; amount: number }) => void;
   onEndTurn: () => void;
   onToggleMode: (mode: ViewMode) => void;
   viewMode: ViewMode;
@@ -45,11 +45,11 @@ interface HUDProps {
   onCancelMarchOrder: (id: string) => void;
   zoom: number;
   onZoomChange: (z: number) => void;
-  moveComposition: any;
-  onMoveCompositionChange: (army: any) => void;
+  moveComposition: Army;
+  onMoveCompositionChange: (army: Army) => void;
   selectingMoveComposition: boolean;
-  recruitComposition: any;
-  onRecruitCompositionChange: (army: any) => void;
+  recruitComposition: Army;
+  onRecruitCompositionChange: (army: Army) => void;
   onDispatchScouts?: () => void;
   onRoute?: () => void;
   onDiplomacy?: (targetRealmId: string) => void;
@@ -59,8 +59,8 @@ interface HUDProps {
   // Disband
   isDisbandMode?: boolean;
   onIsDisbandMode?: (v: boolean) => void;
-  disbandComposition?: any;
-  onDisbandCompositionChange?: (army: any) => void;
+  disbandComposition?: Army;
+  onDisbandCompositionChange?: (army: Army) => void;
   onDisband?: (provinceId: string) => void;
   // Action state for Disband
   onActionState?: (v: ActionType) => void;
@@ -751,7 +751,8 @@ export const HUD: React.FC<HUDProps> = ({
                 <div className="mt-4 p-3 bg-amber-950/20 border border-amber-700/30 rounded-sm">
                   <p className="text-[10px] md:text-[11px] text-amber-500 font-black uppercase mb-3">Composição das Tropas</p>
                   {(['infantry', 'archers', 'cavalry', 'scouts'] as const).map(type => {
-                    const maxAvailable = selectedProvince.army[type];
+                    const comp = disbandComposition || { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+                        const maxAvailable = selectedProvince.army[type];
                     if (maxAvailable <= 0) return null;
                     const labels: Record<string, string> = { infantry: 'Infantaria', archers: 'Arqueiros', cavalry: 'Cavalaria', scouts: 'Batedores' };
                     return (
@@ -852,6 +853,7 @@ export const HUD: React.FC<HUDProps> = ({
                       <p className="text-[9px] text-stone-500 mb-2">Custo: 1 AP • 50% recursos retornam</p>
 
                       {(['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).map(type => {
+                        const comp = disbandComposition || { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
                         const maxAvailable = selectedProvince.army[type];
                         if (maxAvailable <= 0) return null;
                         const labels: Record<string, string> = { infantry: 'Infantaria', archers: 'Arqueiros', cavalry: 'Cavalaria', scouts: 'Batedores' };
@@ -859,14 +861,14 @@ export const HUD: React.FC<HUDProps> = ({
                           <div key={type} className="mb-2">
                             <div className="flex justify-between text-[10px] text-stone-400 mb-1">
                               <span>{labels[type]}</span>
-                              <span>{disbandComposition[type] || 0} / {maxAvailable}</span>
+                              <span>{comp[type] || 0} / {maxAvailable}</span>
                             </div>
                             <input
                               type="range"
                               min={0}
                               max={maxAvailable}
-                              value={disbandComposition[type] || 0}
-                              onChange={(e) => onDisbandCompositionChange?.({ ...disbandComposition, [type]: parseInt(e.target.value) })}
+                              value={comp[type] || 0}
+                              onChange={(e) => onDisbandCompositionChange?.({ ...comp, [type]: parseInt(e.target.value) })}
                               title={`Dispensar: ${labels[type]}`}
                               aria-label={`Dispensar: ${labels[type]}`}
                               className="w-full h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-red-500"
@@ -876,8 +878,9 @@ export const HUD: React.FC<HUDProps> = ({
                       })}
 
                       {(() => {
-                        const total = (disbandComposition.infantry || 0) + (disbandComposition.archers || 0) +
-                          (disbandComposition.cavalry || 0) + (disbandComposition.scouts || 0);
+                        const comp = disbandComposition || { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+                        const total = (comp.infantry || 0) + (comp.archers || 0) +
+                          (comp.cavalry || 0) + (comp.scouts || 0);
                         if (total <= 0) return null;
                         return (
                           <button
@@ -929,7 +932,7 @@ export const HUD: React.FC<HUDProps> = ({
 
                     {(['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).map(type => {
                       const stats = UNIT_STATS[type];
-                      const statsWithReq = stats as any;
+                      
                       const labels: Record<string, string> = {
                         infantry: 'Infantaria',
                         archers: 'Arqueiros',
@@ -938,9 +941,9 @@ export const HUD: React.FC<HUDProps> = ({
                       };
 
                       // Check if strategic resource is available
-                      if (statsWithReq.requires) {
+                      if (stats.requires) {
                         const hasResource = Object.values(gameState.provinces).some(p =>
-                          p.ownerId === gameState.playerRealmId && p.strategicResource === statsWithReq.requires
+                          p.ownerId === gameState.playerRealmId && p.strategicResource === stats.requires
                         );
                         if (!hasResource) return null;
                       }
@@ -1045,7 +1048,7 @@ export const HUD: React.FC<HUDProps> = ({
                     </div>
                     <div className="grid grid-cols-2 gap-1">
                       {['farms', 'mines', 'workshops', 'courts'].map(b => {
-                        const buildingStats = (BUILDING_STATS as any)[b];
+                        const buildingStats = BUILDING_STATS[b as keyof typeof BUILDING_STATS];
                         const labels: Record<string, string> = {
                           farms: 'Fazendas',
                           mines: 'Minas',

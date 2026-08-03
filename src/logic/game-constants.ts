@@ -1,4 +1,4 @@
-import { StrategicResource, PersonalityType, StrategicObjective, DiplomacyAction } from '../types';
+import { StrategicResource, PersonalityType, StrategicObjective, DiplomacyAction, UnitType } from '../types';
 
 export const ACTION_COSTS = {
   move: 1,
@@ -8,7 +8,17 @@ export const ACTION_COSTS = {
   diplomacy: 2
 };
 
-export const UNIT_STATS = {
+export interface UnitStats {
+  cost: { gold: number; food: number; materials: number; pop: number };
+  maintenance: { gold: number; food: number };
+  attack: number;
+  defense: number;
+  speed: number;
+  requires?: StrategicResource;
+  vision?: boolean;
+}
+
+export const UNIT_STATS: Record<UnitType, UnitStats> = {
   infantry: {
     cost: { gold: 5, food: 3, materials: 1, pop: 10 },
     maintenance: { gold: 0.3, food: 0.2 },

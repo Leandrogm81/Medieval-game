@@ -221,6 +221,7 @@ function processMarchOrders(state: GameState) {
       const fromProvId = order.currentProvId;
       order.currentProvId = nextProvId;
       order.remainingPath.shift();
+      state.lastTurnMovements = state.lastTurnMovements || [];
       state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
     }
 
@@ -360,7 +361,7 @@ function getStabilityFactor(stability: number): number {
   return 0.4;
 }
 
-function calculateStabilityDelta(province: any, realm: Realm, state: GameState): number {
+function calculateStabilityDelta(province: Province, realm: Realm, state: GameState): number {
   let delta = 0;
 
   if ((province.recentlyConquered || 0) > 0) delta -= 10;
@@ -375,7 +376,7 @@ function calculateStabilityDelta(province: any, realm: Realm, state: GameState):
   );
   if (atWar) delta -= 3;
 
-  const noWarTurns = (province as any).turnsWithoutWar || 0;
+  const noWarTurns = province.turnsWithoutWar || 0;
   if (noWarTurns >= 3) delta += 4;
 
   return Math.max(-20, Math.min(20, delta));
@@ -584,9 +585,9 @@ export function processEndOfTurn(state: GameState): GameState {
 
       const atWar = (newState.activeWars || []).some(w => w.attackerId === realm.id || w.defenderId === realm.id);
       if (atWar) {
-        (p as any).turnsWithoutWar = 0;
+        p.turnsWithoutWar = 0;
       } else {
-        (p as any).turnsWithoutWar = ((p as any).turnsWithoutWar || 0) + 1;
+        p.turnsWithoutWar = (p.turnsWithoutWar || 0) + 1;
       }
 
       const dist = distances[p.id] || 0;

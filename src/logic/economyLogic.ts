@@ -299,11 +299,10 @@ export function handleResourceDeficit(realm: Realm, provinces: Province[], troop
 // Calculate max recruitable units of a type given current resources
 export function getMaxRecruitable(state: GameState, realm: Realm, prov: Province, type: UnitType): number {
   const stats = UNIT_STATS[type];
-  const statsWithReq = stats as any;
   
   // Check strategic resource requirement
-  if (statsWithReq.requires) {
-    const hasResource = Object.values(state.provinces).some(p => p.ownerId === realm.id && p.strategicResource === statsWithReq.requires);
+  if (stats.requires) {
+    const hasResource = Object.values(state.provinces).some(p => p.ownerId === realm.id && p.strategicResource === stats.requires);
     if (!hasResource) return 0;
   }
   
@@ -384,7 +383,7 @@ export function executeRecruitment(state: GameState, realm: Realm, prov: Provinc
 }
 
 export function executeBuilding(state: GameState, realm: Realm, prov: Province, type: 'farms' | 'mines' | 'workshops' | 'courts' | 'fortify'): boolean {
-  const stats = (BUILDING_STATS as any)[type];
+  const stats = BUILDING_STATS[type as keyof typeof BUILDING_STATS];
   if (!stats) return false;
 
   const goldCost = stats.gold || 0;

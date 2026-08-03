@@ -107,7 +107,7 @@ export function processAI(state: GameState) {
       // Decisão de Tecnologia
       if (realm.techPoints >= 50 && Math.random() < 0.2) {
         for (const category in TECH_TREE) {
-          const tech = TECH_TREE[category].find(t => canUnlockTech(realm, t.id).can);
+          const tech = TECH_TREE[category].find((t: { id: string }) => canUnlockTech(realm, t.id).can);
           if (tech) {
             const updatedRealm = unlockTech(realm, tech.id);
             Object.assign(realm, updatedRealm);

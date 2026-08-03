@@ -145,7 +145,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     });
   }, [setGameState, ui]);
 
-  const handleAction = useCallback((type: ActionType, provinceId: string, extra?: any) => {
+  const handleAction = useCallback((type: ActionType, provinceId: string, extra?: string | { from: 'gold' | 'food' | 'materials'; to: 'gold' | 'food' | 'materials'; amount: number }) => {
     if (!gameState) return;
     const realm = gameState.realms[gameState.playerRealmId];
     if (realm.actionPoints <= 0) {
@@ -187,7 +187,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       const clone = deepClone(gameState);
       const p = clone.provinces[provinceId];
       const r = clone.realms[clone.playerRealmId];
-      const buildingType = extra as any;
+      const buildingType = (extra ?? 'farms') as 'farms' | 'mines' | 'workshops' | 'courts' | 'fortify';
       if (executeBuilding(clone, r, p, buildingType)) {
         r.actionPoints -= ACTION_COSTS.build;
         setGameState(clone);

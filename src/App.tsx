@@ -94,12 +94,25 @@ export default function App() {
       e.stopPropagation();
     }
     try {
-      const doc = window.document as any;
-      const docEl = doc.documentElement;
+      const doc = window.document;
+      const docEl = doc.documentElement as HTMLElement & {
+        requestFullscreen?: () => Promise<void>;
+        mozRequestFullScreen?: () => Promise<void>;
+        webkitRequestFullScreen?: () => Promise<void>;
+        msRequestFullscreen?: () => Promise<void>;
+      };
+      const docFS = doc as Document & {
+        mozCancelFullScreen?: () => Promise<void>;
+        webkitExitFullscreen?: () => Promise<void>;
+        msExitFullscreen?: () => Promise<void>;
+        mozFullScreenElement?: Element | null;
+        webkitFullscreenElement?: Element | null;
+        msFullscreenElement?: Element | null;
+      };
 
       const requestFullScreen = docEl.requestFullscreen || docEl.mozRequestFullScreen || docEl.webkitRequestFullScreen || docEl.msRequestFullscreen;
-      const cancelFullScreen = doc.exitFullscreen || doc.mozCancelFullScreen || doc.webkitExitFullscreen || doc.msExitFullscreen;
-      const isFullscreen = !!(doc.fullscreenElement || doc.mozFullScreenElement || doc.webkitFullscreenElement || doc.msFullscreenElement);
+      const cancelFullScreen = docFS.exitFullscreen || docFS.mozCancelFullScreen || docFS.webkitExitFullscreen || docFS.msExitFullscreen;
+      const isFullscreen = !!(docFS.fullscreenElement || docFS.mozFullScreenElement || docFS.webkitFullscreenElement || docFS.msFullscreenElement);
 
       if (!isFullscreen && requestFullScreen) {
         requestFullScreen.call(docEl);
