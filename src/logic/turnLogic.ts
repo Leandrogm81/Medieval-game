@@ -11,6 +11,7 @@ import { isProvinceDistant } from './governmentLogic';
 import { checkCapitulation, executeCapitulation } from './capitulationLogic';
 import { getTechBonus } from './techLogic';
 import { processRealmLoans } from './financeLogic';
+import { processVassalLiberty } from './vassalLogic';
 
 export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
@@ -94,6 +95,23 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
       return {
         winnerId: activeRealms[0],
         reason: `${lastRealm.name} é o último reino soberano.`
+      };
+    }
+  }
+
+  // Fase 2 — Derrota do jogador: eliminado (sem províncias) → game over
+  const playerProvinces = provinceCounts[state.playerRealmId] || 0;
+  if (playerProvinces === 0 && activeRealms.length > 1) {
+    // Vencedor = reino com mais províncias
+    let topRealmId = activeRealms[0];
+    for (const id of activeRealms) {
+      if ((provinceCounts[id] || 0) > (provinceCounts[topRealmId] || 0)) topRealmId = id;
+    }
+    const winner = state.realms[topRealmId];
+    if (winner) {
+      return {
+        winnerId: topRealmId,
+        reason: `${state.realms[state.playerRealmId]?.name || 'Seu reino'} foi eliminado. ${winner.name} domina agora.`
       };
     }
   }
@@ -354,6 +372,14 @@ function processMarchOrders(state: GameState) {
       result,
       retreatInfo: retreatInfo || undefined
     });
+
+    // Fase 2 — Estatísticas de tracking: batalhas vencidas
+    if (result.won && attackerRealm) {
+      attackerRealm.battlesWon = (attackerRealm.battlesWon || 0) + 1;
+    }
+    if (!result.won && defenderRealm) {
+      defenderRealm.battlesWon = (defenderRealm.battlesWon || 0) + 1;
+    }
 
     orders.forEach(order => toRemove.add(order.id));
   });
@@ -717,6 +743,10 @@ export function processEndOfTurn(state: GameState): GameState {
     realm.food = normalizeNaturalAmount(realm.food + foodRevenue);
     realm.materials = normalizeNaturalAmount(realm.materials + materialRevenue);
 
+    // Fase 2 — Estatísticas de tracking (tela de derrota)
+    realm.cumulativeGold = (realm.cumulativeGold || 0) + realm.gold;
+    realm.maxProvincesHeld = Math.max(realm.maxProvincesHeld || 0, ownedProvinces.length);
+
     Object.entries({ ...realm.tributeTo }).forEach(([targetId, rawAmount]) => {
       const amount = Number(rawAmount) || 0;
       const targetRealm = newState.realms[targetId];
@@ -787,6 +817,7 @@ export function processEndOfTurn(state: GameState): GameState {
 
   processMarchOrders(newState);
   processCoalitions(newState);
+  processVassalLiberty(newState); // Fase 2 — Liberty desire dos vassalos
   processActiveWars(newState);
   newState.turn += 1;
   newState.visibleProvinces = calculateVisibility(newState);

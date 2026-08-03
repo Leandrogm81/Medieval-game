@@ -126,6 +126,7 @@ export function executeCapitulation(state: GameState, result: CapitulationResult
     if (!winner.vassals.includes(result.loserId)) winner.vassals.push(result.loserId);
   } else {
     delete state.realms[result.loserId];
+    winner.realmsDefeated = (winner.realmsDefeated || 0) + 1; // Fase 2: tracking
   }
 
   // 4. Encerrar guerra
