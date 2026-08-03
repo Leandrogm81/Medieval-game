@@ -8,6 +8,7 @@ import { deepClone } from '../utils/deepClone';
 import { generateTechPoints } from './technologyLogic';
 import { GOVERNMENT_STATS, checkRevolution } from './governmentLogic';
 import { isProvinceDistant } from './governmentLogic';
+import { checkCapitulation, executeCapitulation } from './capitulationLogic';
 import { getTechBonus } from './techLogic';
 import { processRealmLoans } from './financeLogic';
 
@@ -317,6 +318,7 @@ function processMarchOrders(state: GameState) {
 
     if (result.won) {
       retreatInfo = applyRetreat(defenderRealmId, prov.id, result.defenderRemaining);
+      if (prov.ownerId !== 'neutral') prov.originalOwnerId = prov.ownerId; // Fase 2: dono pré-guerra (capitulação)
       prov.ownerId = baseOrder.realmId;
       prov.loyalty = 40;
       prov.recentlyConquered = 3;
@@ -457,6 +459,18 @@ function processActiveWars(state: GameState) {
     if (attackerCapital && attackerCapital.ownerId === war.defenderId) {
       war.warScore -= 40;
       war.attackerExhaustion += 20;
+    }
+
+    // Fase 2 — Capitulação: checada após war scores, antes da exaustão
+    const capitulation = checkCapitulation(state, war);
+    if (capitulation) {
+      executeCapitulation(state, capitulation);
+      if (war.attackerId === state.playerRealmId || war.defenderId === state.playerRealmId) {
+        const winner = state.realms[capitulation.winnerId];
+        const loserName = state.realms[capitulation.loserId]?.name || 'o reino derrotado';
+        state.logs.push(`🏳️ ${loserName} se rendeu a ${winner?.name || 'seu oponente'}!`);
+      }
+      return; // guerra encerrada por capitulação
     }
 
     // Peace detection
