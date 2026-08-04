@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GameState, ViewMode, ActionType, UnitType, Province } from './types.ts';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
@@ -50,6 +50,19 @@ export default function App() {
   const ui = useUI();
   const ctrl = useGameController(gameState, setGameState, ui);
   const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+
+  // ZOOM POR SCROLL: listener nativo não-passivo (React registra wheel como passivo)
+  useEffect(() => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+    const handler = (e: WheelEvent) => {
+      e.preventDefault();
+      ctrl.handleWheel(e as unknown as React.WheelEvent<HTMLDivElement>);
+    };
+    container.addEventListener('wheel', handler, { passive: false });
+    return () => container.removeEventListener('wheel', handler);
+  }, [ctrl, gameState]);
 
   // Persistence and Visual Effects cleanup
   useEffect(() => {
@@ -617,6 +630,7 @@ export default function App() {
     <div className="w-full h-full bg-stone-950 text-white flex flex-col md:flex-row overflow-hidden font-serif select-none relative">
       <ErrorBoundary>
         <div
+          ref={mapContainerRef}
           className="flex-1 min-h-0 relative overflow-hidden bg-[#1e293b] touch-none h-full"
           onMouseDown={ctrl.handleMouseDown}
           onMouseMove={ctrl.handleMouseMove}
@@ -675,6 +689,7 @@ export default function App() {
               multiSelectedProvinceIds={ui.multiSelectedProvinceIds}
               onMultiSelectChange={ui.setMultiSelectedProvinceIds}
               playerRealmId={gameState.playerRealmId}
+              zoom={ui.zoom}
             />
           </motion.div>
 

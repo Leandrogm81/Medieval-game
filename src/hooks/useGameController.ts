@@ -58,6 +58,7 @@ import { deepClone } from '../utils/deepClone';
 
 export function useGameController(gameState: GameState | null, setGameState: React.Dispatch<React.SetStateAction<GameState | null>>, ui: ReturnType<typeof useUI>) {
   const timeoutIds = useRef<number[]>([]);
+  const pinchDistanceRef = useRef<number | null>(null);
 
   useEffect(() => {
     return () => {
@@ -979,12 +980,44 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
   }, [ui]);
 
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    // PINCH: 2 dedos → inicia pinch em vez de pan
+    if (e.touches.length >= 2) {
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      pinchDistanceRef.current = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      ui.setIsDragging(false);
+      return;
+    }
     ui.setIsDragging(true);
     ui.setDragStart({ x: e.touches[0].clientX, y: e.touches[0].clientY });
     ui.setHasDragged(false);
   }, [ui]);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // PINCH: 2 dedos → zoom proporcional à distância
+    if (e.touches.length >= 2) {
+      e.preventDefault();
+      const [t1, t2] = [e.touches[0], e.touches[1]];
+      const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
+      const prevDist = pinchDistanceRef.current || dist;
+      const factor = dist / prevDist;
+      pinchDistanceRef.current = dist;
+      if (Math.abs(factor - 1) > 0.01) {
+        // Zoom no centro dos dois dedos
+        const centerX = (t1.clientX + t2.clientX) / 2;
+        const centerY = (t1.clientY + t2.clientY) / 2;
+        ui.setZoom(prev => {
+          const newZoom = Math.min(4, Math.max(0.5, prev * factor));
+          // Ajusta pan para manter o ponto central sob os dedos
+          ui.setPanOffset(pan => {
+            const worldX = (centerX - pan.x) / prev;
+            const worldY = (centerY - pan.y) / prev;
+            return { x: centerX - worldX * newZoom, y: centerY - worldY * newZoom };
+          });
+          return newZoom;
+        });
+      }
+      return;
+    }
     if (!ui.isDragging) return;
     const dx = e.touches[0].clientX - ui.dragStart.x;
     const dy = e.touches[0].clientY - ui.dragStart.y;
@@ -994,7 +1027,26 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
   }, [ui]);
 
   const handleTouchEnd = useCallback(() => {
+    pinchDistanceRef.current = null;
     ui.setIsDragging(false);
+  }, [ui]);
+
+  // ZOOM POR SCROLL DO MOUSE (centrado no cursor)
+  const handleWheel = useCallback((e: React.WheelEvent) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    const cursorX = e.clientX - rect.left;
+    const cursorY = e.clientY - rect.top;
+    ui.setZoom(prev => {
+      const newZoom = Math.min(4, Math.max(0.5, prev * factor));
+      ui.setPanOffset(pan => {
+        const worldX = (cursorX - pan.x) / prev;
+        const worldY = (cursorY - pan.y) / prev;
+        return { x: cursorX - worldX * newZoom, y: cursorY - worldY * newZoom };
+      });
+      return newZoom;
+    });
   }, [ui]);
 
   return {
@@ -1023,7 +1075,8 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleMouseUp,
     handleTouchStart,
     handleTouchMove,
-    handleTouchEnd
+    handleTouchEnd,
+    handleWheel,
   };
 }
 

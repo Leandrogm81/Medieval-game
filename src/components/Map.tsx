@@ -15,6 +15,7 @@ interface MapProps {
   multiSelectedProvinceIds: string[];
   onMultiSelectChange: (ids: string[]) => void;
   playerRealmId: string;
+  zoom?: number; // Nível de zoom (LOD): re-renderiza labels/escudos para legibilidade
 }
 
 function getHeatColor(value: number, hue: number): string {
@@ -166,12 +167,29 @@ export const Map: React.FC<MapProps> = ({
   actionSourceId,
   multiSelectedProvinceIds,
   onMultiSelectChange,
-  playerRealmId
+  playerRealmId,
+  zoom = 1
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
   const [hoveredProvId, setHoveredProvId] = useState<string | null>(null);
   const isMobile = useIsMobile();
+
+  // ===== LOD (Level of Detail): re-renderiza conforme o zoom =====
+  // Counter-scale: textos sempre legíveis (o wrapper escala via CSS)
+  const lodScale = Math.min(1.6, Math.max(0.55, 1 / zoom));
+  const lod = {
+    scale: lodScale,
+    // Zoom alto → mostra labels de TODAS as províncias (não só capitais/tropas)
+    showAllLabels: zoom >= 1.15,
+    // Zoom muito alto → mostra também labels de províncias sem tropas
+    showEmptyLabels: zoom >= 1.5,
+    // Zoom baixo → esconde labels pequenos (poluição)
+    hideSmallLabels: zoom < 0.75,
+    fontSize: Math.max(6.5, Math.min(11, 9 * lodScale)),
+    borderWidth: Math.max(0.8, Math.min(2.2, 1.5 * lodScale)),
+    shieldScale: Math.min(1.3, Math.max(0.7, lodScale)),
+  };
 
   const provinces = useMemo(() => Object.values(gameState.provinces), [gameState.provinces]);
   const multiSelectedSet = useMemo(() => new Set(multiSelectedProvinceIds), [multiSelectedProvinceIds]);
@@ -575,7 +593,7 @@ export const Map: React.FC<MapProps> = ({
                   d={cellPath}
                   fill={fillColor}
                   stroke="#18181b"
-                  strokeWidth="1.5"
+                  strokeWidth={lod.borderWidth}
                   className="transition-all duration-300"
                   opacity={isVisible ? 1 : 0.6}
                 />
@@ -773,9 +791,9 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Royal Capital Banners */}
+              {/* Royal Capital Banners (sempre visíveis, counter-scale) */}
               {isCapital && (
-                <g transform="translate(0, -32) scale(1.1)">
+                <g transform={`translate(0, -32) scale(${1.1 * lod.scale})`}>
                   <rect x="-10" y="-4" width="20" height="9" fill="#d97706" stroke="#fff" strokeWidth="1" rx="1" />
                   <rect x="-10" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
                   <rect x="-2" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
@@ -786,9 +804,9 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Province Name / Value Banner Text (nunca em oceano) */}
-              {!prov.isWater && isSafeLabelPosition(prov.center) && (
-                <g transform={`translate(0, 31) scale(${labelScale})`}>
+              {/* Province Name / Value Banner Text (nunca em oceano) — LOD por zoom */}
+              {!prov.isWater && isSafeLabelPosition(prov.center) && !lod.hideSmallLabels && (
+                <g transform={`translate(0, 31) scale(${labelScale * lod.scale})`}>
                   <rect
                     x="-54"
                     y="-10"
@@ -806,7 +824,7 @@ export const Map: React.FC<MapProps> = ({
                     y="1.8"
                     textAnchor="middle"
                     fill="#f8fafc"
-                    fontSize="9"
+                    fontSize={lod.fontSize}
                     fontWeight="900"
                     className="select-none uppercase font-serif tracking-widest"
                   >
@@ -821,9 +839,9 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Medieval Shield with Troop strength figure */}
+              {/* Medieval Shield with Troop strength figure (counter-scale) */}
               {(totalTroops > 0 || !isMobile) && (
-                <g transform={`translate(0, -2) scale(${isMobile ? 0.85 : 1.1})`}>
+                <g transform={`translate(0, -2) scale(${(isMobile ? 0.85 : 1.1) * lod.shieldScale})`}>
                   <path
                     d="M -13 -15 L 13 -15 C 13 -15 13 5 0 15 C -13 5 -13 -15 -13 -15 Z"
                     fill="#000000"
