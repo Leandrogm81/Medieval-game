@@ -176,19 +176,32 @@ export const Map: React.FC<MapProps> = ({
   const isMobile = useIsMobile();
 
   // ===== LOD (Level of Detail): re-renderiza conforme o zoom =====
-  // Counter-scale: textos sempre legíveis (o wrapper escala via CSS)
-  const lodScale = Math.min(1.6, Math.max(0.55, 1 / zoom));
+  // Labels MENORES quando afasta (visao geral limpa); MAIORES quando aproxima (legiveis).
+  // Crescimento SUAVE (sqrt) — nao counter-scale (que mantem tudo igual).
+  const labelScaleByZoom = Math.sqrt(zoom); // 0.5→0.71, 1→1, 1.5→1.22, 2→1.41
   const lod = {
-    scale: lodScale,
-    // Zoom alto → mostra labels de TODAS as províncias (não só capitais/tropas)
-    showAllLabels: zoom >= 1.15,
-    // Zoom muito alto → mostra também labels de províncias sem tropas
-    showEmptyLabels: zoom >= 1.5,
-    // Zoom baixo → esconde labels pequenos (poluição)
-    hideSmallLabels: zoom < 0.75,
-    fontSize: Math.max(6.5, Math.min(11, 9 * lodScale)),
-    borderWidth: Math.max(0.8, Math.min(2.2, 1.5 * lodScale)),
-    shieldScale: Math.min(1.3, Math.max(0.7, lodScale)),
+    // Fonte cresce com zoom: 4px (mundo) → 11px (detalhado)
+    fontSize: Math.max(4, Math.min(12, 8 * labelScaleByZoom)),
+    // Bordas crescem com zoom: 0.5 (mundo) → 2.5 (detalhado)
+    borderWidth: Math.max(0.4, Math.min(2.8, 1.3 * labelScaleByZoom)),
+    // Escudo de tropas: encolhe quando afasta, cresce quando aproxima
+    shieldScale: Math.max(0.35, Math.min(1.6, labelScaleByZoom)),
+    // Prioridade de labels:
+    //   0 = capitais (sempre)
+    //   1 = províncias com tropas (zoom > 0.6)
+    //   2 = províncias com edifícios (zoom > 0.85)
+    //   3 = todas as outras (zoom > 1.25)
+    labelLevel: zoom < 0.6 ? 0 : zoom < 0.85 ? 1 : zoom < 1.25 ? 2 : 3,
+  };
+
+  // Calcula prioridade de label por província
+  const getLabelPriority = (prov: Province): number => {
+    if (prov.isWater) return 99; // nunca mostra label de oceano
+    if (gameState.realms[prov.ownerId]?.capitalId === prov.id) return 0;
+    if (prov.troops > 0) return 1;
+    const hasBuildings = (prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0) > 0;
+    if (hasBuildings) return 2;
+    return 3;
   };
 
   const provinces = useMemo(() => Object.values(gameState.provinces), [gameState.provinces]);
@@ -791,22 +804,22 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Royal Capital Banners (sempre visíveis, counter-scale) */}
+              {/* Royal Capital Banners (sempre visíveis, escala com zoom) */}
               {isCapital && (
-                <g transform={`translate(0, -32) scale(${1.1 * lod.scale})`}>
-                  <rect x="-10" y="-4" width="20" height="9" fill="#d97706" stroke="#fff" strokeWidth="1" rx="1" />
-                  <rect x="-10" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <rect x="-2" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <rect x="6" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <line x1="0" y1="-8" x2="0" y2="-17" stroke="#fff" strokeWidth="1.2" />
-                  <path d="M 0 -17 L 12 -21 L 0 -25 Z" fill={factionColor} stroke="#fff" strokeWidth="1" />
+                <g transform={`translate(0, -32) scale(${1.1 * lod.shieldScale})`}>
+                  <rect x="-10" y="-4" width="20" height="9" fill="#d97706" stroke="#fff" strokeWidth={Math.max(0.5, lod.borderWidth * 0.7)} rx="1" />
+                  <rect x="-10" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth={Math.max(0.5, lod.borderWidth * 0.7)} />
+                  <rect x="-2" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth={Math.max(0.5, lod.borderWidth * 0.7)} />
+                  <rect x="6" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth={Math.max(0.5, lod.borderWidth * 0.7)} />
+                  <line x1="0" y1="-8" x2="0" y2="-17" stroke="#fff" strokeWidth={Math.max(0.4, lod.borderWidth * 0.6)} />
+                  <path d="M 0 -17 L 12 -21 L 0 -25 Z" fill={factionColor} stroke="#fff" strokeWidth={Math.max(0.4, lod.borderWidth * 0.6)} />
                   <circle cx="0" cy="-4" r="2.5" fill="#fef08a" />
                 </g>
               )}
 
-              {/* Province Name / Value Banner Text (nunca em oceano) — LOD por zoom */}
-              {!prov.isWater && isSafeLabelPosition(prov.center) && !lod.hideSmallLabels && (
-                <g transform={`translate(0, 31) scale(${labelScale * lod.scale})`}>
+              {/* Province Name / Value Banner Text — LOD por prioridade + zoom */}
+              {!prov.isWater && getLabelPriority(prov) <= lod.labelLevel && isSafeLabelPosition(prov.center) && (
+                <g transform={`translate(0, 31) scale(${labelScale * lod.shieldScale})`}>
                   <rect
                     x="-54"
                     y="-10"
@@ -816,7 +829,7 @@ export const Map: React.FC<MapProps> = ({
                     fill="#090d16"
                     fillOpacity="0.95"
                     stroke={isSelected ? '#fbbf24' : isHovered ? '#ffffff' : '#4b5563'}
-                    strokeWidth={isSelected ? '2' : '1'}
+                    strokeWidth={isSelected ? '2' : Math.max(0.4, lod.borderWidth * 0.5)}
                     className="shadow-2xl"
                   />
                   <text
@@ -839,8 +852,8 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Medieval Shield with Troop strength figure (counter-scale) */}
-              {(totalTroops > 0 || !isMobile) && (
+              {/* Medieval Shield with Troop strength figure (escala com zoom) */}
+              {(!prov.isWater && totalTroops > 0) && (
                 <g transform={`translate(0, -2) scale(${(isMobile ? 0.85 : 1.1) * lod.shieldScale})`}>
                   <path
                     d="M -13 -15 L 13 -15 C 13 -15 13 5 0 15 C -13 5 -13 -15 -13 -15 Z"
@@ -852,7 +865,7 @@ export const Map: React.FC<MapProps> = ({
                     d="M -13 -15 L 13 -15 C 13 -15 13 5 0 15 C -13 5 -13 -15 -13 -15 Z"
                     fill={factionColor}
                     stroke={isSelected ? '#ffffff' : '#f1f5f9'}
-                    strokeWidth={isSelected ? '2.5' : '1.3'}
+                    strokeWidth={isSelected ? '2.5' : Math.max(0.5, lod.borderWidth * 0.9)}
                     opacity="0.98"
                   />
                   <text
@@ -860,7 +873,7 @@ export const Map: React.FC<MapProps> = ({
                     y="3"
                     textAnchor="middle"
                     fill="#ffffff"
-                    fontSize="9.5"
+                    fontSize={Math.max(5, lod.fontSize * 1.05)}
                     fontWeight="900"
                     className="select-none font-sans font-black tracking-tight"
                     filter="drop-shadow(0px 1px 1.5px rgba(0,0,0,0.8))"
