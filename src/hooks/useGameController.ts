@@ -4,6 +4,7 @@ import { generateInitialState } from '../logic/mapGeneration';
 import { processEndOfTurn, findPath } from '../logic/turnLogic';
 import { allocateTechPoints, getTechUpgradeCost } from '../logic/technologyLogic';
 import { changeGovernment, GOVERNMENT_CHANGE_LOYALTY_PENALTY, GOVERNMENT_CHANGE_LOYALTY_TURNS } from '../logic/governmentLogic';
+import { canTakeLoan, takeLoan, getMaxLoanAmount } from '../logic/financeLogic';
 import { resolveCombat } from '../logic/combatLogic';
 import {
   executeRecruitmentWithComposition,
@@ -47,7 +48,9 @@ import {
   resolveCallToArms,
   sendInsult,
   autoResolveCallToArms,
-  isWarBetween
+  isWarBetween,
+  canAppeaseVassal,
+  appeaseVassal as appeaseVassalDiplomacy
 } from '../logic/diplomacyLogic';
 import { persistence } from '../persistence';
 import { useUI } from './useUI';
@@ -493,6 +496,19 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         setTimeout(() => ui.showToast(`Guerra declarada contra ${targetRealm.name}.`, 'success'), 0);
         return;
       }
+      case 'appeaseVassal': {
+        const validation = canAppeaseVassal(clone, clone.playerRealmId, targetRealmId);
+        if (!validation.valid) {
+          ui.showToast(validation.reason || 'Não foi possível apaziguar.', 'error');
+          return;
+        }
+        appeaseVassalDiplomacy(clone, clone.playerRealmId, targetRealmId);
+        const newLiberty = clonePlayer.vassalLiberty?.[targetRealmId] ?? 0;
+        toastMessage = `Vassalo apaziguado. Liberty agora ${newLiberty}%.`;
+        toastType = 'success';
+        shouldClose = true;
+        break;
+      }
       default:
         return;
     }
@@ -821,6 +837,28 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
   }, [gameState, setGameState, ui]);
 
 
+
+  const handleTakeLoan = useCallback(() => {
+    if (!gameState) return;
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    if (!realm) return;
+
+    const validation = canTakeLoan(realm, clone);
+    if (!validation.can) {
+      ui.showToast(validation.reason || 'Não é possível pegar empréstimo.', 'error');
+      return;
+    }
+
+    const maxAmount = getMaxLoanAmount(realm, clone);
+    const amount = Math.max(100, Math.min(maxAmount, 500)); // empréstimo padrão até 500
+    const updated = takeLoan(realm, amount, clone.turn);
+    Object.assign(realm, updated);
+
+    setGameState(clone);
+    setTimeout(() => ui.showToast(`💰 Empréstimo de ${amount} ouro contraído (10 turnos, 15%).`, 'success'), 0);
+  }, [gameState, setGameState, ui]);
+
   const handleChangeGovernment = useCallback((newType: GovernmentType) => {
     if (!gameState) return;
     const clone = deepClone(gameState);
@@ -965,6 +1003,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleDisband,
     handleAllocateTech,
     handleChangeGovernment,
+    handleTakeLoan,
     handleProvinceClick,
     confirmAttack,
     handleSave,

@@ -13,7 +13,8 @@ export type DiplomacyAction =
   | 'sendInsult' 
   | 'offerTribute' 
   | 'demandTribute' 
-  | 'declareWar';
+  | 'declareWar'
+  | 'appeaseVassal';
 
 export type ViewMode = 'political' | 'economic' | 'military' | 'diplomatic' | 'resources' | 'trade'
   | 'population' | 'development' | 'income' | 'stability' | 'buildings' | 'growth' | 'military_strength';
@@ -55,6 +56,7 @@ export interface Province {
   recentlyConquered: number;
   turnsWithoutWar?: number;
   originalOwnerId?: string; // Fase 2: dono pré-guerra (capitulação)
+  postWarInstability?: number; // Fase 2: turnos restantes de -4 loyalty (capitulação)
 }
 
 export interface Technology {

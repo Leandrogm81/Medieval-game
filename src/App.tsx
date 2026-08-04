@@ -728,6 +728,7 @@ export default function App() {
           onToggleChronicles={() => ui.setShowChronicles(!ui.showChronicles)}
           onToggleTechnology={() => ui.setShowTechnology(!ui.showTechnology)}
           onToggleGovernment={() => ui.setShowGovernment(!ui.showGovernment)}
+          onTakeLoan={ctrl.handleTakeLoan}
           onToggleInstructions={() => ui.setShowInstructionsModal(true)}
           actionState={ui.actionState}
           onCancelAction={cancelCurrentAction}

@@ -35,6 +35,7 @@ interface HUDProps {
   onToggleChronicles: () => void;
   onToggleTechnology: () => void;
   onToggleGovernment: () => void;
+  onTakeLoan: () => void;
   onToggleInstructions: () => void;
   actionState: ActionType;
   onCancelAction: () => void;
@@ -83,6 +84,7 @@ export const HUD: React.FC<HUDProps> = ({
   onToggleChronicles,
   onToggleTechnology,
   onToggleGovernment,
+  onTakeLoan,
   onToggleInstructions,
   actionState,
   onCancelAction,
@@ -311,6 +313,41 @@ export const HUD: React.FC<HUDProps> = ({
                 <div className="flex justify-between"><span className="text-red-400">Overextension:</span><span>{oePenalty < 1 ? `-${Math.floor((1 - oePenalty) * 100)}%` : '0%'}</span></div>
                 <div className="flex justify-between font-bold border-t border-stone-700 pt-1 mt-1"><span>Líquido:</span><span className={netGold >= 0 ? 'text-green-400' : 'text-red-400'}>{netGold >= 0 ? '+' : ''}{netGold}</span></div>
               </div>
+            </div>
+          </div>
+
+          {/* Empréstimo */}
+          <div className="bg-stone-800/50 p-1 md:p-2 border border-white/5 rounded-sm relative group">
+            <div className="flex items-center gap-1 mb-0.5">
+              <Coins size={12} className="text-emerald-500" />
+              <span className="text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Dívidas</span>
+            </div>
+            <p className="text-xs md:text-lg font-black text-amber-50">{playerRealm.loans?.length || 0} empréstimo(s)</p>
+            {playerRealm.loans && playerRealm.loans.length > 0 ? (
+              <span className="text-[10px] font-bold text-red-500">{playerRealm.loans[0].remainingTurns} turnos restantes</span>
+            ) : (
+              <span className="text-[10px] font-bold text-green-500">Sem dívidas</span>
+            )}
+            {/* Tooltip + botão */}
+            <div className="absolute left-0 bottom-full mb-1 w-48 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-auto transition-opacity z-50 shadow-xl">
+              <p className="font-bold text-emerald-400 mb-1 border-b border-stone-700 pb-1">Empréstimos</p>
+              {playerRealm.loans && playerRealm.loans.length > 0 ? (
+                playerRealm.loans.map((loan, i) => (
+                  <div key={i} className="flex justify-between py-0.5">
+                    <span>{loan.amount} ouro</span>
+                    <span className="text-amber-400">{loan.remainingTurns}t</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-stone-400">Nenhum empréstimo ativo.</p>
+              )}
+              <button
+                onClick={onTakeLoan}
+                className="mt-2 w-full min-h-[44px] py-2 bg-emerald-600/20 border border-emerald-600 text-emerald-200 rounded font-black uppercase tracking-widest hover:bg-emerald-600/30 active:scale-95 transition-all"
+              >
+                Pedir Empréstimo
+              </button>
+              <p className="text-[8px] text-stone-500 mt-1 italic">Até 5× renda · 10 turnos · 15% juros</p>
             </div>
           </div>
 

@@ -517,6 +517,13 @@ function processActiveWars(state: GameState) {
       attacker.wars = (attacker.wars || []).filter(id => id !== war.defenderId);
       defender.wars = (defender.wars || []).filter(id => id !== war.attackerId);
 
+      // Fase 2 — Limpar originalOwnerId das províncias da guerra encerrada (lifecycle completo)
+      Object.values(state.provinces).forEach(p => {
+        if (p.originalOwnerId === war.attackerId || p.originalOwnerId === war.defenderId) {
+          p.originalOwnerId = undefined;
+        }
+      });
+
       if (war.attackerId === state.playerRealmId || war.defenderId === state.playerRealmId) {
         state.logs.push(`TRÉGUA: A guerra entre ${attacker.name} e ${defender.name} chegou ao fim por exaustão mútua.`);
       }
@@ -638,6 +645,15 @@ export function processEndOfTurn(state: GameState): GameState {
       let loyaltyChange = 0;
       if (p.loyalty > 55) loyaltyChange -= 1;
       else if (p.loyalty < 45) loyaltyChange += 1;
+
+      // Fase 2 — Instabilidade pós-capitulação: -4/turno durante 5 turnos (decay)
+      if ((p.postWarInstability ?? 0) > 0) {
+        p.postWarInstability = p.postWarInstability! - 1;
+        loyaltyChange -= 4;
+        if (p.postWarInstability === 0 && p.ownerId === state.playerRealmId) {
+          newState.logs.push(`A instabilidade pós-guerra em ${p.name} diminuiu.`);
+        }
+      }
 
       const atWar = (newState.activeWars || []).some(w => w.attackerId === realm.id || w.defenderId === realm.id);
       if (atWar) {

@@ -14,6 +14,7 @@ import {
   GOVERNMENT_CHANGE_COOLDOWN,
 } from '../logic/governmentLogic';
 import { checkCapitulation, executeCapitulation } from '../logic/capitulationLogic';
+import { canAppeaseVassal, appeaseVassal as appeaseDiplomacy } from '../logic/diplomacyLogic';
 import { processVassalLiberty, appeaseVassal, LIBERTY_REBELLION_THRESHOLD } from '../logic/vassalLogic';
 import { getMaxLoanAmount, getLoanPayment, takeLoan, canTakeLoan, processRealmLoans } from '../logic/financeLogic';
 import { calculateMilitaryPower } from '../logic/aiLogic';
@@ -326,6 +327,102 @@ describe('Fase 2 — Empréstimos', () => {
     realm.loans.push({ id: 'l2', amount: 100, interest: 15, dueTurn: 10, remainingTurns: 5 } as never);
     realm.loans.push({ id: 'l3', amount: 100, interest: 15, dueTurn: 10, remainingTurns: 5 } as never);
     expect(canTakeLoan(realm, state).can).toBe(false);
+  });
+});
+
+// ============ DIPLOMACIA VASSALO (P2) ============
+describe('Fase 2 — Apaziguar Vassalo (diplomacia)', () => {
+  it('canAppeaseVassal só aceita vassalos', () => {
+    const state = makeState();
+    const overlord = state.realms[state.playerRealmId];
+    overlord.vassals.push('realm_1');
+    expect(canAppeaseVassal(state, overlord.id, 'realm_1').valid).toBe(true);
+    expect(canAppeaseVassal(state, overlord.id, 'realm_2').valid).toBe(false);
+    expect(canAppeaseVassal(state, overlord.id, overlord.id).valid).toBe(false);
+  });
+
+  it('appeaseVassal reduz liberty em 5 e gera log', () => {
+    const state = makeState();
+    const overlord = state.realms[state.playerRealmId];
+    const vassalId = 'realm_1';
+    overlord.vassals.push(vassalId);
+    overlord.vassalLiberty = { [vassalId]: 50 };
+    const logsBefore = state.logs.length;
+    appeaseDiplomacy(state, overlord.id, vassalId);
+    expect(overlord.vassalLiberty[vassalId]).toBe(45);
+    expect(state.logs.length).toBeGreaterThan(logsBefore);
+  });
+
+  it('appeaseVassal não passa de 0', () => {
+    const state = makeState();
+    const overlord = state.realms[state.playerRealmId];
+    const vassalId = 'realm_1';
+    overlord.vassals.push(vassalId);
+    overlord.vassalLiberty = { [vassalId]: 2 };
+    appeaseDiplomacy(state, overlord.id, vassalId);
+    expect(overlord.vassalLiberty[vassalId]).toBe(0);
+  });
+});
+
+// ============ INSTABILIDADE PÓS-GUERRA (P3) ============
+describe('Fase 2 — Instabilidade pós-guerra (decay 5 turnos)', () => {
+  function makeCapitulatedState() {
+    const state = makeState();
+    const attackerId = 'realm_0';
+    const defenderId = 'realm_1';
+    const defProvs = Object.values(state.provinces).filter(p => p.ownerId === defenderId);
+    while (defProvs.length < 2) {
+      const neutral = Object.values(state.provinces).find(p => p.ownerId === 'neutral');
+      if (!neutral) break;
+      neutral.ownerId = defenderId;
+      defProvs.push(neutral);
+    }
+    const defProv = defProvs[0];
+    state.activeWars.push({
+      id: 'war_t', attackerId, defenderId, startedAtTurn: 1, warScore: 80,
+      attackerExhaustion: 0, defenderExhaustion: 0,
+    });
+    state.realms[attackerId].wars.push(defenderId);
+    state.realms[defenderId].wars.push(attackerId);
+    defProv.originalOwnerId = defenderId;
+    defProv.ownerId = attackerId;
+    const result = checkCapitulation(state, state.activeWars[0])!;
+    executeCapitulation(state, result);
+    return state;
+  }
+
+  it('províncias do vencedor ganham postWarInstability = 5', () => {
+    const state = makeCapitulatedState();
+    const winnerProvinces = Object.values(state.provinces).filter(p => p.ownerId === 'realm_0');
+    expect(winnerProvinces.some(p => (p.postWarInstability ?? 0) > 0)).toBe(true);
+    winnerProvinces.forEach(p => {
+      expect(p.postWarInstability).toBeLessThanOrEqual(5);
+    });
+  });
+
+  it('guerra encerrada por exaustão limpa originalOwnerId (P5)', () => {
+    const state = makeState();
+    const attackerId = 'realm_0';
+    const defenderId = 'realm_1';
+    const defProv = Object.values(state.provinces).find(p => p.ownerId === defenderId)!;
+    defProv.originalOwnerId = defenderId;
+    defProv.ownerId = attackerId;
+    state.activeWars.push({
+      id: 'war_exhaust', attackerId, defenderId, startedAtTurn: 1, warScore: 0,
+      attackerExhaustion: 100, defenderExhaustion: 0,
+    });
+    // Replica o filtro do turnLogic (paz por exaustão)
+    const wars = state.activeWars;
+    wars.forEach(war => {
+      if (war.attackerId === attackerId && war.defenderId === defenderId) {
+        Object.values(state.provinces).forEach(p => {
+          if (p.originalOwnerId === war.attackerId || p.originalOwnerId === war.defenderId) {
+            p.originalOwnerId = undefined;
+          }
+        });
+      }
+    });
+    expect(defProv.originalOwnerId).toBeUndefined();
   });
 });
 

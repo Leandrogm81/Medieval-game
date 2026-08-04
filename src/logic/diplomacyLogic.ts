@@ -570,6 +570,40 @@ export function canDeclareWar(state: GameState, fromId: string, toId: string): D
 }
 
 /**
+ * Validação de "Apaziguar Vassalo": alvo deve ser vassalo do remetente.
+ */
+export function canAppeaseVassal(state: GameState, fromId: string, toId: string): DiplomacyValidationResult {
+  const fromRealm = getRealm(state, fromId);
+  const toRealm = getRealm(state, toId);
+  if (!fromRealm || !toRealm) return { valid: false, reason: 'Reino não encontrado.' };
+  if (fromId === toId) return { valid: false, reason: 'Não é possível apaziguar a si mesmo.' };
+  if (!fromRealm.vassals.includes(toId)) {
+    return { valid: false, reason: `${toRealm.name} não é seu vassalo.` };
+  }
+  return { valid: true };
+}
+
+/**
+ * Apazigua um vassalo: reduz liberty desire em 5 (ação unilateral).
+ * @param state Deve ser um deep clone. Modifica o objeto recebido.
+ */
+export function appeaseVassal(state: GameState, fromId: string, toId: string): { newState: GameState } {
+  const validation = canAppeaseVassal(state, fromId, toId);
+  const fromRealm = getRealm(state, fromId);
+  const toRealm = getRealm(state, toId);
+  if (!validation.valid || !fromRealm || !toRealm) {
+    return { newState: state };
+  }
+
+  if (!fromRealm.vassalLiberty) fromRealm.vassalLiberty = {};
+  const current = fromRealm.vassalLiberty[toId] ?? 0;
+  fromRealm.vassalLiberty[toId] = Math.max(0, current - 5);
+
+  addLog(state, getDiplomacyFlavorText('appeaseVassal', fromRealm.name, toRealm.name, true));
+  return { newState: state };
+}
+
+/**
  * @param state Deve ser um deep clone. Esta função modifica o objeto recebido.
  */
 export function declareWar(state: GameState, fromId: string, toId: string): { newState: GameState; callsToResolve: CallToArmsRequest[] } {

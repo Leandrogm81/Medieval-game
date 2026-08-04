@@ -24,6 +24,7 @@ import {
   canSendInsult
 } from '../logic/diplomacyLogic';
 import { DIPLOMACY_ACTION_COSTS, UNIT_STATS } from '../logic/game-constants';
+import { canAppeaseVassal } from '../logic/diplomacyLogic';
 import { DiplomacyAction, GameState, Realm } from '../types';
 
 interface DiplomacyModalProps {
@@ -50,7 +51,8 @@ const ACTIONS: ActionEntry[] = [
   { action: 'alliance', label: 'Aliança', icon: <Handshake size={14} />, amountSensitive: false },
   { action: 'offerTribute', label: 'Oferecer Tributo', icon: <Coins size={14} />, amountSensitive: true },
   { action: 'demandTribute', label: 'Exigir Tributo', icon: <FileText size={14} />, amountSensitive: true },
-  { action: 'declareWar', label: 'Declarar Guerra', icon: <Flame size={14} />, amountSensitive: false }
+  { action: 'declareWar', label: 'Declarar Guerra', icon: <Flame size={14} />, amountSensitive: false },
+  { action: 'appeaseVassal', label: 'Apaziguar Vassalo', icon: <Crown size={14} />, amountSensitive: false }
 ];
 
 function getRealmPower(state: GameState, realmId: string): number {
@@ -113,6 +115,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = ({
 
   const historyLines = useMemo(() => buildHistoryLines(gameState, playerRealmId, targetRealmId), [gameState, playerRealmId, targetRealmId]);
 
+  const libertyValue = playerRealm?.vassalLiberty?.[targetRealmId] ?? 0;
   const relation = playerRealm?.relations?.[targetRealmId] ?? 0;
   const relationPercent = Math.max(0, Math.min(100, Math.round((relation + 100) / 2)));
   const relationColor = relation > 50 ? 'bg-emerald-500' : relation < 0 ? 'bg-red-500' : 'bg-amber-500';
@@ -140,6 +143,8 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = ({
         return tributeAmount > 0 ? canDemandTribute(gameState, playerRealmId, targetRealmId, tributeAmount) : { valid: false, reason: 'Escolha um valor de tributo maior que zero.' };
       case 'declareWar':
         return canDeclareWar(gameState, playerRealmId, targetRealmId);
+      case 'appeaseVassal':
+        return canAppeaseVassal(gameState, playerRealmId, targetRealmId);
       default:
         return { valid: false, reason: 'Ação indisponível.' };
     }
@@ -219,6 +224,26 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = ({
                 </p>
               </div>
 
+              {playerRealm?.vassals?.includes(targetRealmId) && (
+                <div className="rounded-xl border border-stone-800 bg-stone-900/60 p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Liberty Desire</p>
+                    <p className={`text-lg font-black ${libertyValue >= 70 ? 'text-red-400' : libertyValue >= 40 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                      {libertyValue}%
+                    </p>
+                  </div>
+                  <div className="h-3 overflow-hidden rounded-full bg-stone-800">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${libertyValue >= 70 ? 'bg-red-500' : libertyValue >= 40 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                      style={{ width: `${Math.min(100, libertyValue)}%` }}
+                    />
+                  </div>
+                  <p className="mt-2 text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                    {libertyValue >= 100 ? 'Rebelião iminente!' : libertyValue >= 70 ? 'Vassalo muito inquieto' : libertyValue >= 40 ? 'Vassalo insatisfeito' : 'Vassalo leal'}
+                  </p>
+                </div>
+              )}
+
               <div className="grid gap-3 rounded-xl border border-stone-800 bg-stone-900/60 p-4 md:grid-cols-2">
                 <div className="rounded-lg bg-black/20 p-3">
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-500">Poder militar relativo</p>
@@ -263,7 +288,7 @@ export const DiplomacyModal: React.FC<DiplomacyModalProps> = ({
                         type="button"
                         disabled={entry.disabled}
                         onClick={() => onAction(entry.action, entry.amountSensitive ? { amount: tributeAmount } : undefined)}
-                        className={`flex w-full items-center justify-between gap-3 rounded-lg border px-3 py-3 text-left text-[10px] font-black uppercase tracking-[0.14em] transition-all ${
+                        className={`flex min-h-[44px] w-full items-center justify-between gap-3 rounded-lg border px-3 py-3 text-left text-[10px] font-black uppercase tracking-[0.14em] transition-all ${
                           entry.disabled
                             ? 'cursor-not-allowed border-stone-800 bg-stone-950/70 text-stone-600'
                             : 'border-amber-900/30 bg-stone-950 text-amber-100 hover:border-amber-500/60 hover:bg-amber-600/10'

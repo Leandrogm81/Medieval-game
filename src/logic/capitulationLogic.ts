@@ -140,11 +140,10 @@ export function executeCapitulation(state: GameState, result: CapitulationResult
   winner.wars = (winner.wars || []).filter(id => id !== result.loserId);
   loser.wars = (loser.wars || []).filter(id => id !== result.winnerId);
 
-  // 5. Instabilidade pós-guerra: -20 loyalty por 5 turnos (implementado via recentlyConquered-like flag)
-  const instabilityTurns = { turns: 5, penalty: -20 };
+  // 5. Instabilidade pós-guerra: -4 loyalty por turno, durante 5 turnos
   Object.values(state.provinces).forEach(p => {
     if (p.ownerId === result.winnerId) {
-      p.loyalty = Math.max(0, Math.min(100, (p.loyalty || 0) + instabilityTurns.penalty));
+      p.postWarInstability = 5;
     }
   });
 

@@ -79,7 +79,8 @@ export const DIPLOMACY_ACTION_COSTS: Record<DiplomacyAction, number> = {
   sendInsult: 1,
   offerTribute: 1,
   demandTribute: 1,
-  declareWar: 2
+  declareWar: 2,
+  appeaseVassal: 1
 };
 
 export const DIPLOMACY_FLAVOR_TEXTS: Record<DiplomacyAction, { accepted: string; rejected?: string }> = {
@@ -111,6 +112,10 @@ export const DIPLOMACY_FLAVOR_TEXTS: Record<DiplomacyAction, { accepted: string;
   },
   declareWar: {
     accepted: '{from} declara guerra contra {to}.'
+  },
+  appeaseVassal: {
+    accepted: '{from} apazigua {to}, reduzindo seu desejo de independência.',
+    rejected: '{to} não é um vassalo de {from}.'
   }
 };
 
