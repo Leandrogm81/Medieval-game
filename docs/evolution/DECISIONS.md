@@ -67,3 +67,12 @@ Registro de decisoes permanentes do projeto.
 
 **Status:** ativa.
 
+
+### 2026-08-03 - Decisoes do ciclo Fase 2 (Sprints C-H + pendentes)
+
+1. **Emprestimo padrao do jogador:** ate 500 ouro ou 5x renda (o menor); parcela `ceil(amount*1.15/10)` por 10 turnos.
+2. **Penalidade pos-capitulacao:** -4 loyalty/turno por 5 turnos (equivalente ao -20 do PRD, com decay) via `postWarInstability`.
+3. **Hotkey F = fullscreen (Fase 1); forca militar em V** (conflito com PRD resolvido mantendo a Fase 1).
+4. **Bônus de combate:** tech de combate (+5%/nivel) e governo (ataque/defesa) sao aditivos no bônus final de combate.
+5. **Apaziguar vassalo:** acao diplomatica unilateral (1 AP) que reduz liberty em 5, via `appeaseVassal` canonico em diplomacyLogic.
+6. **Migracao de saves:** schemaVersion 2; saves v1 migram com defaults (tec zerada, monarchy, stats zerados).
