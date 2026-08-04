@@ -109,9 +109,26 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       // CRITICAL: Clone BEFORE passing to mutator functions
       const stateToProcess = deepClone(prev);
 
+      // REGRA: aviso de guerra declarada contra o jogador (antes da invasão)
+      const warsBefore = new Set((prev.activeWars || []).map(w => w.id));
+      const warsAfter = new Set((stateToProcess.activeWars || []).map(w => w.id));
+
       processAI(stateToProcess);
 
       const next = processEndOfTurn(stateToProcess);
+
+      // Detectar guerras novas contra o jogador após processAI + processEndOfTurn
+      const newWarsAgainstPlayer = (next.activeWars || []).filter(
+        w => w.defenderId === next.playerRealmId && !warsBefore.has(w.id)
+      );
+      if (newWarsAgainstPlayer.length > 0) {
+        const attacker = next.realms[newWarsAgainstPlayer[0].attackerId];
+        ui.setWarDeclaredInfo({
+          attackerName: attacker?.name || 'Um reino rival',
+          attackerRealmId: newWarsAgainstPlayer[0].attackerId,
+        });
+        ui.setShowWarDeclaredModal(true);
+      }
 
       persistence.saveAutoSave(next);
 
@@ -742,21 +759,11 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         return prev;
       }
 
-      const hasExistingWar = targetOwnerId !== 'neutral' && isWarBetween(next, next.playerRealmId, targetOwnerId);
-      if (targetOwnerId !== 'neutral' && !hasExistingWar) {
-        const warCheck = canDeclareWar(next, next.playerRealmId, targetOwnerId);
-        if (!warCheck.valid) {
-          ui.showToast(warCheck.reason || 'Não foi possível iniciar a guerra.', 'error');
-          return prev;
-        }
-
-        const warResult = declareWar(next, next.playerRealmId, targetOwnerId);
-        warResult.callsToResolve.forEach(call => {
-          const accepted = autoResolveCallToArms(next, call);
-          resolveCallToArms(next, call.id, accepted);
-        });
-        playWarDeclaredSound();
-        next.logs.unshift(`GUERRA: ${next.realms[next.playerRealmId].name} declarou guerra contra ${next.realms[targetOwnerId]?.name || 'o alvo'}.`);
+      // REGRA: invasão exige guerra declarada (nada de guerra automática)
+      if (targetOwnerId !== 'neutral' && !isWarBetween(next, next.playerRealmId, targetOwnerId)) {
+        ui.showToast('⚠️ Declare guerra antes de invadir! Use a diplomacia (4).', 'error');
+        ui.setShowDiplomacyModal(true);
+        return prev;
       }
 
       const path = findPath(next, ui.combatAttackerProvId!, ui.combatDefenderProvId!, next.playerRealmId, false, true);
@@ -793,9 +800,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       ui.setActionBannerMessage(null);
       const attackToast = targetOwnerId === 'neutral'
         ? 'Ataque enviado. O combate sera resolvido na chegada.'
-        : hasExistingWar
-          ? 'Ataque enviado. A guerra ja estava ativa e o combate sera resolvido na chegada.'
-          : 'Ataque enviado. A guerra foi declarada e o combate sera resolvido na chegada.';
+        : 'Ataque enviado. O combate sera resolvido na chegada.';
       ui.showToast(attackToast, 'info');
 
       return next;

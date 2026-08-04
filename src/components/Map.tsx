@@ -244,6 +244,8 @@ export const Map: React.FC<MapProps> = ({
   const handleProvinceClick = (provId: string, isShiftPressed: boolean) => {
     const province = gameState.provinces[provId];
     if (!province) return;
+    // MEGA MAPA: oceano não é selecionável
+    if (province.isWater) return;
 
     if (isShiftPressed) {
       if (province.ownerId !== playerRealmId) return;
@@ -524,7 +526,12 @@ export const Map: React.FC<MapProps> = ({
             let overlayColor = 'transparent';
             let overlayOpacity = 0;
 
-            if (!isVisible) {
+            if (prov.isWater) {
+              // MEGA MAPA: oceano sempre azul, sem fog/overlay/facção
+              fillColor = viewMode === 'economic' ? '#0c2c4a' : '#123f6d';
+              overlayColor = 'transparent';
+              overlayOpacity = 0;
+            } else if (!isVisible) {
               // Fog of war: dark, subdued
               fillColor = '#131c2c';
               overlayColor = '#0f172a';
@@ -564,26 +571,21 @@ export const Map: React.FC<MapProps> = ({
             return (
               <g key={`cell-${prov.id}`}>
                 {/* Base terrain color background */}
-                <motion.path
+                <path
                   d={cellPath}
                   fill={fillColor}
                   stroke="#18181b"
                   strokeWidth="1.5"
                   className="transition-all duration-300"
-                  initial={false}
-                  animate={{ fill: fillColor, opacity: isVisible ? 1 : 0.6 }}
+                  opacity={isVisible ? 1 : 0.6}
                 />
 
                 {/* View mode & faction overlay (interactive layer) */}
-                <motion.path
+                <path
                   d={cellPath}
                   fill={overlayColor}
-                  initial={false}
-                  animate={{
-                    fill: overlayColor,
-                    fillOpacity: overlayOpacity,
-                    opacity: isVisible ? 1 : isValidTarget ? 1 : 0.5
-                  }}
+                  fillOpacity={overlayOpacity}
+                  opacity={isVisible ? 1 : isValidTarget ? 1 : 0.5}
                   stroke={
                     isMultiSelected ? '#fbbf24' :
                     isSelected ? '#fbbf24' :
@@ -679,7 +681,7 @@ export const Map: React.FC<MapProps> = ({
 
           // Check if eligible target for actions to pulsate
           let isEligibleTarget = false;
-          if (sourceProv && sourceProv.neighbors.includes(prov.id)) {
+          if (!prov.isWater && sourceProv && sourceProv.neighbors.includes(prov.id)) {
             if (actionState === 'moving' && prov.ownerId === playerRealmId) {
               isEligibleTarget = true;
             } else if (actionState === 'attacking' && prov.ownerId !== playerRealmId) {
@@ -784,8 +786,8 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Province Name / Value Banner Text */}
-              {isSafeLabelPosition(prov.center) && (
+              {/* Province Name / Value Banner Text (nunca em oceano) */}
+              {!prov.isWater && isSafeLabelPosition(prov.center) && (
                 <g transform={`translate(0, 31) scale(${labelScale})`}>
                   <rect
                     x="-54"

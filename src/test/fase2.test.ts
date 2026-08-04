@@ -498,8 +498,38 @@ describe('Fase 2 — Conquista da IA (bug tropas fantasma)', () => {
     defProv.army = { infantry: 30, archers: 0, cavalry: 0, scouts: 0 };
     defProv.troops = 30;
     state.realms[attackerId].actionPoints = 50;
+    // REGRA: guerra já declarada em turno anterior (invasão permitida)
+    state.activeWars.push({
+      id: 'war_pre', attackerId, defenderId,
+      startedAtTurn: state.turn - 1, warScore: 0,
+      attackerExhaustion: 0, defenderExhaustion: 0,
+    });
+    state.realms[attackerId].wars.push(defenderId);
+    state.realms[defenderId].wars.push(attackerId);
     return { state, attackerId, defenderId, attProv, defProv };
   }
+
+  it('sem guerra declarada a IA NÃO invade (retorna declare)', () => {
+    const { state, attackerId, attProv, defProv } = makeAttackState();
+    // Remover a guerra pré-existente para testar a regra
+    state.activeWars = [];
+    state.realms[attackerId].wars = [];
+    state.realms[state.playerRealmId].wars = [];
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const outcome = executeAIAttack(state, attProv.id, defProv.id, attackerId);
+    expect(outcome).toBe('declare');
+    expect(defProv.ownerId).not.toBe(attackerId); // NÃO conquistou
+    expect(state.activeWars.length).toBe(1); // mas declarou guerra
+  });
+
+  it('guerra declarada neste turno: IA não ataca (espera 1 turno)', () => {
+    const { state, attackerId, attProv, defProv } = makeAttackState();
+    state.activeWars[0].startedAtTurn = state.turn; // guerra começou agora
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const outcome = executeAIAttack(state, attProv.id, defProv.id, attackerId);
+    expect(outcome).toBe('declare');
+    expect(defProv.ownerId).not.toBe(attackerId);
+  });
 
   it('origem esvazia e conquista recebe o exército vencedor (avanço)', () => {
     const { state, attackerId, attProv, defProv } = makeAttackState();

@@ -26,8 +26,8 @@ export function useUI() {
   const [battleResultMeta, setBattleResultMeta] = useState<{ attackerName: string; defenderName: string; provinceName: string; conquered: boolean; retreatInfo?: RetreatInfo } | null>(null);
   const [autosave, setAutosave] = useState<SaveData | null>(null);
   const [gameSettings, setGameSettings] = useState<GameSettings>({
-    numProvinces: 30,
-    numRealms: 6,
+    numProvinces: 250,
+    numRealms: 12,
     aiDifficulty: 'normal',
     resourceDensity: 'normal',
     victoryCondition: 'conquest',
@@ -37,6 +37,8 @@ export function useUI() {
   const [showChronicles, setShowChronicles] = useState(false);
   const [showTechnology, setShowTechnology] = useState(false);
   const [showGovernment, setShowGovernment] = useState(false);
+  const [showWarDeclaredModal, setShowWarDeclaredModal] = useState(false);
+  const [warDeclaredInfo, setWarDeclaredInfo] = useState<{ attackerName: string; attackerRealmId?: string } | null>(null);
   const [showMinimap, setShowMinimap] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
     return window.innerWidth >= 768;
@@ -111,6 +113,8 @@ export function useUI() {
     showChronicles, setShowChronicles,
     showTechnology, setShowTechnology,
     showGovernment, setShowGovernment,
+    showWarDeclaredModal, setShowWarDeclaredModal,
+    warDeclaredInfo, setWarDeclaredInfo,
     showMinimap, setShowMinimap,
     panOffset, setPanOffset,
     isDragging, setIsDragging,

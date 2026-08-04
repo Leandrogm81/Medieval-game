@@ -1,7 +1,8 @@
 import * as d3 from 'd3';
 import { GameState, Realm, Province, Terrain, GameSettings } from '../types';
-import { REALM_NAMES, REALM_COLORS, PROVINCE_NAMES, STRATEGIC_RESOURCES, PERSONALITIES, OBJECTIVES } from './game-constants';
+import { REALM_NAMES, REALM_COLORS, STRATEGIC_RESOURCES, PERSONALITIES, OBJECTIVES } from './game-constants';
 import { calculateVisibility } from './turnLogic';
+import { isLand, generateProvinceName, WORLD_WIDTH, WORLD_HEIGHT } from './worldMap';
 
 export function generateInitialState(width: number, height: number, settings: GameSettings): GameState {
   console.log("Generating initial state...");
@@ -16,9 +17,26 @@ export function generateInitialState(width: number, height: number, settings: Ga
     const numRealms = Math.max(1, settings.numRealms || 1);
     const numProvinces = Math.max(numRealms, settings.numProvinces || 5);
     const { resourceDensity } = settings;
-    
-    // Generate random points
-    let points = Array.from({ length: numProvinces }, () => [Math.random() * width, Math.random() * height] as [number, number]);
+
+    // ============================================================
+    // MEGA MAPA MUNDI: amostragem de pontos apenas em TERRA.
+    // Rejection sampling sobre a máscara de continentes (worldMap).
+    // ============================================================
+    let points: [number, number][] = [];
+    const maxAttempts = numProvinces * 60;
+    let attempts = 0;
+    while (points.length < numProvinces && attempts < maxAttempts) {
+      attempts++;
+      const x = Math.random() * width;
+      const y = Math.random() * height;
+      if (isLand(x, y)) {
+        points.push([x, y]);
+      }
+    }
+    // Fallback: se a máscara não preencheu tudo (configuração mínima), completa no oceano
+    while (points.length < numProvinces) {
+      points.push([Math.random() * width, Math.random() * height]);
+    }
 
     // Lloyd's relaxation for better province shapes
     for (let i = 0; i < 3; i++) {
@@ -101,90 +119,132 @@ export function generateInitialState(width: number, height: number, settings: Ga
     for (let i = 0; i < numProvinces; i++) {
       const polygon = voronoi.cellPolygon(i);
       if (!polygon) continue;
-      
+
       const neighbors = Array.from(voronoi.neighbors(i)).map(n => `prov_${n}`);
-      const terrainRand = Math.random();
-      const terrain: Terrain = terrainRand < 0.5 ? 'plains' : terrainRand < 0.8 ? 'forest' : 'mountain';
-      
-      let wealth = Math.floor(Math.random() * 3) + 1;
-      let foodProduction = Math.floor(Math.random() * 3) + 1;
-      let materialProduction = Math.floor(Math.random() * 2) + 1;
+      const centerPoint = clampCenter(points[i]);
+      // Mega mapa: célula é oceano se o centro NÃO está em terra
+      const isWater = !isLand(centerPoint[0], centerPoint[1]);
 
-      if (terrain === 'plains') foodProduction += 3;
-      if (terrain === 'mountain') {
-        wealth += 2;
-        materialProduction += 2;
+      // Terreno apenas para terra; oceano não tem produção
+      let terrain: Terrain = 'plains';
+      if (!isWater) {
+        const terrainRand = Math.random();
+        terrain = terrainRand < 0.5 ? 'plains' : terrainRand < 0.8 ? 'forest' : 'mountain';
       }
-      if (terrain === 'forest') materialProduction += 3;
 
-      const pop = Math.floor(Math.random() * 500) + 500;
+      let wealth = 0;
+      let foodProduction = 0;
+      let materialProduction = 0;
+
+      if (!isWater) {
+        wealth = Math.floor(Math.random() * 3) + 1;
+        foodProduction = Math.floor(Math.random() * 3) + 1;
+        materialProduction = Math.floor(Math.random() * 2) + 1;
+
+        if (terrain === 'plains') foodProduction += 3;
+        if (terrain === 'mountain') {
+          wealth += 2;
+          materialProduction += 2;
+        }
+        if (terrain === 'forest') materialProduction += 3;
+      }
+
+      const pop = isWater ? 0 : Math.floor(Math.random() * 500) + 500;
       const army = {
-        infantry: Math.floor(Math.random() * 10) + 5,
-        archers: Math.floor(Math.random() * 3) + 1,
+        infantry: isWater ? 0 : Math.floor(Math.random() * 10) + 5,
+        archers: isWater ? 0 : Math.floor(Math.random() * 3) + 1,
         cavalry: 0,
         scouts: 0
       };
 
       provinces[`prov_${i}`] = {
         id: `prov_${i}`,
-        name: PROVINCE_NAMES[i % PROVINCE_NAMES.length],
-        ownerId: 'neutral',
+        name: isWater ? 'Oceano' : generateProvinceName(i, centerPoint[0], centerPoint[1]),
+        ownerId: isWater ? 'neutral' : 'neutral',
         army,
         troops: army.infantry + army.archers + army.cavalry + army.scouts,
         population: pop,
-        maxPopulation: pop + 500,
-        strategicResource: Math.random() < (resourceDensity === 'high' ? 0.6 : resourceDensity === 'low' ? 0.2 : 0.4) 
+        maxPopulation: pop + (isWater ? 0 : 500),
+        strategicResource: !isWater && Math.random() < (resourceDensity === 'high' ? 0.6 : resourceDensity === 'low' ? 0.2 : 0.4) 
           ? STRATEGIC_RESOURCES[Math.floor(Math.random() * (STRATEGIC_RESOURCES.length - 1)) + 1] 
           : 'none',
         wealth,
         foodProduction,
         materialProduction,
-        defense: Math.floor(Math.random() * 2),
+        defense: isWater ? 0 : Math.floor(Math.random() * 2),
         terrain,
         neighbors,
         polygon: polygon.map(p => [p[0], p[1]] as [number, number]),
-        center: clampCenter(points[i]),
+        center: centerPoint,
         buildings: { farms: 0, mines: 0, workshops: 0, courts: 0 },
         siegeDamage: 0,
         loyalty: 100,
         stability: 70,
-        recentlyConquered: 0
+        recentlyConquered: 0,
+        isWater
       };
     }
 
-    // Contiguous Distribution
-    const unassigned = new Set(Object.keys(provinces));
+    // ============================================================
+    // Contiguous Distribution — apenas em TERRA (pulos de oceano)
+    // ============================================================
+    const unassigned = new Set(Object.keys(provinces).filter(id => !provinces[id].isWater));
     const frontier: { provinceId: string; realmId: string }[] = [];
-    const shuffledIds = [...Object.keys(provinces)].sort(() => Math.random() - 0.5);
-    
-    for (let i = 0; i < numRealms; i++) {
-        const seedId = shuffledIds[i];
-        provinces[seedId].ownerId = `realm_${i}`;
-        unassigned.delete(seedId);
-        provinces[seedId].neighbors.forEach(nId => {
-            if (unassigned.has(nId)) frontier.push({ provinceId: nId, realmId: `realm_${i}` });
-        });
-    }
-    
-    while (unassigned.size > 0 && frontier.length > 0) {
-        const index = Math.floor(Math.random() * frontier.length);
-        const { provinceId, realmId } = frontier.splice(index, 1)[0];
-        if (unassigned.has(provinceId)) {
-            provinces[provinceId].ownerId = realmId;
-            unassigned.delete(provinceId);
-            provinces[provinceId].neighbors.forEach(nId => {
-                if (unassigned.has(nId)) frontier.push({ provinceId: nId, realmId });
-            });
+    const landIds = [...unassigned].sort(() => Math.random() - 0.5);
+
+    // Seeds dos reinos: espalhados entre continentes (evita 2 reinos no mesmo canto)
+    const realmSeeds: string[] = [];
+    const seedPool = [...landIds];
+    for (let i = 0; i < numRealms && seedPool.length > 0; i++) {
+      // Pega o ponto de terra mais distante dos seeds já escolhidos (farthest-point)
+      let bestId = seedPool[Math.floor(Math.random() * seedPool.length)];
+      let bestDist = -1;
+      for (const candidateId of seedPool) {
+        const c = provinces[candidateId].center;
+        let minDist = Infinity;
+        for (const seedId of realmSeeds) {
+          const s = provinces[seedId].center;
+          const d = Math.hypot(c[0] - s[0], c[1] - s[1]);
+          if (d < minDist) minDist = d;
         }
+        if (minDist > bestDist) {
+          bestDist = minDist;
+          bestId = candidateId;
+        }
+      }
+      realmSeeds.push(bestId);
+      seedPool.splice(seedPool.indexOf(bestId), 1);
     }
-    
+
+    realmSeeds.forEach((seedId, i) => {
+      provinces[seedId].ownerId = `realm_${i}`;
+      unassigned.delete(seedId);
+      provinces[seedId].neighbors.forEach(nId => {
+        const nProv = provinces[nId];
+        if (nProv && !nProv.isWater && unassigned.has(nId)) frontier.push({ provinceId: nId, realmId: `realm_${i}` });
+      });
+    });
+
+    while (unassigned.size > 0 && frontier.length > 0) {
+      const index = Math.floor(Math.random() * frontier.length);
+      const { provinceId, realmId } = frontier.splice(index, 1)[0];
+      if (unassigned.has(provinceId)) {
+        provinces[provinceId].ownerId = realmId;
+        unassigned.delete(provinceId);
+        provinces[provinceId].neighbors.forEach(nId => {
+          const nProv = provinces[nId];
+          if (nProv && !nProv.isWater && unassigned.has(nId)) frontier.push({ provinceId: nId, realmId });
+        });
+      }
+    }
+
     unassigned.forEach(pId => {
-        const nId = provinces[pId].neighbors.find(n => provinces[n].ownerId !== 'neutral');
-        provinces[pId].ownerId = nId ? provinces[nId].ownerId : `realm_${Math.floor(Math.random() * numRealms)}`;
+      const nId = provinces[pId].neighbors.find(n => provinces[n] && !provinces[n].isWater && provinces[n].ownerId !== 'neutral');
+      provinces[pId].ownerId = nId ? provinces[nId].ownerId : `realm_${Math.floor(Math.random() * numRealms)}`;
     });
 
     Object.values(realms).forEach(realm => {
-      const owned = Object.values(provinces).filter(p => p.ownerId === realm.id);
+      const owned = Object.values(provinces).filter(p => p.ownerId === realm.id && !p.isWater);
       if (owned.length > 0) {
         realm.capitalId = owned[Math.floor(owned.length / 2)].id;
         provinces[realm.capitalId].loyalty = 100;
@@ -201,8 +261,8 @@ export function generateInitialState(width: number, height: number, settings: Ga
       provinces,
       playerRealmId,
       logs: [
-        "Bem-vindo ao Medieval Realms!", 
-        realms[playerRealmId]?.capitalId 
+        "Bem-vindo ao Medieval Realms!",
+        realms[playerRealmId]?.capitalId
           ? `Sua capital foi estabelecida em ${provinces[realms[playerRealmId].capitalId!].name}.`
           : "Sua jornada começa em terras desconhecidas.",
         "Sua jornada rumo à glória começa agora."

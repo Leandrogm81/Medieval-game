@@ -139,6 +139,8 @@ export function findPath(
   if (isAdjacent) {
     const targetProv = state.provinces[toId];
     if (!targetProv) return [];
+    // MEGA MAPA: oceano nunca é destino válido
+    if (targetProv.isWater) return [];
     // Scouts can traverse anything; regular troops can only march to their own land
     if (isScout || targetProv.ownerId === realmId || allowEnemyDestination) {
       return [toId];
@@ -160,8 +162,9 @@ export function findPath(
       const neighbor = state.provinces[nId];
       if (!neighbor) continue;
 
-      // Scouts can traverse anything
+      // Scouts can traverse anything (exceto oceano no mega mapa)
       if (isScout) {
+        if (neighbor.isWater) continue;
         const newPath = [...path, nId];
         if (nId === toId) return newPath;
         visited.add(nId);

@@ -57,6 +57,7 @@ export interface Province {
   turnsWithoutWar?: number;
   originalOwnerId?: string; // Fase 2: dono pré-guerra (capitulação)
   postWarInstability?: number; // Fase 2: turnos restantes de -4 loyalty (capitulação)
+  isWater?: boolean; // Mega mapa: célula oceânica (não-jogável)
 }
 
 export interface Technology {

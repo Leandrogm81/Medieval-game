@@ -5,6 +5,7 @@ import { HUD } from './components/HUD';
 import { ChronicleModal } from './components/ChronicleModal';
 import { TechnologyModal } from './components/TechnologyModal';
 import { GovernmentModal } from './components/GovernmentModal';
+import { WarDeclaredModal } from './components/WarDeclaredModal';
 import { GameEndModal } from './components/GameEndModal';
 import { SaveGameModal } from './components/SaveGameModal';
 import { GameInstructionsModal } from './components/GameInstructionsModal';
@@ -424,16 +425,16 @@ export default function App() {
                   <MapPin size={12} className="text-amber-600" /> Extensão do Mundo
                 </label>
                 <input
-                  type="range" min="20" max="70" step="1"
+                  type="range" min="100" max="500" step="10"
                   value={ui.gameSettings.numProvinces}
                   onChange={e => ui.setGameSettings({ ...ui.gameSettings, numProvinces: parseInt(e.target.value) })}
                   className="menu-range w-full h-1 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-600 mt-1"
                   title="Ajustar número de províncias no mapa"
                 />
                 <div className="flex justify-between text-[8px] xs:text-[10px] text-stone-500 mt-2 font-serif italic">
-                  <span>Pequeno</span>
+                  <span>Pequeno (100)</span>
                   <span className="text-amber-500 font-bold not-italic">{ui.gameSettings.numProvinces} Províncias</span>
-                  <span>Vasto</span>
+                  <span>Mega (500)</span>
                 </div>
               </div>
 
@@ -442,7 +443,21 @@ export default function App() {
                   <Shield size={12} className="text-amber-600" /> Número de Reinos
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {[4, 6, 8].map(n => (
+                  {[8, 12, 16, 20, 24, 30].slice(0, 3).map(n => (
+                    <button
+                      key={n}
+                      onClick={() => ui.setGameSettings({ ...ui.gameSettings, numRealms: n })}
+                      className={`text-xs xs:text-sm py-1 md:py-2 rounded-sm border transition-all duration-300 font-serif ${ui.gameSettings.numRealms === n
+                        ? 'bg-amber-600/20 border-amber-500 text-amber-200 shadow-[0_0_15px_rgba(245,158,11,0.2)]'
+                        : 'bg-stone-800/40 border-stone-700/50 text-stone-500 hover:border-amber-900/50 hover:text-stone-300'
+                        }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {[8, 12, 16, 20, 24, 30].slice(3).map(n => (
                     <button
                       key={n}
                       onClick={() => ui.setGameSettings({ ...ui.gameSettings, numRealms: n })}
@@ -827,6 +842,14 @@ export default function App() {
               playerRealmId={gameState.playerRealmId}
               onChange={ctrl.handleChangeGovernment}
               onClose={() => ui.setShowGovernment(false)}
+            />
+          )}
+          {ui.showWarDeclaredModal && ui.warDeclaredInfo && (
+            <WarDeclaredModal
+              isOpen={ui.showWarDeclaredModal}
+              onClose={() => ui.setShowWarDeclaredModal(false)}
+              attackerName={ui.warDeclaredInfo.attackerName}
+              attackerRealmId={ui.warDeclaredInfo.attackerRealmId}
             />
           )}
           {ui.showSaveModal && (

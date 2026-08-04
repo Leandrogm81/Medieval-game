@@ -30,12 +30,26 @@ describe('turnLogic — findPath', () => {
 
   it('scouts atravessam território inimigo', () => {
     const state = makeState();
-    // Província de outro reino (qualquer que não seja do jogador)
+    // Província de outro reino ALCANÇÁVEL por terra (mesmo continente)
     const player = state.realms[state.playerRealmId];
     const playerProv = Object.values(state.provinces).find(p => p.ownerId === player.id)!;
-    const otherProv = Object.values(state.provinces).find(p => p.ownerId !== player.id)!;
-    if (!playerProv || !otherProv) return;
-    // Scout pode marchar para qualquer província (isScout=true)
+    if (!playerProv) return;
+
+    // BFS por terra (ignora oceano) para achar alvo inimigo alcançável
+    const visited = new Set<string>([playerProv.id]);
+    const queue = [...playerProv.neighbors];
+    let otherProv = null;
+    while (queue.length > 0 && !otherProv) {
+      const id = queue.shift()!;
+      if (visited.has(id)) continue;
+      visited.add(id);
+      const p = state.provinces[id];
+      if (!p || p.isWater) continue;
+      if (p.ownerId !== player.id) { otherProv = p; break; }
+      queue.push(...p.neighbors);
+    }
+    if (!otherProv) return;
+    // Scout pode marchar para qualquer província de terra (isScout=true)
     const path = findPath(state, playerProv.id, otherProv.id, player.id, true);
     expect(Array.isArray(path)).toBe(true);
     expect(path.length).toBeGreaterThan(0);

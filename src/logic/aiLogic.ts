@@ -9,27 +9,46 @@ import { TECH_TREE } from './game-constants';
 import { declareWar } from './diplomacyLogic';
 
 // Exportado para testes (regressão: avanço de exército e retreat pós-conquista)
+// Retorna: 'attack' (atacou), 'declare' (só declarou guerra, sem atacar), 'none' (não agiu)
 export function executeAIAttack(
   state: GameState,
   attackerProvId: string,
   defenderProvId: string,
   realmId: string,
-): boolean {
+): 'attack' | 'declare' | 'none' {
   const attackerProv = state.provinces[attackerProvId];
   const defenderProv = state.provinces[defenderProvId];
   const realm = state.realms[realmId];
-  if (!attackerProv || !defenderProv || !realm) return false;
-  if (realm.actionPoints < ACTION_COSTS.attack) return false;
+  if (!attackerProv || !defenderProv || !realm) return 'none';
+  if (realm.actionPoints < ACTION_COSTS.attack) return 'none';
 
-  // Declare war if not already at war
-  if (!realm.wars.includes(defenderProv.ownerId)) {
+  const defenderRealm = state.realms[defenderProv.ownerId];
+
+  // REGRA (Fase 2): invasão exige guerra declarada. Sem guerra, a IA apenas
+  // declara neste turno — a invasão começa no turno seguinte (aviso ao alvo).
+  const atWar = realm.wars.includes(defenderProv.ownerId);
+  if (!atWar) {
     declareWar(state, realmId, defenderProv.ownerId);
+    if (defenderProv.ownerId === state.playerRealmId) {
+      state.logs.push(`⚔️ ${realm.name} DECLAROU GUERRA contra o seu reino! Prepare sua defesa.`);
+    } else {
+      state.logs.push(`⚔️ ${realm.name} declarou guerra contra ${defenderRealm?.name || 'outro reino'}.`);
+    }
+    return 'declare';
+  }
+
+  // Guerra declarada NESTE turno (pela própria IA no processAI atual): não atacar ainda
+  const activeWar = state.activeWars.find(
+    w => (w.attackerId === realmId && w.defenderId === defenderProv.ownerId) ||
+         (w.attackerId === defenderProv.ownerId && w.defenderId === realmId)
+  );
+  if (activeWar && activeWar.startedAtTurn === state.turn) {
+    return 'declare';
   }
 
   // Use the troops in the province as the attacking army
   const attackerGov = GOVERNMENT_STATS[realm.government || 'monarchy'];
   const attackerTechBonus = (realm.techLevels?.combat ?? 0) * 0.05 + (attackerGov.attack - 1);
-  const defenderRealm = state.realms[defenderProv.ownerId];
   const defenderGov = defenderRealm ? GOVERNMENT_STATS[defenderRealm.government || 'monarchy'] : null;
   const defenderTechBonus = defenderRealm ? ((defenderRealm.techLevels?.combat ?? 0) * 0.05) + (defenderGov ? defenderGov.defense - 1 : 0) : 0;
 
@@ -89,7 +108,7 @@ export function executeAIAttack(
     state.logs.push(`${realm.name} falhou em conquistar ${defenderProv.name}.`);
   }
 
-  return true;
+  return 'attack';
 }
 
 /**
@@ -261,8 +280,13 @@ export function processAI(state: GameState) {
         for (const target of neighbors) {
           const targetRealm = state.realms[target.ownerId];
           if (targetRealm && shouldAIAttack(realm, targetRealm, prov, target, state)) {
-            executeAIAttack(state, prov.id, target.id, realm.id);
-            realm.actionPoints -= ACTION_COSTS.attack;
+            const outcome = executeAIAttack(state, prov.id, target.id, realm.id);
+            if (outcome === 'attack') {
+              realm.actionPoints -= ACTION_COSTS.attack;
+            } else if (outcome === 'declare') {
+              // Declarou guerra (custo diplomático) — não ataca neste turno
+              realm.actionPoints = Math.max(0, realm.actionPoints - 2);
+            }
             break;
           }
         }
