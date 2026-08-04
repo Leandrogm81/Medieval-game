@@ -189,6 +189,12 @@ function processMarchOrders(state: GameState) {
   state.lastTurnMovements = [];
   state.pendingBattleResults = [];
   const toRemove = new Set<string>();
+
+  // FIX: march orders de reinos eliminados são órfãs — cancelar
+  state.marchOrders.forEach(o => {
+    if (!state.realms[o.realmId]) toRemove.add(o.id);
+  });
+
   const arrivedOrders: { order: (typeof state.marchOrders)[number]; prov: Province }[] = [];
   const recalcTroops = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
     army.infantry + army.archers + army.cavalry + army.scouts;
@@ -237,6 +243,30 @@ function processMarchOrders(state: GameState) {
     if (!nextProv) {
       toRemove.add(order.id);
       return;
+    }
+
+    // FIX: validar que o próximo passo é VIZINHO da província atual (caminho
+    // não pode ter sido corrompido) e que o território não mudou de dono.
+    const currentProv = state.provinces[order.currentProvId];
+    if (order.remainingPath.length > 0) {
+      const isAdjacent = currentProv && currentProv.neighbors.includes(nextProvId);
+      if (!isAdjacent) {
+        // Caminho inválido: cancelar a ordem, tropas ficam onde estão
+        if (order.realmId === state.playerRealmId) {
+          state.logs.push(`Ordem de marcha cancelada: caminho para ${nextProv.name} não está mais disponível.`);
+        }
+        toRemove.add(order.id);
+        return;
+      }
+      // Para ordens de movimento (não ataque/scout): bloquear se o próximo
+      // passo agora pertence a outro reino (território conquistado entre turnos)
+      if (order.kind === 'move' && nextProv.ownerId !== order.realmId && nextProv.ownerId !== 'neutral') {
+        if (order.realmId === state.playerRealmId) {
+          state.logs.push(`Ordem de marcha bloqueada: ${nextProv.name} agora pertence a ${state.realms[nextProv.ownerId]?.name || 'outro reino'}.`);
+        }
+        toRemove.add(order.id);
+        return;
+      }
     }
 
     if (order.remainingPath.length > 0) {

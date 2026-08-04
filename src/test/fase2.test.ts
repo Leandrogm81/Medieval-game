@@ -17,7 +17,7 @@ import { checkCapitulation, executeCapitulation } from '../logic/capitulationLog
 import { canAppeaseVassal, appeaseVassal as appeaseDiplomacy } from '../logic/diplomacyLogic';
 import { processVassalLiberty, appeaseVassal, LIBERTY_REBELLION_THRESHOLD } from '../logic/vassalLogic';
 import { getMaxLoanAmount, getLoanPayment, takeLoan, canTakeLoan, processRealmLoans } from '../logic/financeLogic';
-import { calculateMilitaryPower } from '../logic/aiLogic';
+import { calculateMilitaryPower, executeAIAttack } from '../logic/aiLogic';
 import { makeState } from './helpers';
 import { GameState, Realm } from '../types';
 
@@ -156,11 +156,19 @@ describe('Fase 2 — Capitulação', () => {
     const defenderId = 'realm_1';
     // Garantir que o defensor tenha pelo menos 2 províncias (evita eliminação acidental)
     const defProvs = Object.values(state.provinces).filter(p => p.ownerId === defenderId);
+    const fallbackSource = Object.values(state.provinces).find(p => p.ownerId !== defenderId && p.ownerId !== attackerId && p.ownerId !== 'neutral');
     while (defProvs.length < 2) {
       const neutral = Object.values(state.provinces).find(p => p.ownerId === 'neutral');
-      if (!neutral) break;
-      neutral.ownerId = defenderId;
-      defProvs.push(neutral);
+      if (neutral) {
+        neutral.ownerId = defenderId;
+        defProvs.push(neutral);
+      } else if (fallbackSource) {
+        // Sem neutros no mapa: tira uma província de outro reino não-envolvido
+        fallbackSource.ownerId = defenderId;
+        defProvs.push(fallbackSource);
+      } else {
+        break;
+      }
     }
     const defProv = defProvs[0];
     const attProv = Object.values(state.provinces).find(p => p.ownerId === attackerId)!;
@@ -451,5 +459,73 @@ describe('Fase 2 — IA Avançada', () => {
     realm.techLevels.combat = 4; // +20%
     const boosted = calculateMilitaryPower(realm, state);
     expect(boosted).toBeGreaterThan(base);
+  });
+});
+
+// ============ BUG: CONQUISTA DA IA (regressão) ============
+describe('Fase 2 — Conquista da IA (bug tropas fantasma)', () => {
+  function makeAttackState() {
+    const state = makeState();
+    const attackerId = 'realm_1'; // IA
+    const defenderId = state.playerRealmId; // jogador
+    // Província do atacante com exército grande
+    const attProv = Object.values(state.provinces).find(p => p.ownerId === attackerId)!;
+    // Província inimiga vizinha (garantir que existe: converte um vizinho qualquer para o jogador)
+    let defProv = attProv.neighbors
+      .map(id => state.provinces[id])
+      .find(p => p && p.ownerId === defenderId);
+    if (!defProv) {
+      const otherRealmProv = Object.values(state.provinces)
+        .find(p => p.ownerId !== attackerId && p.ownerId !== defenderId && p.ownerId !== 'neutral');
+      const neighbor = attProv.neighbors
+        .map(id => state.provinces[id])
+        .find(p => p && p.ownerId !== attackerId);
+      if (neighbor) {
+        neighbor.ownerId = defenderId;
+        defProv = neighbor;
+      } else if (otherRealmProv) {
+        // Sem vizinho livre: conecta uma província remota ao atacante
+        otherRealmProv.ownerId = defenderId;
+        otherRealmProv.neighbors.push(attProv.id);
+        attProv.neighbors.push(otherRealmProv.id);
+        defProv = otherRealmProv;
+      } else {
+        throw new Error('Impossível montar cenário de ataque (mapa sem províncias livres)');
+      }
+    }
+    attProv.army = { infantry: 100, archers: 0, cavalry: 0, scouts: 0 };
+    attProv.troops = 100;
+    defProv.army = { infantry: 30, archers: 0, cavalry: 0, scouts: 0 };
+    defProv.troops = 30;
+    state.realms[attackerId].actionPoints = 50;
+    return { state, attackerId, defenderId, attProv, defProv };
+  }
+
+  it('origem esvazia e conquista recebe o exército vencedor (avanço)', () => {
+    const { state, attackerId, attProv, defProv } = makeAttackState();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5); // combate determinístico (mapa já gerado)
+    executeAIAttack(state, attProv.id, defProv.id, attackerId);
+    expect(defProv.ownerId).toBe(attackerId); // conquistou
+    expect(attProv.troops).toBe(0); // origem esvaziou (exército avançou)
+    expect(defProv.troops).toBeGreaterThan(0); // conquista ocupada
+  });
+
+  it('não cria tropas do nada (soma preservada: origem + conquista <= atacante inicial)', () => {
+    const { state, attackerId, attProv, defProv } = makeAttackState();
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const before = attProv.troops;
+    executeAIAttack(state, attProv.id, defProv.id, attackerId);
+    const after = attProv.troops + defProv.troops;
+    expect(after).toBeLessThanOrEqual(before); // baixas + retreat, nunca duplicação
+  });
+
+  it('derrota da IA mantém defensor e recua atacante', () => {
+    const { state, attackerId, attProv, defProv } = makeAttackState();
+    defProv.army = { infantry: 300, archers: 0, cavalry: 0, scouts: 0 };
+    defProv.troops = 300;
+    vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    executeAIAttack(state, attProv.id, defProv.id, attackerId);
+    expect(defProv.ownerId).not.toBe(attackerId);
+    expect(defProv.troops).toBeGreaterThan(0);
   });
 });

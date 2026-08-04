@@ -1,6 +1,6 @@
 import { GameState, Realm, Province } from '../types';
 import { executeRecruitment, executeBuilding } from './economyLogic';
-import { resolveCombat } from './combatLogic';
+import { resolveCombat, calculateRetreat, getRetreatDestination } from './combatLogic';
 import { ACTION_COSTS } from './game-constants';
 import { canUnlockTech, unlockTech } from './techLogic';
 import { GOVERNMENT_STATS } from './governmentLogic';
@@ -8,7 +8,8 @@ import { canTakeLoan, takeLoan, getMaxLoanAmount } from './financeLogic';
 import { TECH_TREE } from './game-constants';
 import { declareWar } from './diplomacyLogic';
 
-function executeAIAttack(
+// Exportado para testes (regressão: avanço de exército e retreat pós-conquista)
+export function executeAIAttack(
   state: GameState,
   attackerProvId: string,
   defenderProvId: string,
@@ -43,20 +44,48 @@ function executeAIAttack(
     defenderTechBonus
   );
 
-  // Apply results
-  attackerProv.army = result.attackerRemaining;
-  attackerProv.troops = attackerProv.army.infantry + attackerProv.army.archers + attackerProv.army.cavalry + attackerProv.army.scouts;
-
-  defenderProv.army = result.defenderRemaining;
-  defenderProv.troops = defenderProv.army.infantry + defenderProv.army.archers + defenderProv.army.cavalry + defenderProv.army.scouts;
+  const recalcTroops = (army: { infantry: number; archers: number; cavalry: number; scouts: number }) =>
+    army.infantry + army.archers + army.cavalry + army.scouts;
 
   if (result.won) {
-    if (defenderProv.ownerId !== 'neutral') defenderProv.originalOwnerId = defenderProv.ownerId;
+    // FIX: exército vencedor AVANÇA para a província conquistada (origem zera),
+    // e o defensor derrotado RECUA para o vizinho amigo mais próximo.
+    defenderProv.originalOwnerId = defenderProv.ownerId !== 'neutral' ? defenderProv.ownerId : undefined;
     defenderProv.ownerId = realmId;
     defenderProv.recentlyConquered = 3;
+
+    // Defensor recua com o que sobrou (se houver destino amigo)
+    if (defenderRealm && defenderRealm.id !== 'neutral') {
+      const retreatDest = getRetreatDestination(state, defenderProvId, defenderRealm.id);
+      const retreating = calculateRetreat(result.defenderRemaining);
+      if (retreatDest && recalcTroops(retreating) > 0) {
+        const destProv = state.provinces[retreatDest];
+        if (destProv) {
+          destProv.army.infantry += retreating.infantry;
+          destProv.army.archers += retreating.archers;
+          destProv.army.cavalry += retreating.cavalry;
+          destProv.army.scouts += retreating.scouts;
+          destProv.troops = recalcTroops(destProv.army);
+        }
+      }
+    }
+
+    // Conquistador ocupa a província com o exército remanescente
+    defenderProv.army = result.attackerRemaining;
+    defenderProv.troops = recalcTroops(defenderProv.army);
+    // Origem esvazia (exército avançou)
+    attackerProv.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+    attackerProv.troops = 0;
+
     realm.overextension += 10;
     state.logs.push(`${realm.name} conquistou ${defenderProv.name} de ${defenderRealm?.name || 'um reino'}.`);
   } else {
+    // Ataque falhou: atacante volta para a origem com o que sobrou;
+    // defensor mantém a província com o que restou.
+    attackerProv.army = result.attackerRemaining;
+    attackerProv.troops = recalcTroops(attackerProv.army);
+    defenderProv.army = result.defenderRemaining;
+    defenderProv.troops = recalcTroops(defenderProv.army);
     state.logs.push(`${realm.name} falhou em conquistar ${defenderProv.name}.`);
   }
 
