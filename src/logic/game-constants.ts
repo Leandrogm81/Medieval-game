@@ -8,6 +8,20 @@ export const ACTION_COSTS = {
   diplomacy: 2
 };
 
+export function isPlayerFleetOrTerritory(prov: import('../types').Province | null | undefined, playerRealmId: string): boolean {
+  if (!prov) return false;
+  if (prov.ownerId === playerRealmId) return true;
+  if (prov.occupantRealmId === playerRealmId) return true;
+  const armyTroops = prov.army ? (prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts) : 0;
+  const totalTroops = Math.max(prov.troops || 0, armyTroops);
+  if (prov.isWater && totalTroops > 0) {
+    if (!prov.occupantRealmId || prov.occupantRealmId === 'neutral' || prov.occupantRealmId === playerRealmId) {
+      return true;
+    }
+  }
+  return false;
+}
+
 export interface UnitStats {
   cost: { gold: number; food: number; materials: number; pop: number };
   maintenance: { gold: number; food: number };
@@ -60,7 +74,37 @@ export const BUILDING_PRODUCTION = {
 };
 
 export const REALM_NAMES = ["Avalon", "Eldoria", "Thalassa", "Gondor", "Rohan", "Mercia", "Wessex", "Northumbria"];
-export const REALM_COLORS = ["#ef4444", "#3b82f6", "#10b981", "#eab308", "#a855f7", "#06b6d4", "#f97316", "#ec4899"];
+export const REALM_COLORS = [
+  "#ef4444", // Crimson Red (Jogador)
+  "#3b82f6", // Royal Blue
+  "#10b981", // Emerald Green
+  "#eab308", // Golden Yellow
+  "#a855f7", // Imperial Purple
+  "#06b6d4", // Cyan
+  "#f97316", // Amber Orange
+  "#ec4899", // Magenta Pink
+  "#84cc16", // Lime Green
+  "#14b8a6", // Teal
+  "#6366f1", // Indigo
+  "#d946ef", // Fuchsia
+  "#b45309", // Bronze Brown
+  "#0369a1", // Ocean Blue
+  "#15803d", // Forest Green
+  "#b91c1c", // Dark Scarlet
+  "#6b21a8", // Dark Violet
+  "#a16207"  // Deep Gold
+];
+
+export function getUniqueRealmColor(index: number, totalRealms: number): string {
+  if (index < REALM_COLORS.length) {
+    return REALM_COLORS[index];
+  }
+  // Distribuição pelo ângulo de proporção áurea para gerar cores 100% únicas sem repetição
+  const hue = Math.floor((index * 137.508) % 360);
+  const saturation = 75 + (index % 3) * 8;
+  const lightness = 45 + (index % 2) * 10;
+  return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
 export const PROVINCE_NAMES = [
   "Aethelgard", "Blythe", "Cairn", "Dunwich", "Eversong", "Falkreath", "Glimmer", "Hearth",
   "Ilium", "Jorvik", "Kaelen", "Lothian", "Mourn", "Nessa", "Oakhaven", "Prydwen",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { GameState, ViewMode, ActionType, UnitType, Province } from './types.ts';
 import { Map } from './components/Map';
 import { HUD } from './components/HUD';
@@ -14,9 +14,11 @@ import { CombatSetupModal } from './components/CombatSetupModal';
 import { BattleOutcomeModal } from './components/BattleOutcomeModal';
 import { DiplomacyModal } from './components/DiplomacyModal';
 import { CallToArmsModal } from './components/CallToArmsModal';
+import { MigrationModal } from './components/MigrationModal';
 import { Minimap } from './components/Minimap';
 import { ToastContainer } from './components/ToastContainer';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { isPlayerFleetOrTerritory } from './logic/game-constants';
 import { motion, AnimatePresence } from 'motion/react';
 import * as Tone from 'tone';
 import {
@@ -44,6 +46,7 @@ import { useUI } from './hooks/useUI';
 import { useGameController } from './hooks/useGameController';
 import { persistence } from './persistence.ts';
 import { initAudio } from './logic/sfxLogic';
+import { isWarBetween } from './logic/diplomacyLogic';
 
 export default function App() {
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -52,17 +55,52 @@ export default function App() {
   const [viewportSize, setViewportSize] = useState({ width: 1280, height: 720 });
   const mapContainerRef = useRef<HTMLDivElement>(null);
 
+  // Keep refs of zoom and panOffset to avoid stale closures in high-frequency event handlers
+  const zoomRef = useRef(ui.zoom);
+  const panOffsetRef = useRef(ui.panOffset);
+
+  useEffect(() => {
+    zoomRef.current = ui.zoom;
+  }, [ui.zoom]);
+
+  useEffect(() => {
+    panOffsetRef.current = ui.panOffset;
+  }, [ui.panOffset]);
+
   // ZOOM POR SCROLL: listener nativo não-passivo (React registra wheel como passivo)
   useEffect(() => {
     const container = mapContainerRef.current;
     if (!container) return;
     const handler = (e: WheelEvent) => {
       e.preventDefault();
-      ctrl.handleWheel(e as unknown as React.WheelEvent<HTMLDivElement>);
+      const rect = container.getBoundingClientRect();
+      const cursorX = e.clientX - rect.left;
+      const cursorY = e.clientY - rect.top;
+
+      const currentZoom = zoomRef.current;
+      const currentPan = panOffsetRef.current;
+
+      const factor = e.deltaY < 0 ? 1.12 : 1 / 1.12;
+      const newZoom = Math.min(4, Math.max(0.5, currentZoom * factor));
+      if (newZoom === currentZoom) return;
+
+      const worldX = (cursorX - currentPan.x) / currentZoom;
+      const worldY = (cursorY - currentPan.y) / currentZoom;
+
+      const newPan = {
+        x: cursorX - worldX * newZoom,
+        y: cursorY - worldY * newZoom
+      };
+
+      zoomRef.current = newZoom;
+      panOffsetRef.current = newPan;
+
+      ui.setZoom(newZoom);
+      ui.setPanOffset(newPan);
     };
     container.addEventListener('wheel', handler, { passive: false });
     return () => container.removeEventListener('wheel', handler);
-  }, [ctrl, gameState]);
+  }, [ui.setZoom, ui.setPanOffset, !!gameState, ui.isGenerating, ui.showMenu]);
 
   // Persistence and Visual Effects cleanup
   useEffect(() => {
@@ -191,36 +229,47 @@ export default function App() {
     const source = gameState.provinces[provinceId];
     if (!source) return [];
 
-    if (type === 'attack') {
-      return source.neighbors.slice();
-    }
-
     if (type === 'scout') {
       return Object.keys(gameState.provinces).filter(id => id !== provinceId);
     }
 
-    if (type === 'move') {
+    if (type === 'move' || type === 'attack') {
       const reachable = new Set<string>();
       const visited = new Set<string>([provinceId]);
-      const queue: { id: string; depth: number }[] = [{ id: provinceId, depth: 0 }];
+      const queue: string[] = [provinceId];
 
       while (queue.length > 0) {
-        const current = queue.shift();
-        if (!current) continue;
-
-        const prov = gameState.provinces[current.id];
+        const currId = queue.shift()!;
+        const prov = gameState.provinces[currId];
         if (!prov) continue;
 
         for (const neighborId of prov.neighbors) {
-          if (visited.has(neighborId)) continue;
-          visited.add(neighborId);
-          reachable.add(neighborId);
-
           const neighbor = gameState.provinces[neighborId];
           if (!neighbor) continue;
 
-          if (neighbor.ownerId === gameState.playerRealmId && current.depth < 3) {
-            queue.push({ id: neighborId, depth: current.depth + 1 });
+          // Ocean provinces are traversable and targetable for naval march/recon
+          if (neighbor.isWater) {
+            reachable.add(neighborId);
+            if (!visited.has(neighborId)) {
+              visited.add(neighborId);
+              queue.push(neighborId);
+            }
+            continue;
+          }
+
+          // Land province is targetable
+          reachable.add(neighborId);
+
+          // We can only traverse through this land province if it is friendly, neutral, or we are at war with the owner.
+          const isOwn = neighbor.ownerId === gameState.playerRealmId;
+          const isNeutral = neighbor.ownerId === 'neutral';
+          const isAtWar = neighbor.ownerId !== gameState.playerRealmId && neighbor.ownerId !== 'neutral' && isWarBetween(gameState, gameState.playerRealmId, neighbor.ownerId);
+
+          const canTraverse = isOwn || isNeutral || isAtWar;
+
+          if (canTraverse && !visited.has(neighborId)) {
+            visited.add(neighborId);
+            queue.push(neighborId);
           }
         }
       }
@@ -229,11 +278,7 @@ export default function App() {
       return Array.from(reachable);
     }
 
-    if (type === 'scout') {
-      return Object.keys(gameState.provinces).filter(id => id !== provinceId);
-    }
-
-    return source.neighbors.slice();
+    return [];
   };
 
   const openDiplomacy = (targetRealmId: string) => {
@@ -241,7 +286,7 @@ export default function App() {
     ui.setShowDiplomacyModal(true);
   };
 
-  const handleProvinceClick = (id: string) => {
+  const handleProvinceClick = (id: string, isDoubleClick?: boolean) => {
     if (gameState && ui.viewMode === 'diplomatic') {
       const prov = gameState.provinces[id];
       if (prov && prov.ownerId !== gameState.playerRealmId && prov.ownerId !== 'neutral') {
@@ -252,8 +297,37 @@ export default function App() {
       }
     }
 
-    ctrl.handleProvinceClick(id, ui.hasDragged);
+    ctrl.handleProvinceClick(id, ui.hasDragged, isDoubleClick);
   };
+
+  const handleZoomChange = useCallback((targetZoom: number, screenX?: number, screenY?: number) => {
+    const container = mapContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const sX = screenX ?? rect.width / 2;
+    const sY = screenY ?? rect.height / 2;
+
+    const currentZoom = zoomRef.current;
+    const currentPan = panOffsetRef.current;
+
+    const newZoom = Math.min(3, Math.max(0.5, targetZoom));
+    if (newZoom === currentZoom) return;
+
+    const worldX = (sX - currentPan.x) / currentZoom;
+    const worldY = (sY - currentPan.y) / currentZoom;
+
+    const newPan = {
+      x: sX - worldX * newZoom,
+      y: sY - worldY * newZoom
+    };
+
+    zoomRef.current = newZoom;
+    panOffsetRef.current = newPan;
+
+    ui.setZoom(newZoom);
+    ui.setPanOffset(newPan);
+  }, [ui.setZoom, ui.setPanOffset]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -323,16 +397,15 @@ export default function App() {
           return;
         case 'v':
         case 'V':
-          // F conflita com fullscreen (Fase 1) — military_strength em V
           ui.setViewMode('military_strength');
           return;
         case 'q':
         case 'Q':
-          ui.setZoom(Math.max(0.5, ui.zoom - 0.2));
+          handleZoomChange(ui.zoom - 0.2);
           return;
         case 'e':
         case 'E':
-          ui.setZoom(Math.min(3, ui.zoom + 0.2));
+          handleZoomChange(ui.zoom + 0.2);
           return;
         case 'f':
         case 'F':
@@ -356,20 +429,16 @@ export default function App() {
     ui.selectedProvinceId,
     ui.zoom,
     ui.setViewMode,
-    ui.setZoom,
+    handleZoomChange,
     toggleFullScreen
   ]);
 
   if (ui.isGenerating) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
-        <motion.div
-          animate={{ rotate: 360 }}
-          transition={{ repeat: Infinity, duration: 2, ease: 'linear' }}
-          className="w-16 h-16 border-4 border-amber-600 border-t-transparent rounded-full mb-6"
-        />
-        <p className="text-amber-200 text-xl font-serif">Gerando reinos...</p>
-        <p className="text-stone-500 text-sm mt-2 italic">Forjando o destino do seu império</p>
+      <div className="w-full h-full bg-stone-950 flex flex-col items-center justify-center relative overflow-hidden">
+        <div className="w-32 h-32 border-4 border-amber-500/20 border-t-amber-500 rounded-full animate-spin mb-8 shadow-[0_0_50px_rgba(245,158,11,0.2)]"></div>
+        <p className="text-amber-200 text-xl font-bold uppercase tracking-[0.2em] animate-pulse">Criando Mundo Medieval...</p>
+        <p className="text-stone-500 text-sm mt-2 italic font-serif">Por favor, aguarde enquanto as fronteiras são traçadas.</p>
       </div>
     );
   }
@@ -393,31 +462,35 @@ export default function App() {
 
         {/* Logo area */}
         <motion.div
-          initial={{ opacity: 0, y: -50 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 flex justify-center mb-2 mt-6 md:mt-0"
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.6 }}
+          className="relative z-10 flex justify-center mb-1 mt-4 md:mt-0"
         >
           <div className="relative flex justify-center items-center">
-            <div className="absolute inset-0 bg-amber-500/20 blur-2xl rounded-full scale-75"></div>
-            <div className="relative w-20 h-20 xs:w-24 xs:h-24 md:w-36 md:h-36 rounded-full border border-amber-500/25 bg-stone-950/70 shadow-[0_0_50px_rgba(245,158,11,0.15)] flex items-center justify-center">
-              <div className="absolute inset-3 rounded-full border border-amber-500/15" />
-              <Crown className="w-10 h-10 xs:w-12 xs:h-12 md:w-16 md:h-16 text-amber-400" />
+            <div className="absolute inset-0 bg-amber-500/30 blur-3xl rounded-full scale-125"></div>
+            <div className="relative w-28 h-28 xs:w-36 xs:h-36 md:w-44 md:h-44 rounded-full border-2 border-amber-500/40 bg-black/40 shadow-[0_0_60px_rgba(245,158,11,0.35)] flex items-center justify-center overflow-hidden p-1">
+              <img
+                src="/game_logo.jpg"
+                alt="Emblema Reinos Medievais"
+                className="w-full h-full object-cover rounded-full filter drop-shadow-[0_0_15px_rgba(245,158,11,0.6)] transform hover:scale-105 transition-transform duration-500"
+              />
             </div>
           </div>
         </motion.div>
 
         {/* Title area */}
         <motion.div
-          initial={{ opacity: 0, y: -30 }}
+          initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="relative z-10 text-center mb-4 md:mb-6 w-full max-w-full px-2"
+          transition={{ delay: 0.1, duration: 0.6 }}
+          className="relative z-10 text-center mb-6 md:mb-8 w-full max-w-full px-2"
         >
-          <h1 className="text-[clamp(1.8rem,8.5vw,4.25rem)] leading-none font-black tracking-[0.07em] sm:tracking-[0.12em] md:tracking-[0.2em] mb-1 gold-gradient-text uppercase">
+          <h1 className="text-[clamp(2.2rem,9vw,4.8rem)] leading-none font-black tracking-[0.1em] sm:tracking-[0.16em] md:tracking-[0.22em] mb-2 gold-gradient-text uppercase font-serif drop-shadow-[0_4px_20px_rgba(0,0,0,0.9)]">
             Reinos Medievais
           </h1>
-          <p className="text-amber-200/60 tracking-[0.18em] xs:tracking-[0.24em] md:tracking-[0.4em] text-[8px] xs:text-[10px] md:text-xs uppercase font-serif">
-            Forje seu império • Conquiste o destino
+          <p className="text-amber-200/80 tracking-[0.25em] xs:tracking-[0.3em] md:tracking-[0.45em] text-[9px] xs:text-[11px] md:text-xs uppercase font-serif drop-shadow-md">
+            ⚔️ Forje Seu Império • Conquiste o Destino ⚔️
           </p>
         </motion.div>
 
@@ -627,7 +700,7 @@ export default function App() {
   if (!gameState) return null;
 
   return (
-    <div className="w-full h-full bg-stone-950 text-white flex flex-col md:flex-row overflow-hidden font-serif select-none relative">
+    <div className="w-full h-full bg-stone-950 text-white flex flex-col md:flex-row overflow-hidden font-sans select-none relative">
       <ErrorBoundary>
         <div
           ref={mapContainerRef}
@@ -654,27 +727,60 @@ export default function App() {
             </button>
           </div>
 
-          {(ui.actionBannerMessage || ui.multiSelectedProvinceIds.length > 1) && (
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 px-6 py-2 bg-black/70 backdrop-blur-sm border border-amber-500/50 rounded-b-lg">
-              <div className="flex flex-col items-center gap-0.5">
-                {ui.actionBannerMessage && <span className="text-amber-200 text-sm font-bold">{ui.actionBannerMessage}</span>}
-                {ui.multiSelectedProvinceIds.length > 1 && (
-                  <span className="text-[11px] font-bold text-amber-300/90">
-                    {ui.multiSelectedProvinceIds.length} províncias selecionadas
-                  </span>
-                )}
-              </div>
+          {(ui.actionBannerMessage || ui.multiSelectedProvinceIds.length > 1 || ui.isCampaignMode) && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-[110] px-4 py-2 bg-stone-950/90 backdrop-blur-md border border-amber-500/60 rounded-b-xl shadow-2xl flex flex-col items-center gap-2 max-w-xl pointer-events-auto">
+              {ui.actionBannerMessage && (
+                <span className="text-amber-200 text-xs md:text-sm font-bold text-center">
+                  {ui.actionBannerMessage}
+                </span>
+              )}
+              {ui.isCampaignMode && (
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <button
+                    onClick={ctrl.handleConfirmCampaignRoute}
+                    disabled={ui.campaignWaypoints.length === 0}
+                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1.5
+                      ${ui.campaignWaypoints.length > 0 
+                        ? 'bg-red-600 hover:bg-red-500 text-white shadow-[0_0_15px_rgba(220,38,38,0.5)] active:scale-95' 
+                        : 'bg-stone-800 text-stone-500 cursor-not-allowed'}`}
+                  >
+                    <span>⚔️ Confirmar Ataque ({ui.campaignWaypoints.length}/20)</span>
+                  </button>
+                  <button
+                    onClick={ctrl.handleUndoCampaignWaypoint}
+                    disabled={ui.campaignWaypoints.length === 0}
+                    className={`px-3 py-1.5 rounded text-xs font-bold transition-all flex items-center gap-1
+                      ${ui.campaignWaypoints.length > 0 
+                        ? 'bg-stone-800 hover:bg-stone-700 text-amber-300 border border-amber-700/50' 
+                        : 'bg-stone-900 text-stone-600 border border-stone-800 cursor-not-allowed'}`}
+                  >
+                    <span>↺ Desfazer</span>
+                  </button>
+                  <button
+                    onClick={ctrl.handleCancelCampaignRoute}
+                    className="px-3 py-1.5 rounded text-xs font-bold bg-stone-800 hover:bg-stone-700 text-stone-300 border border-stone-700"
+                  >
+                    <span>✕ Cancelar</span>
+                  </button>
+                </div>
+              )}
+              {ui.multiSelectedProvinceIds.length > 1 && (
+                <span className="text-[11px] font-bold text-amber-300/90">
+                  {ui.multiSelectedProvinceIds.length} províncias selecionadas
+                </span>
+              )}
             </div>
           )}
 
           <motion.div
             className="absolute inset-0 cursor-grab active:cursor-grabbing"
+            style={{ transformOrigin: '0 0', originX: 0, originY: 0 }}
             animate={{
               x: ui.panOffset.x,
               y: ui.panOffset.y,
               scale: ui.zoom
             }}
-            transition={{ type: 'spring', damping: 25, stiffness: 150, mass: 0.5 }}
+            transition={{ type: 'tween', ease: 'easeOut', duration: 0.1 }}
           >
             <Map
               gameState={gameState}
@@ -690,6 +796,37 @@ export default function App() {
               onMultiSelectChange={ui.setMultiSelectedProvinceIds}
               playerRealmId={gameState.playerRealmId}
               zoom={ui.zoom}
+              campaignWaypoints={ui.campaignWaypoints}
+              isCampaignMode={ui.isCampaignMode}
+              onQuickAction={(action, provId) => {
+                const prov = gameState.provinces[provId];
+                if (!prov) return;
+
+                if (action === 'move') {
+                  ui.setActionSourceId(provId);
+                  ui.setActionState('moving');
+                  ui.setSelectingMoveComposition(true);
+                  ui.setActionBannerMessage('Modo Marcha — selecione uma província sua no mapa');
+                  ui.setPreviewPath(getActionPreviewPath(provId, 'move'));
+                  ui.setMoveComposition({
+                    infantry: prov.army.infantry,
+                    archers: prov.army.archers,
+                    cavalry: prov.army.cavalry,
+                    scouts: prov.army.scouts
+                  });
+                  ctrl.addLog(`Iniciado preparo de movimentação em ${prov.name}. Selecione o alvo.`);
+                } else if (action === 'attack') {
+                  ui.setActionSourceId(provId);
+                  ui.setActionState('attacking');
+                  ui.setActionBannerMessage('Modo Ataque — clique em uma província adjacente');
+                  ui.setPreviewPath(getActionPreviewPath(provId, 'attack'));
+                  ctrl.addLog(`Modo de ataque ativado a partir de ${prov.name}. Escolha o alvo adjacente.`);
+                } else if (action === 'disband') {
+                  ui.setIsDisbandMode(true);
+                  ui.setActionState('disband');
+                  ui.setActionBannerMessage('Modo Dispensar — selecione tropas para dispensar');
+                }
+              }}
             />
           </motion.div>
 
@@ -739,8 +876,8 @@ export default function App() {
               {ui.isHudOpen ? <ChevronLeft size={18} /> : <ChevronRight size={18} />}
             </button>
             <div className="flex flex-col gap-0.5 xs:gap-1">
-              <button onClick={() => ui.setZoom(Math.min(ui.zoom + 0.2, 3))} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">+</button>
-              <button onClick={() => ui.setZoom(Math.max(ui.zoom - 0.2, 0.5))} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">-</button>
+              <button onClick={() => handleZoomChange(ui.zoom + 0.2)} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">+</button>
+              <button onClick={() => handleZoomChange(ui.zoom - 0.2)} className="w-11 h-11 bg-stone-900/80 border border-stone-700 rounded-full flex items-center justify-center hover:bg-stone-800 shadow-xl text-xl">-</button>
             </div>
           </div>
         </div>
@@ -751,6 +888,10 @@ export default function App() {
           selectedProvinceId={ui.selectedProvinceId}
           onAction={ctrl.handleAction}
           onEndTurn={ctrl.handleEndTurn}
+          isAutoPlayActive={ctrl.isAutoPlayActive}
+          autoPlaySpeed={ctrl.autoPlaySpeed}
+          onToggleAutoPlay={ctrl.handleToggleAutoPlay}
+          onChangeAutoPlaySpeed={ctrl.handleChangeAutoPlaySpeed}
           onToggleMode={(mode) => ui.setViewMode(mode)}
           viewMode={ui.viewMode}
           onSave={() => ui.setShowSaveModal(true)}
@@ -769,7 +910,7 @@ export default function App() {
           onMapAction={(type) => {
             if (!ui.selectedProvinceId) return;
             const prov = gameState.provinces[ui.selectedProvinceId];
-            if (prov.ownerId !== gameState.playerRealmId) return;
+            if (!isPlayerFleetOrTerritory(prov, gameState.playerRealmId)) return;
 
             if (type === 'move') {
               ui.setActionSourceId(ui.selectedProvinceId);
@@ -812,6 +953,14 @@ export default function App() {
           onDiplomacy={openDiplomacy}
           onMassAction={ctrl.handleMassAction}
           onProvinceAction={ctrl.handleProvinceAction}
+          onStartMigrate={(provId) => {
+            ui.setActionSourceId(provId);
+            ui.setActionState('migrate');
+            ui.setActionBannerMessage('Modo Migração — selecione uma província de destino do seu reino');
+          }}
+          onBatchAction={ctrl.handleBatchAction}
+          multiSelectedProvinceIds={ui.multiSelectedProvinceIds}
+          onClearMultiSelect={() => ui.setMultiSelectedProvinceIds([])}
           onToggleFullScreen={toggleFullScreen}
           isDisbandMode={ui.isDisbandMode}
           onIsDisbandMode={(v) => {
@@ -831,6 +980,12 @@ export default function App() {
           onActionSourceId={ui.setActionSourceId}
           onPreviewPath={ui.setPreviewPath}
           onActionBannerMessage={ui.setActionBannerMessage}
+          onStartCampaignMode={ctrl.handleStartCampaignMode}
+          onUndoCampaignWaypoint={ctrl.handleUndoCampaignWaypoint}
+          onConfirmCampaignRoute={ctrl.handleConfirmCampaignRoute}
+          onCancelCampaignRoute={ctrl.handleCancelCampaignRoute}
+          campaignWaypoints={ui.campaignWaypoints}
+          isCampaignMode={ui.isCampaignMode}
         />
 
         <AnimatePresence>
@@ -919,7 +1074,7 @@ export default function App() {
                   goldChange: ui.turnSummaryData.goldNet,
                   foodChange: ui.turnSummaryData.foodNet,
                   materialsChange: ui.turnSummaryData.materialsNet,
-                  populationChange: 0,
+                  populationChange: ui.turnSummaryData.populationNet ?? 0,
                   events: ui.turnSummaryData.events,
                 },
               }}
@@ -929,6 +1084,7 @@ export default function App() {
           {ui.showCombatPreview && ui.combatAttackerProvId && ui.combatDefenderProvId && ui.combatAttackingArmy && (
             <CombatSetupModal
               isOpen={ui.showCombatPreview}
+              mode={ui.combatModalMode}
               attackerProv={gameState.provinces[ui.combatAttackerProvId]}
               defenderProv={gameState.provinces[ui.combatDefenderProvId]}
               attackingArmy={ui.combatAttackingArmy}
@@ -954,6 +1110,21 @@ export default function App() {
               conquered={ui.battleResultMeta.conquered}
               retreatInfo={ui.battleResultMeta.retreatInfo}
               onClose={() => ui.setShowBattleResult(false)}
+            />
+          )}
+          {ui.showMigrationModal && (
+            <MigrationModal
+              isOpen={ui.showMigrationModal}
+              onClose={() => {
+                ui.setShowMigrationModal(false);
+                ui.setMigrationSourceId(null);
+                ui.setMigrationTargetId(null);
+              }}
+              sourceProvince={ui.migrationSourceId ? gameState.provinces[ui.migrationSourceId] : null}
+              targetProvince={ui.migrationTargetId ? gameState.provinces[ui.migrationTargetId] : null}
+              playerGold={gameState.realms[gameState.playerRealmId]?.gold || 0}
+              playerActionPoints={gameState.realms[gameState.playerRealmId]?.actionPoints || 0}
+              onConfirmMigration={ctrl.handleMigratePopulation}
             />
           )}
           {gameState.gameOver && (

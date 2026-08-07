@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { GameState, ViewMode, ActionType, UnitType, MarchOrder, Army } from '../types';
 import {
-  Shield, Swords, Crown, Scroll, Play, Handshake, FlaskConical,
+  Shield, Swords, Crown, Scroll, Play, Pause, FastForward, Handshake, FlaskConical,
   Coins, Carrot, Users,
   Hammer, Map as MapIcon, Eye, Zap, Landmark,
   PlusCircle, HelpCircle, ChevronLeft, ChevronRight,
   Volume2, VolumeX
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ACTION_COSTS, BUILDING_PRODUCTION, BUILDING_STATS, REALM_COLORS, UNIT_STATS } from '../logic/game-constants';
-import { estimateMassActionCost, getTradeRate, MassActionType, MAX_TRADE_AMOUNT } from '../logic/economyLogic';
+import { ACTION_COSTS, BUILDING_PRODUCTION, BUILDING_STATS, REALM_COLORS, UNIT_STATS, isPlayerFleetOrTerritory } from '../logic/game-constants';
+import { estimateMassActionCost, getTradeRate, MassActionType, MAX_TRADE_AMOUNT, getMaxRecruitable, getRecruitCost } from '../logic/economyLogic';
 import { getSfxEnabled, toggleSfx } from '../logic/sfxLogic';
 
 const RESOURCE_META: Record<string, { label: string; icon: string }> = {
@@ -28,6 +28,10 @@ interface HUDProps {
   selectedProvinceId: string | null;
   onAction: (type: ActionType, provinceId: string, extra?: string | { from: 'gold' | 'food' | 'materials'; to: 'gold' | 'food' | 'materials'; amount: number }) => void;
   onEndTurn: () => void;
+  isAutoPlayActive?: boolean;
+  autoPlaySpeed?: number;
+  onToggleAutoPlay?: () => void;
+  onChangeAutoPlaySpeed?: (speed: number) => void;
   onToggleMode: (mode: ViewMode) => void;
   viewMode: ViewMode;
   onSave: () => void;
@@ -54,10 +58,18 @@ interface HUDProps {
   recruitComposition: Army;
   onRecruitCompositionChange: (army: Army) => void;
   onDispatchScouts?: () => void;
+  onStartMigrate?: (provinceId: string) => void;
   onRoute?: () => void;
   onDiplomacy?: (targetRealmId: string) => void;
   onMassAction: (actionType: MassActionType) => void;
   onProvinceAction?: (actionType: 'assimilate' | 'invest', provinceId: string) => void;
+  onBatchAction?: (
+    actionType: 'buildFarms' | 'buildMines' | 'buildWorkshops' | 'buildCourts' | 'buildFortifications' | 'invest' | 'assimilate' | 'recruit' | 'disband',
+    provinceIds: string[],
+    recruitComposition?: Army
+  ) => void;
+  multiSelectedProvinceIds: string[];
+  onClearMultiSelect?: () => void;
   onToggleFullScreen: () => void;
   // Disband
   isDisbandMode?: boolean;
@@ -65,11 +77,18 @@ interface HUDProps {
   disbandComposition?: Army;
   onDisbandCompositionChange?: (army: Army) => void;
   onDisband?: (provinceId: string) => void;
-  // Action state for Disband
+  // Action state for Disband / Campaign
   onActionState?: (v: ActionType) => void;
   onActionSourceId?: (v: string | null) => void;
   onPreviewPath?: (v: string[]) => void;
   onActionBannerMessage?: (v: string | null) => void;
+  // Campaign Mode
+  onStartCampaignMode?: (sourceProvId: string) => void;
+  onUndoCampaignWaypoint?: () => void;
+  onConfirmCampaignRoute?: () => void;
+  onCancelCampaignRoute?: () => void;
+  campaignWaypoints?: string[];
+  isCampaignMode?: boolean;
 }
 
 export const HUD: React.FC<HUDProps> = ({
@@ -77,6 +96,10 @@ export const HUD: React.FC<HUDProps> = ({
   selectedProvinceId,
   onAction,
   onEndTurn,
+  isAutoPlayActive = false,
+  autoPlaySpeed = 2000,
+  onToggleAutoPlay,
+  onChangeAutoPlaySpeed,
   onToggleMode,
   viewMode,
   onSave,
@@ -103,10 +126,14 @@ export const HUD: React.FC<HUDProps> = ({
   recruitComposition,
   onRecruitCompositionChange,
   onDispatchScouts,
+  onStartMigrate,
   onRoute,
   onDiplomacy,
   onMassAction,
   onProvinceAction,
+  onBatchAction,
+  multiSelectedProvinceIds,
+  onClearMultiSelect,
   onToggleFullScreen,
   // Disband
   isDisbandMode = false,
@@ -114,11 +141,18 @@ export const HUD: React.FC<HUDProps> = ({
   disbandComposition,
   onDisbandCompositionChange,
   onDisband,
-  // Action state for Disband
+  // Action state for Disband / Campaign
   onActionState,
   onActionSourceId,
   onPreviewPath,
   onActionBannerMessage,
+  // Campaign Mode
+  onStartCampaignMode,
+  onUndoCampaignWaypoint,
+  onConfirmCampaignRoute,
+  onCancelCampaignRoute,
+  campaignWaypoints = [],
+  isCampaignMode = false
 }) => {
   const playerRealm = gameState.realms[gameState.playerRealmId];
   if (!playerRealm) return null;
@@ -138,6 +172,7 @@ export const HUD: React.FC<HUDProps> = ({
   })();
 
   const selectedProvince = selectedProvinceId ? gameState.provinces[selectedProvinceId] : null;
+  const hasPlayerTroopsInSelected = isPlayerFleetOrTerritory(selectedProvince, gameState.playerRealmId);
 
   // Calculando lucros líquidos estimados (idêntico ao logicTurn.ts)
   const playerProvinces = useMemo(() => Object.values(gameState.provinces).filter(p => p.ownerId === gameState.playerRealmId), [gameState.provinces, gameState.playerRealmId]);
@@ -220,10 +255,12 @@ export const HUD: React.FC<HUDProps> = ({
   const provinceStabilityState = provinceStability >= 80 ? 'Estável' : provinceStability >= 50 ? 'Resiliente' : provinceStability >= 20 ? 'Instável' : 'Crítica';
   const selectedProvinceGrowthPerTurn = selectedProvince
     ? (() => {
+      if (selectedProvince.population >= selectedProvince.maxPopulation) return 0;
       const loyaltyFactor = 0.5 + (selectedProvince.loyalty / 200);
       const stabilityFactor = provinceStability >= 80 ? 1 : provinceStability >= 50 ? 0.85 : provinceStability >= 20 ? 0.65 : 0.4;
       const efficiency = (0.5 + (selectedProvince.population / selectedProvince.maxPopulation) * 0.5) * loyaltyFactor * stabilityFactor;
-      return Math.floor(selectedProvince.population * 0.07 * efficiency);
+      const potentialGrowth = Math.floor(selectedProvince.population * 0.07 * efficiency);
+      return Math.min(selectedProvince.maxPopulation - selectedProvince.population, potentialGrowth);
     })()
     : 0;
 
@@ -237,14 +274,330 @@ export const HUD: React.FC<HUDProps> = ({
   const tradeCanConfirm = tradeAmount > 0 && tradeAmount <= MAX_TRADE_AMOUNT && tradeFrom !== tradeTo && tradeAmount <= tradeAvailable && (playerRealm.tradesThisTurn || 0) < 3 && playerRealm.actionPoints >= 1;
   const canAssimilateProvince = !!selectedProvince && selectedProvince.ownerId === gameState.playerRealmId && playerRealm.gold >= 50 && selectedProvince.loyalty < 100;
   const canInvestProvince = !!selectedProvince && selectedProvince.ownerId === gameState.playerRealmId && playerRealm.gold >= 100;
-  const massActionOptions = [
-    { key: 'assimilate', label: 'Assimilar Todas', action: 'assimilate' as MassActionType, costGold: 50, costMaterials: 0 },
-    { key: 'invest', label: 'Investir em Todas', description: 'Aplica em todas as províncias do reino.', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
-    { key: 'buildFarms', label: 'Construir Farms', action: 'buildFarms' as MassActionType, costGold: 100, costMaterials: 50 },
-    { key: 'buildMines', label: 'Construir Mines', action: 'buildMines' as MassActionType, costGold: 150, costMaterials: 75 },
-    { key: 'buildWorkshops', label: 'Construir Workshops', action: 'buildWorkshops' as MassActionType, costGold: 200, costMaterials: 100 },
-    { key: 'buildCourts', label: 'Construir Courts', action: 'buildCourts' as MassActionType, costGold: 300, costMaterials: 150 }
-  ] as const;
+  const renderUnifiedRecruitmentPanel = (isBatch: boolean) => {
+    const provinceList = isBatch
+      ? multiSelectedProvinceIds.map(id => gameState.provinces[id]).filter(Boolean)
+      : (selectedProvince ? [selectedProvince] : []);
+
+    if (provinceList.length === 0) return null;
+
+    const unitTypes: UnitType[] = ['infantry', 'archers', 'cavalry', 'scouts'];
+    const maxAmounts: Record<UnitType, number> = {
+      infantry: 0,
+      archers: 0,
+      cavalry: 0,
+      scouts: 0
+    };
+
+    unitTypes.forEach(type => {
+      if (isBatch) {
+        const maxes = provinceList.map(p => getMaxRecruitable(gameState, playerRealm, p, type));
+        maxAmounts[type] = Math.max(0, ...maxes);
+      } else {
+        maxAmounts[type] = getMaxRecruitable(gameState, playerRealm, provinceList[0], type);
+      }
+    });
+
+    const applyGlobalPreset = (fraction: number) => {
+      const newComp = { ...recruitComposition };
+      unitTypes.forEach(type => {
+        newComp[type] = Math.floor(maxAmounts[type] * fraction);
+      });
+      onRecruitCompositionChange(newComp);
+    };
+
+    const setUnitFraction = (type: UnitType, fraction: number) => {
+      onRecruitCompositionChange({
+        ...recruitComposition,
+        [type]: Math.floor(maxAmounts[type] * fraction)
+      });
+    };
+
+    const addUnitFixed = (type: UnitType, amount: number) => {
+      const current = recruitComposition[type] || 0;
+      const maxVal = maxAmounts[type];
+      const nextVal = Math.min(maxVal, Math.max(0, current + amount));
+      onRecruitCompositionChange({
+        ...recruitComposition,
+        [type]: nextVal
+      });
+    };
+
+    const setUnitFixed = (type: UnitType, amount: number) => {
+      const maxVal = maxAmounts[type];
+      const nextVal = Math.min(maxVal, Math.max(0, amount));
+      onRecruitCompositionChange({
+        ...recruitComposition,
+        [type]: nextVal
+      });
+    };
+
+    return (
+      <div className="bg-stone-800/30 border border-amber-900/20 p-3 rounded-sm space-y-3">
+        <div className="flex justify-between items-center">
+          <div>
+            <p className="text-[10px] md:text-[11px] text-amber-500/80 font-bold uppercase tracking-widest">
+              {isBatch ? `Recrutamento em Lote` : `Recrutamento Regional`}
+            </p>
+            <p className="text-[10px] text-stone-400 font-medium">
+              {isBatch ? `${provinceList.length} províncias selecionadas` : provinceList[0].name}
+            </p>
+          </div>
+          <span className="text-[10px] text-stone-500 italic">Custo: {ACTION_COSTS.recruit} AP {isBatch ? '/ prov' : ''}</span>
+        </div>
+
+        {/* Ajuste Rápido Global */}
+        <div className="bg-black/20 p-2 rounded-sm border border-stone-800 flex flex-wrap items-center gap-1">
+          <span className="text-[9px] font-bold text-amber-400/80 uppercase tracking-wider mr-1">Tudo:</span>
+          <button
+            onClick={() => applyGlobalPreset(0.25)}
+            className="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-amber-200 text-[10px] font-bold rounded border border-stone-700 transition-colors"
+            title="Preencher 25% (1/4) do máximo em cada tipo"
+          >
+            25% (1/4)
+          </button>
+          <button
+            onClick={() => applyGlobalPreset(1/3)}
+            className="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-amber-200 text-[10px] font-bold rounded border border-stone-700 transition-colors"
+            title="Preencher 33% (1/3) do máximo em cada tipo"
+          >
+            33% (1/3)
+          </button>
+          <button
+            onClick={() => applyGlobalPreset(0.5)}
+            className="px-2 py-1 bg-stone-800 hover:bg-stone-700 text-amber-200 text-[10px] font-bold rounded border border-stone-700 transition-colors"
+            title="Preencher 50% (1/2) do máximo em cada tipo"
+          >
+            50% (1/2)
+          </button>
+          <button
+            onClick={() => applyGlobalPreset(1.0)}
+            className="px-2 py-1 bg-amber-700/40 hover:bg-amber-700/60 text-amber-100 text-[10px] font-black rounded border border-amber-600/50 transition-colors"
+            title="Preencher 100% (MÁXIMO) do máximo em cada tipo"
+          >
+            MÁXIMO TUDO
+          </button>
+          <button
+            onClick={() => applyGlobalPreset(0)}
+            className="px-2 py-1 bg-stone-900 hover:bg-stone-800 text-stone-400 text-[10px] font-bold rounded border border-stone-700 transition-colors ml-auto"
+          >
+            Zerar Tudo
+          </button>
+        </div>
+
+        {/* Unidades */}
+        <div className="space-y-3">
+          {unitTypes.map(type => {
+            const stats = UNIT_STATS[type];
+            const labels: Record<string, string> = {
+              infantry: 'Infantaria',
+              archers: 'Arqueiros',
+              cavalry: 'Cavalaria',
+              scouts: 'Batedores'
+            };
+
+            if (stats.requires) {
+              const hasResource = Object.values(gameState.provinces).some(p =>
+                p.ownerId === gameState.playerRealmId && p.strategicResource === stats.requires
+              );
+              if (!hasResource) return null;
+            }
+
+            const maxAmount = maxAmounts[type];
+            const currentValue = recruitComposition[type] || 0;
+            const unitCost = getRecruitCost(type, 1, playerRealm);
+            const costForCurrent = getRecruitCost(type, currentValue, playerRealm);
+
+            return (
+              <div key={type} className="bg-black/20 p-2.5 rounded-sm border border-stone-800">
+                <div className="flex justify-between items-center mb-1">
+                  <span className="text-[11px] font-bold text-amber-100">{labels[type]}</span>
+                  <span className="text-[9px] text-stone-400 font-mono">
+                    {unitCost.gold > 0 ? `${unitCost.gold}g` : ''}
+                    {unitCost.food > 0 ? ` / ${unitCost.food}c` : ''}
+                    {unitCost.materials > 0 ? ` / ${unitCost.materials}m` : ''}
+                    {unitCost.pop > 0 ? ` / ${unitCost.pop}pop` : ''}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2 mb-1.5">
+                  <input
+                    type="range"
+                    min={0}
+                    max={Math.max(1, maxAmount)}
+                    disabled={maxAmount <= 0}
+                    value={currentValue}
+                    onChange={(e) => {
+                      const val = Math.min(maxAmount, Math.max(0, parseInt(e.target.value) || 0));
+                      onRecruitCompositionChange({ ...recruitComposition, [type]: val });
+                    }}
+                    title={`Recrutar: ${labels[type]}`}
+                    aria-label={`Recrutar: ${labels[type]}`}
+                    className="flex-1 h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-500 disabled:opacity-30"
+                  />
+                  <input
+                    type="number"
+                    min={0}
+                    max={maxAmount}
+                    value={currentValue}
+                    onChange={(e) => {
+                      const val = Math.min(maxAmount, Math.max(0, parseInt(e.target.value) || 0));
+                      onRecruitCompositionChange({ ...recruitComposition, [type]: val });
+                    }}
+                    className="w-12 bg-stone-900 border border-stone-700 rounded px-1 py-0.5 text-xs text-amber-200 text-center font-bold font-mono focus:border-amber-500 outline-none"
+                  />
+                  <span className="text-[10px] text-stone-500 w-10 text-right font-mono">/ {maxAmount}</span>
+                </div>
+
+                {/* Botões Rápidos por Unidade */}
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => setUnitFraction(type, 0.25)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-amber-200 text-[9px] font-bold rounded border border-stone-700"
+                  >
+                    1/4
+                  </button>
+                  <button
+                    onClick={() => setUnitFraction(type, 1/3)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-amber-200 text-[9px] font-bold rounded border border-stone-700"
+                  >
+                    1/3
+                  </button>
+                  <button
+                    onClick={() => setUnitFraction(type, 0.5)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-amber-200 text-[9px] font-bold rounded border border-stone-700"
+                  >
+                    1/2
+                  </button>
+                  <button
+                    onClick={() => setUnitFraction(type, 1.0)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-amber-900/40 hover:bg-amber-800/60 disabled:opacity-30 text-amber-100 text-[9px] font-black rounded border border-amber-700/60"
+                  >
+                    MÁX
+                  </button>
+
+                  <span className="text-stone-700 text-[9px]">|</span>
+
+                  <button
+                    onClick={() => setUnitFixed(type, 20)}
+                    disabled={maxAmount < 20}
+                    className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-amber-300 text-[9px] font-mono rounded border border-stone-700"
+                  >
+                    20
+                  </button>
+                  <button
+                    onClick={() => setUnitFixed(type, 30)}
+                    disabled={maxAmount < 30}
+                    className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-amber-300 text-[9px] font-mono rounded border border-stone-700"
+                  >
+                    30
+                  </button>
+                  <button
+                    onClick={() => setUnitFixed(type, 40)}
+                    disabled={maxAmount < 40}
+                    className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-amber-300 text-[9px] font-mono rounded border border-stone-700"
+                  >
+                    40
+                  </button>
+                  <button
+                    onClick={() => setUnitFixed(type, 50)}
+                    disabled={maxAmount < 50}
+                    className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-amber-300 text-[9px] font-mono rounded border border-stone-700"
+                  >
+                    50
+                  </button>
+                  <button
+                    onClick={() => setUnitFixed(type, 100)}
+                    disabled={maxAmount < 100}
+                    className="px-1.5 py-0.5 bg-stone-900 hover:bg-stone-800 disabled:opacity-30 text-amber-300 text-[9px] font-mono rounded border border-stone-700"
+                  >
+                    100
+                  </button>
+
+                  <span className="text-stone-700 text-[9px]">|</span>
+
+                  <button
+                    onClick={() => addUnitFixed(type, 10)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-emerald-400 text-[9px] font-bold rounded border border-stone-700"
+                  >
+                    +10
+                  </button>
+                  <button
+                    onClick={() => addUnitFixed(type, 50)}
+                    disabled={maxAmount <= 0}
+                    className="px-1.5 py-0.5 bg-stone-800 hover:bg-stone-700 disabled:opacity-30 text-emerald-400 text-[9px] font-bold rounded border border-stone-700"
+                  >
+                    +50
+                  </button>
+                </div>
+
+                {currentValue > 0 && (
+                  <div className="mt-1 text-[9px] text-amber-400/80 font-mono">
+                    Custo: {costForCurrent.gold > 0 ? `${costForCurrent.gold}g` : ''}
+                    {costForCurrent.food > 0 ? ` / ${costForCurrent.food}c` : ''}
+                    {costForCurrent.materials > 0 ? ` / ${costForCurrent.materials}m` : ''}
+                    {costForCurrent.pop > 0 ? ` / ${costForCurrent.pop}pop` : ''}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Resumo e Botão de Ação */}
+        {(() => {
+          const totalUnits = (recruitComposition.infantry || 0) + (recruitComposition.archers || 0) +
+            (recruitComposition.cavalry || 0) + (recruitComposition.scouts || 0);
+
+          const totalCosts = { gold: 0, food: 0, materials: 0, pop: 0 };
+          unitTypes.forEach(type => {
+            const amount = recruitComposition[type] || 0;
+            const stats = UNIT_STATS[type];
+            totalCosts.gold += stats.cost.gold * amount;
+            totalCosts.food += stats.cost.food * amount;
+            totalCosts.materials += stats.cost.materials * amount;
+            totalCosts.pop += stats.cost.pop * amount;
+          });
+
+          return (
+            <div className="pt-2 border-t border-stone-700 space-y-2">
+              <div className="text-[10px] text-stone-400 font-mono">
+                Total: {totalUnits} unidades {isBatch ? 'por província' : ''} — {totalCosts.gold > 0 ? `${totalCosts.gold} ouro` : ''}
+                {totalCosts.food > 0 ? ` / ${totalCosts.food} comida` : ''}
+                {totalCosts.materials > 0 ? ` / ${totalCosts.materials} material` : ''}
+                {totalCosts.pop > 0 ? ` / ${totalCosts.pop} pop` : ''}
+              </div>
+              <button
+                onClick={() => {
+                  if (isBatch) {
+                    onBatchAction?.('recruit', multiSelectedProvinceIds, recruitComposition);
+                  } else if (selectedProvince) {
+                    onAction('recruit', selectedProvince.id);
+                  }
+                }}
+                disabled={totalUnits <= 0}
+                className={`w-full py-3 min-h-[44px] rounded-sm border text-[10px] font-black uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${
+                  totalUnits > 0
+                    ? 'bg-amber-600/20 border-amber-600 text-amber-200 hover:bg-amber-600/30'
+                    : 'bg-stone-800 border-stone-700 text-stone-500 cursor-not-allowed'
+                }`}
+              >
+                <PlusCircle size={14} />
+                {isBatch
+                  ? `Recrutar em Lote (${multiSelectedProvinceIds.length} províncias)`
+                  : `Recrutar em ${provinceList[0].name}`}
+              </button>
+            </div>
+          );
+        })()}
+      </div>
+    );
+  };
 
   return (
     <div className={`relative z-50 flex flex-col bg-stone-900/95 border-l border-amber-900/30 shadow-2xl transition-all duration-300 ease-out md:h-full max-md:border-l-0 max-md:border-t max-md:shadow-none max-md:rounded-t-2xl ${isHudOpen ? 'w-full md:w-[320px] lg:w-[clamp(280px,25vw,420px)] opacity-100 pointer-events-auto max-md:h-[58vh] max-md:max-h-[58vh] max-md:overflow-y-auto' : 'w-0 md:w-0 opacity-0 pointer-events-none overflow-hidden max-md:h-0'}`}>
@@ -304,7 +657,7 @@ export const HUD: React.FC<HUDProps> = ({
               {netGold >= 0 ? '+' : ''}{netGold}
             </span>
             {/* Tooltip */}
-            <div className="absolute left-0 bottom-full mb-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+            <div className="absolute left-0 top-full mt-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
               <p className="font-bold text-amber-400 mb-1 border-b border-stone-700 pb-1">Tesouro</p>
               <div className="space-y-0.5">
                 <div className="flex justify-between"><span className="text-green-400">Renda base:</span><span>+{Math.floor(baseGoldIncome)}</span></div>
@@ -317,19 +670,19 @@ export const HUD: React.FC<HUDProps> = ({
           </div>
 
           {/* Empréstimo */}
-          <div className="bg-stone-800/50 p-1 md:p-2 border border-white/5 rounded-sm relative group">
+          <div className="bg-stone-800/50 p-1 md:p-2 border border-white/5 rounded-sm relative group overflow-hidden">
             <div className="flex items-center gap-1 mb-0.5">
               <Coins size={12} className="text-emerald-500" />
               <span className="text-[10px] md:text-[11px] text-stone-400 font-bold uppercase">Dívidas</span>
             </div>
-            <p className="text-xs md:text-lg font-black text-amber-50">{playerRealm.loans?.length || 0} empréstimo(s)</p>
+            <p className="text-xs md:text-lg font-black text-amber-50">{playerRealm.loans?.length || 0}</p>
             {playerRealm.loans && playerRealm.loans.length > 0 ? (
-              <span className="text-[10px] font-bold text-red-500">{playerRealm.loans[0].remainingTurns} turnos restantes</span>
+              <span className="text-[10px] font-bold text-red-500 truncate block">{playerRealm.loans[0].remainingTurns}t restantes</span>
             ) : (
               <span className="text-[10px] font-bold text-green-500">Sem dívidas</span>
             )}
-            {/* Tooltip + botão */}
-            <div className="absolute left-0 bottom-full mb-1 w-48 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-auto transition-opacity z-50 shadow-xl">
+            {/* Tooltip + botão — aparece abaixo para não cobrir botões do topo */}
+            <div className="absolute left-0 top-full mt-1 w-48 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-auto transition-opacity z-50 shadow-xl">
               <p className="font-bold text-emerald-400 mb-1 border-b border-stone-700 pb-1">Empréstimos</p>
               {playerRealm.loans && playerRealm.loans.length > 0 ? (
                 playerRealm.loans.map((loan, i) => (
@@ -362,7 +715,7 @@ export const HUD: React.FC<HUDProps> = ({
               {netFood >= 0 ? '+' : ''}{netFood}
             </span>
             {/* Tooltip */}
-            <div className="absolute left-0 bottom-full mb-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+            <div className="absolute left-0 top-full mt-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
               <p className="font-bold text-orange-400 mb-1 border-b border-stone-700 pb-1">Grãos</p>
               <div className="space-y-0.5">
                 <div className="flex justify-between"><span className="text-green-400">Produção:</span><span>+{Math.floor(baseFoodIncome)}</span></div>
@@ -384,7 +737,7 @@ export const HUD: React.FC<HUDProps> = ({
               {netMaterials >= 0 ? '+' : ''}{netMaterials}
             </span>
             {/* Tooltip */}
-            <div className="absolute left-0 bottom-full mb-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
+            <div className="absolute left-0 top-full mt-1 w-44 bg-stone-900 border border-stone-600 rounded-sm p-2 text-[9px] text-stone-300 opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 shadow-xl">
               <p className="font-bold text-blue-400 mb-1 border-b border-stone-700 pb-1">Obra</p>
               <div className="space-y-0.5">
                 <div className="flex justify-between"><span className="text-green-400">Produção:</span><span>+{Math.floor(baseMaterialsIncome)}</span></div>
@@ -411,7 +764,7 @@ export const HUD: React.FC<HUDProps> = ({
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-y-auto custom-scrollbar p-2 md:p-4 space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-2 md:p-4 space-y-4">
         {viewMode === 'trade' ? (
           <div className="space-y-4">
             <div className="bg-stone-800/30 border border-amber-900/20 p-3 rounded-sm">
@@ -514,6 +867,95 @@ export const HUD: React.FC<HUDProps> = ({
               </div>
             </div>
           </div>
+        ) : multiSelectedProvinceIds && multiSelectedProvinceIds.length > 1 ? (
+          <div className="space-y-4">
+            <div className="bg-stone-800/30 border border-amber-900/20 p-3 rounded-sm">
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <p className="text-[10px] md:text-[11px] text-amber-500/60 font-bold uppercase tracking-widest">Painel de Ações em Lote</p>
+                  <h3 className="text-lg md:text-xl font-black text-amber-100 uppercase tracking-tighter">
+                    {multiSelectedProvinceIds.length} Províncias
+                  </h3>
+                </div>
+                {onClearMultiSelect && (
+                  <button
+                    onClick={onClearMultiSelect}
+                    className="px-2 py-1 bg-red-950/20 border border-red-900/40 text-red-200 text-[10px] font-black uppercase tracking-widest hover:bg-red-900/30 rounded-sm transition-all"
+                  >
+                    Limpar Seleção
+                  </button>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <button
+                  onClick={() => onBatchAction?.('buildFarms', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Construir Fazendas</span>
+                  <span className="text-[10px] text-stone-400">Fazendas: 25g, 15m, 1 AP</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('buildMines', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Construir Minas</span>
+                  <span className="text-[10px] text-stone-400">Minas: 40g, 20m, 1 AP</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('buildWorkshops', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Construir Oficinas</span>
+                  <span className="text-[10px] text-stone-400">Oficinas: 35g, 15m, 1 AP</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('buildCourts', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Construir Tribunais</span>
+                  <span className="text-[10px] text-stone-400">Tribunais: 60g, 30m, 1 AP</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('buildFortifications', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Fortificar</span>
+                  <span className="text-[10px] text-stone-400">Fortificação: 20g, 10m, 1 AP</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('invest', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Investir</span>
+                  <span className="text-[10px] text-stone-400">Investimento: 100g</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('assimilate', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-stone-900/50 border-stone-700 text-amber-100 hover:border-amber-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest">Assimilar</span>
+                  <span className="text-[10px] text-stone-400">Assimilação: 50g</span>
+                </button>
+
+                <button
+                  onClick={() => onBatchAction?.('disband', multiSelectedProvinceIds)}
+                  className="text-left rounded-sm border p-3 bg-red-950/20 border-red-900/40 text-red-100 hover:border-red-500 transition-all flex flex-col gap-1 min-h-[72px]"
+                >
+                  <span className="text-[10px] md:text-[11px] font-black uppercase tracking-widest text-red-400">Dispensar Tropas</span>
+                  <span className="text-[10px] text-stone-400">Dispensar tudo: +50% ref. (1 AP/prov)</span>
+                </button>
+              </div>
+            </div>
+
+            {renderUnifiedRecruitmentPanel(true)}
+          </div>
         ) : selectedProvince ? (
           <div className="space-y-4">
             {viewMode === 'economic' && (
@@ -540,7 +982,14 @@ export const HUD: React.FC<HUDProps> = ({
                       className="overflow-hidden"
                     >
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {massActionOptions.map(option => {
+                        {([
+                          { key: 'assimilate', label: 'Assimilar Todas', action: 'assimilate' as MassActionType, costGold: 50, costMaterials: 0 },
+                          { key: 'invest', label: 'Investir em Todas', description: 'Aplica em todas as províncias do reino.', action: 'invest' as MassActionType, costGold: 100, costMaterials: 0 },
+                          { key: 'buildFarms', label: 'Construir Farms', action: 'buildFarms' as MassActionType, costGold: 100, costMaterials: 50 },
+                          { key: 'buildMines', label: 'Construir Mines', action: 'buildMines' as MassActionType, costGold: 150, costMaterials: 75 },
+                          { key: 'buildWorkshops', label: 'Construir Workshops', action: 'buildWorkshops' as MassActionType, costGold: 200, costMaterials: 100 },
+                          { key: 'buildCourts', label: 'Construir Courts', action: 'buildCourts' as MassActionType, costGold: 300, costMaterials: 150 }
+                        ] as const).map(option => {
                           const estimate = estimateMassActionCost(gameState, gameState.playerRealmId, option.costGold, option.costMaterials);
                           const canAfford = playerRealm.gold >= estimate.totalCostGold && playerRealm.materials >= estimate.totalCostMaterials;
                           const costParts = [`${estimate.totalCostGold} ouro`];
@@ -581,7 +1030,9 @@ export const HUD: React.FC<HUDProps> = ({
                 </div>
                 <div className="bg-stone-900 px-2 py-1 rounded border border-stone-700">
                   <p className="text-[10px] text-stone-500 uppercase font-black">Terreno</p>
-                  <p className="text-[10px] md:text-[11px] uppercase font-bold text-amber-200">{selectedProvince.terrain === 'plains' ? 'Planície' : selectedProvince.terrain === 'forest' ? 'Floresta' : 'Montanha'}</p>
+                  <p className="text-[10px] md:text-[11px] uppercase font-bold text-amber-200">
+                    {selectedProvince.terrain === 'plains' ? 'Planície' : selectedProvince.terrain === 'forest' ? 'Floresta' : selectedProvince.terrain === 'mountain' ? 'Montanha' : selectedProvince.terrain === 'desert' ? 'Deserto' : selectedProvince.terrain === 'steppe' ? 'Estepe' : selectedProvince.terrain === 'lake' ? 'Lago' : 'Litoral'}
+                  </p>
                 </div>
               </div>
 
@@ -602,30 +1053,102 @@ export const HUD: React.FC<HUDProps> = ({
                 </div>
               </div>
 
-              <div className="mt-3 p-3 bg-black/15 border border-stone-700/40 rounded-sm">
-                <div className="flex items-center justify-between mb-2">
-                  <p className="text-[10px] md:text-[11px] text-amber-500 font-black uppercase">Detalhes da Província</p>
-                  <span className="text-[10px] text-stone-500 font-bold uppercase">{selectedProvince.population > 0 ? `${Math.floor(selectedProvince.population * 0.1)} recrutáveis` : '0 recrutáveis'}</span>
+              <div className="mt-3 p-3 bg-stone-950/60 border border-stone-800 rounded-md space-y-3 font-sans">
+                <div className="flex items-center justify-between pb-2 border-b border-stone-800">
+                  <p className="text-xs text-amber-400 font-bold uppercase tracking-wider">Detalhes da Província</p>
+                  <span className="text-[11px] text-stone-400 font-medium">
+                    {selectedProvince.population > 0 ? `${Math.floor(selectedProvince.population * 0.1)} recrutáveis` : '0 recrutáveis'}
+                  </span>
                 </div>
 
+                {/* Ações da Província e Frota (Card em Destaque no Topo) */}
+                {hasPlayerTroopsInSelected && (
+                  <div className="bg-stone-900/50 border border-amber-900/30 rounded-md p-3">
+                    <p className="text-[11px] text-amber-400 font-bold uppercase tracking-wider mb-2.5">
+                      ⚡ Ações da Província e Frota
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      {!selectedProvince.isWater && selectedProvince.ownerId === gameState.playerRealmId && (
+                        <>
+                          <button
+                            onClick={() => onProvinceAction?.('assimilate', selectedProvince.id)}
+                            disabled={!canAssimilateProvince}
+                            className={`rounded-md border px-3 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px]
+                              ${canAssimilateProvince 
+                                ? 'bg-emerald-950/40 border-emerald-600/40 text-emerald-300 hover:bg-emerald-900/60 hover:border-emerald-500 active:scale-95' 
+                                : 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'}`}
+                          >
+                            <span>✨</span>
+                            <span>Assimilar</span>
+                          </button>
+                          <button
+                            onClick={() => onProvinceAction?.('invest', selectedProvince.id)}
+                            disabled={!canInvestProvince}
+                            className={`rounded-md border px-3 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px]
+                              ${canInvestProvince 
+                                ? 'bg-amber-950/40 border-amber-600/40 text-amber-300 hover:bg-amber-900/60 hover:border-amber-500 active:scale-95' 
+                                : 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'}`}
+                          >
+                            <span>💰</span>
+                            <span>Investir</span>
+                          </button>
+                          <button
+                            onClick={() => onStartMigrate?.(selectedProvince.id)}
+                            disabled={selectedProvince.population <= 10 || (playerRealm?.actionPoints || 0) < 1}
+                            className={`rounded-md border px-3 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px]
+                              ${selectedProvince.population > 10 && (playerRealm?.actionPoints || 0) >= 1 
+                                ? 'bg-cyan-950/40 border-cyan-600/40 text-cyan-300 hover:bg-cyan-900/60 hover:border-cyan-500 active:scale-95' 
+                                : 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'}`}
+                          >
+                            <span>🚚</span>
+                            <span>Migrar Pop</span>
+                          </button>
+                        </>
+                      )}
+
+                      <button
+                        onClick={() => onStartCampaignMode?.(selectedProvince.id)}
+                        disabled={(selectedProvince.army.infantry + selectedProvince.army.archers + selectedProvince.army.cavalry) <= 0 || (playerRealm?.actionPoints || 0) < 1}
+                        className={`rounded-md border px-3 py-2.5 text-xs font-bold transition-all flex items-center justify-center gap-1.5 min-h-[42px] col-span-1 sm:col-span-3 mt-1
+                          ${(selectedProvince.army.infantry + selectedProvince.army.archers + selectedProvince.army.cavalry) > 0 && (playerRealm?.actionPoints || 0) >= 1
+                            ? 'bg-gradient-to-r from-red-950/70 via-red-900/60 to-red-950/70 border-red-500/60 text-amber-200 hover:border-red-400 hover:from-red-900 hover:to-red-900 active:scale-95 shadow-[0_0_15px_rgba(220,38,38,0.25)]' 
+                            : 'bg-stone-900/40 border-stone-800 text-stone-600 cursor-not-allowed'}`}
+                      >
+                        <Swords size={15} className="text-red-400" />
+                        <span>Rota de Campanha (Até 20 Alvos em Cadeia)</span>
+                      </button>
+                    </div>
+                    <p className="mt-2 text-[10px] text-stone-400 leading-tight">Ações individuais aplicadas à província ou rotas estratégicas de ataque.</p>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Exército</p>
-                    <div className="grid grid-cols-2 gap-1 text-[10px] text-stone-300">
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider mb-2">Exército Local</p>
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
                       {selectedProvinceArmy.map(unit => (
-                        <div key={unit.key} className="flex items-center justify-between bg-black/20 rounded px-2 py-1">
-                          <span className="font-bold uppercase text-amber-200">{unit.label}</span>
-                          <span className="font-black text-amber-50">{unit.value}</span>
+                        <div key={unit.key} className="flex items-center justify-between bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80">
+                          <span className="font-semibold text-stone-400">{unit.label}</span>
+                          <span className="font-bold text-amber-200">{unit.value}</span>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Lealdade</p>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold uppercase text-stone-300">{provinceLoyaltyState}</span>
-                      <span className="text-[10px] font-black text-amber-50">{selectedProvince.loyalty}%</span>
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider mb-2">Construções</p>
+                    <div className="grid grid-cols-2 gap-1.5 text-xs">
+                      <div className="flex justify-between items-center bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80"><span className="text-stone-400">Fazendas</span><span className="font-bold text-amber-200">{selectedProvince.buildings.farms}</span></div>
+                      <div className="flex justify-between items-center bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80"><span className="text-stone-400">Minas</span><span className="font-bold text-amber-200">{selectedProvince.buildings.mines}</span></div>
+                      <div className="flex justify-between items-center bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80"><span className="text-stone-400">Oficinas</span><span className="font-bold text-amber-200">{selectedProvince.buildings.workshops}</span></div>
+                      <div className="flex justify-between items-center bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80"><span className="text-stone-400">Tribunais</span><span className="font-bold text-amber-200">{selectedProvince.buildings.courts}</span></div>
+                    </div>
+                  </div>
+
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider">Lealdade</p>
+                      <span className="text-xs font-bold text-amber-200">{selectedProvince.loyalty}% ({provinceLoyaltyState})</span>
                     </div>
                     <progress
                       className={`hud-meter ${selectedProvince.loyalty < 30 ? 'hud-meter-red' : selectedProvince.loyalty > 70 ? 'hud-meter-emerald' : 'hud-meter-amber'}`}
@@ -635,11 +1158,10 @@ export const HUD: React.FC<HUDProps> = ({
                     />
                   </div>
 
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Estabilidade</p>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] font-bold uppercase text-stone-300">{provinceStabilityState}</span>
-                      <span className="text-[10px] font-black text-amber-50">{provinceStability}%</span>
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider">Estabilidade</p>
+                      <span className="text-xs font-bold text-amber-200">{provinceStability}% ({provinceStabilityState})</span>
                     </div>
                     <progress
                       className={`hud-meter ${provinceStability >= 80 ? 'hud-meter-emerald' : provinceStability >= 50 ? 'hud-meter-amber' : provinceStability >= 20 ? 'hud-meter-orange' : 'hud-meter-red'}`}
@@ -649,59 +1171,24 @@ export const HUD: React.FC<HUDProps> = ({
                     />
                   </div>
 
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Construções</p>
-                    <div className="grid grid-cols-2 gap-1 text-[10px] text-stone-300">
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Farms</span><span className="font-black text-amber-50">{selectedProvince.buildings.farms}</span></div>
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Mines</span><span className="font-black text-amber-50">{selectedProvince.buildings.mines}</span></div>
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Works</span><span className="font-black text-amber-50">{selectedProvince.buildings.workshops}</span></div>
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Courts</span><span className="font-black text-amber-50">{selectedProvince.buildings.courts}</span></div>
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider mb-2">Produtividade / Turno</p>
+                    <div className="grid grid-cols-3 gap-1.5 text-xs text-center">
+                      <div className="bg-black/40 rounded py-1.5 border border-stone-800/80"><span className="block text-[10px] text-stone-500">Ouro</span><span className="font-bold text-amber-300">+{selectedProvinceProduction?.gold}</span></div>
+                      <div className="bg-black/40 rounded py-1.5 border border-stone-800/80"><span className="block text-[10px] text-stone-500">Comida</span><span className="font-bold text-emerald-300">+{selectedProvinceProduction?.food}</span></div>
+                      <div className="bg-black/40 rounded py-1.5 border border-stone-800/80"><span className="block text-[10px] text-stone-500">Materiais</span><span className="font-bold text-cyan-300">+{selectedProvinceProduction?.materials}</span></div>
                     </div>
                   </div>
 
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Produtividade</p>
-                    <div className="space-y-1 text-[10px] text-stone-300">
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Ouro</span><span className="font-black text-amber-50">+{selectedProvinceProduction?.gold}</span></div>
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Comida</span><span className="font-black text-amber-50">+{selectedProvinceProduction?.food}</span></div>
-                      <div className="flex justify-between bg-black/20 rounded px-2 py-1"><span>Materiais</span><span className="font-black text-amber-50">+{selectedProvinceProduction?.materials}</span></div>
-                    </div>
-                  </div>
-
-                  {selectedProvince.ownerId === gameState.playerRealmId && (
-                    <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                      <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Ações da Província</p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          onClick={() => onProvinceAction?.('assimilate', selectedProvince.id)}
-                          disabled={!canAssimilateProvince}
-                          className={`rounded-sm border px-2 py-2 text-[10px] font-black uppercase tracking-widest transition-colors min-h-[40px]
-                            ${canAssimilateProvince ? 'bg-emerald-600/10 border-emerald-600/30 text-emerald-200 hover:bg-emerald-600/20' : 'bg-stone-800/40 border-stone-700 text-stone-500 cursor-not-allowed'}`}
-                        >
-                          Assimilar
-                        </button>
-                        <button
-                          onClick={() => onProvinceAction?.('invest', selectedProvince.id)}
-                          disabled={!canInvestProvince}
-                          className={`rounded-sm border px-2 py-2 text-[10px] font-black uppercase tracking-widest transition-colors min-h-[40px]
-                            ${canInvestProvince ? 'bg-amber-600/10 border-amber-600/30 text-amber-200 hover:bg-amber-600/20' : 'bg-stone-800/40 border-stone-700 text-stone-500 cursor-not-allowed'}`}
-                        >
-                          Investir
-                        </button>
-                      </div>
-                      <p className="mt-2 text-[9px] text-stone-500">Ações individuais desta província, sem afetar o reino inteiro.</p>
-                    </div>
-                  )}
-
-                  <div className="bg-stone-900/40 border border-stone-700/40 rounded-sm p-2">
-                    <p className="text-[10px] text-stone-500 font-black uppercase mb-2">Crescimento populacional</p>
-                    <div className="flex items-center justify-between bg-black/20 rounded px-2 py-2">
-                      <span className="text-[10px] font-bold uppercase text-stone-300">Por turno</span>
-                      <span className={`font-black ${selectedProvinceGrowthPerTurn >= 0 ? 'text-emerald-300' : 'text-red-300'}`}>
+                  <div className="bg-stone-900/40 border border-stone-800 rounded-md p-2.5">
+                    <p className="text-[11px] text-stone-400 font-bold uppercase tracking-wider mb-2">Crescimento Populacional</p>
+                    <div className="flex items-center justify-between bg-black/40 rounded px-2.5 py-1.5 border border-stone-800/80">
+                      <span className="text-xs font-medium text-stone-400">Por Turno</span>
+                      <span className={`font-bold text-sm ${selectedProvinceGrowthPerTurn >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                         {selectedProvinceGrowthPerTurn >= 0 ? '+' : ''}{selectedProvinceGrowthPerTurn}
                       </span>
                     </div>
-                    <p className="mt-2 text-[9px] text-stone-500">Baseado em população, lealdade e estabilidade.</p>
+                    <p className="mt-1.5 text-[10px] text-stone-400">Afetado por população, lealdade e estabilidade.</p>
                   </div>
                 </div>
 
@@ -766,7 +1253,7 @@ export const HUD: React.FC<HUDProps> = ({
                             <span className="text-stone-500">Defesa:</span> Nível {selectedProvince.defense}
                           </p>
                           <p className="text-[10px] text-stone-300">
-                            <span className="text-stone-500">Terreno:</span> {selectedProvince.terrain === 'plains' ? 'Planície' : selectedProvince.terrain === 'forest' ? 'Floresta' : 'Montanha'}
+                            <span className="text-stone-500">Terreno:</span> {selectedProvince.terrain === 'plains' ? 'Planície' : selectedProvince.terrain === 'forest' ? 'Floresta' : selectedProvince.terrain === 'mountain' ? 'Montanha' : selectedProvince.terrain === 'desert' ? 'Deserto' : selectedProvince.terrain === 'steppe' ? 'Estepe' : selectedProvince.terrain === 'lake' ? 'Lago' : 'Litoral'}
                           </p>
                           <p className="text-[10px] text-stone-300">
                             <span className="text-stone-500">Lealdade:</span> {selectedProvince.loyalty}%
@@ -788,7 +1275,7 @@ export const HUD: React.FC<HUDProps> = ({
               })()}
 
               {/* Troop Composition Selector for March/Attack */}
-              {selectingMoveComposition && selectedProvince.ownerId === gameState.playerRealmId && (
+              {selectingMoveComposition && hasPlayerTroopsInSelected && (
                 <div className="mt-4 p-3 bg-amber-950/20 border border-amber-700/30 rounded-sm">
                   <p className="text-[10px] md:text-[11px] text-amber-500 font-black uppercase mb-3">Composição das Tropas</p>
                   {(['infantry', 'archers', 'cavalry', 'scouts'] as const).map(type => {
@@ -844,7 +1331,7 @@ export const HUD: React.FC<HUDProps> = ({
               )}
 
               {/* Military Actions */}
-              {selectedProvince.ownerId === gameState.playerRealmId && (
+              {hasPlayerTroopsInSelected && (
                 <div className="mt-4 space-y-2">
                   <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase border-b border-stone-700 pb-1 mb-2">Comandos Militares</p>
                   <div className="grid grid-cols-3 gap-1.5 md:gap-2">
@@ -939,7 +1426,7 @@ export const HUD: React.FC<HUDProps> = ({
             </div>
 
             {/* Military Maintenance Breakdown */}
-            {selectedProvince.ownerId === gameState.playerRealmId && selectedProvince.troops > 0 && (
+            {hasPlayerTroopsInSelected && selectedProvince.troops > 0 && (
               <div className="bg-stone-900/30 p-2 rounded-sm border border-stone-700/30">
                 <p className="text-[10px] text-stone-500 font-bold uppercase mb-1">Manutenção Militar</p>
                 <div className="grid grid-cols-2 gap-1 text-[9px]">
@@ -961,159 +1448,48 @@ export const HUD: React.FC<HUDProps> = ({
 
             {/* Recruitment / Building Sections */}
             {selectedProvince.ownerId === gameState.playerRealmId && (
-              <div className="bg-stone-800/30 border border-amber-900/20 p-3 rounded-sm">
-                <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase mb-3">Administração Regional</p>
-                <div className="space-y-4">
-                  {/* Recruitment Section with Sliders */}
-                  <div>
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-[10px] font-bold uppercase text-amber-200">Recrutamento</span>
-                      <span className="text-[10px] text-stone-500 italic">Custo: {ACTION_COSTS.recruit} AP</span>
-                    </div>
+              <div className="bg-stone-800/30 border border-amber-900/20 p-3 rounded-sm space-y-4">
+                <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase">Administração Regional</p>
+                {renderUnifiedRecruitmentPanel(false)}
 
-                    {(['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).map(type => {
-                      const stats = UNIT_STATS[type];
-                      
+                {/* Building Section with Costs */}
+                <div>
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="text-[10px] font-bold uppercase text-amber-200">Projetos</span>
+                    <span className="text-[10px] text-stone-500 italic">Custo: {ACTION_COSTS.build} AP</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1">
+                    {['farms', 'mines', 'workshops', 'courts', 'fortify'].map(b => {
+                      const buildingStats = BUILDING_STATS[b as keyof typeof BUILDING_STATS];
                       const labels: Record<string, string> = {
-                        infantry: 'Infantaria',
-                        archers: 'Arqueiros',
-                        cavalry: 'Cavalaria',
-                        scouts: 'Batedores'
+                        farms: 'Fazendas',
+                        mines: 'Minas',
+                        workshops: 'Oficinas',
+                        courts: 'Corte',
+                        fortify: 'Fortificar'
                       };
-
-                      // Check if strategic resource is available
-                      if (stats.requires) {
-                        const hasResource = Object.values(gameState.provinces).some(p =>
-                          p.ownerId === gameState.playerRealmId && p.strategicResource === stats.requires
-                        );
-                        if (!hasResource) return null;
-                      }
-
-                      const maxByGold = stats.cost.gold > 0 ? Math.floor(playerRealm.gold / stats.cost.gold) : Infinity;
-                      const maxByFood = stats.cost.food > 0 ? Math.floor(playerRealm.food / stats.cost.food) : Infinity;
-                      const maxByMaterials = stats.cost.materials > 0 ? Math.floor(playerRealm.materials / stats.cost.materials) : Infinity;
-                      const maxByPop = stats.cost.pop > 0 ? Math.floor(selectedProvince.population / stats.cost.pop) : Infinity;
-                      const maxAmount = Math.max(0, Math.min(maxByGold, maxByFood, maxByMaterials, maxByPop));
-
-                      if (maxAmount <= 0) return null;
-
-                      const currentValue = recruitComposition[type] || 0;
-                      const costForCurrent = {
-                        gold: stats.cost.gold * currentValue,
-                        food: stats.cost.food * currentValue,
-                        materials: stats.cost.materials * currentValue,
-                        pop: stats.cost.pop * currentValue
-                      };
+                      const costs: string[] = [];
+                      if (buildingStats?.gold) costs.push(`${buildingStats.gold} ouro`);
+                      if (buildingStats?.materials) costs.push(`${buildingStats.materials} materiais`);
+                      const costStr = costs.join(' / ');
+                      const isMaxFortify = b === 'fortify' && selectedProvince.defense >= 5;
 
                       return (
-                        <div key={type} className="mb-3">
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-[10px] font-bold text-amber-100">{labels[type]}</span>
-                            <span className="text-[10px] text-stone-400">
-                              {stats.cost.gold > 0 ? `${stats.cost.gold} ouro` : ''}
-                              {stats.cost.food > 0 ? ` / ${stats.cost.food} comida` : ''}
-                              {stats.cost.materials > 0 ? ` / ${stats.cost.materials} material` : ''}
-                              {stats.cost.pop > 0 ? ` / ${stats.cost.pop} pop` : ''}
-                            </span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="range"
-                              min={0}
-                              max={Math.min(maxAmount, 20)}
-                              value={currentValue}
-                              onChange={(e) => {
-                                const val = parseInt(e.target.value);
-                                onRecruitCompositionChange({ ...recruitComposition, [type]: val });
-                              }}
-                              title={`Recrutar: ${labels[type]}`}
-                              aria-label={`Recrutar: ${labels[type]}`}
-                              className="flex-1 h-1.5 bg-stone-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
-                            />
-                            <span className="text-xs font-black text-amber-200 w-8 text-right">{currentValue}</span>
-                          </div>
-
-                          {currentValue > 0 && (
-                            <div className="mt-1 text-[10px] text-stone-400">
-                              Custo: {costForCurrent.gold > 0 ? `${costForCurrent.gold} ouro` : ''}
-                              {costForCurrent.food > 0 ? ` / ${costForCurrent.food} comida` : ''}
-                              {costForCurrent.materials > 0 ? ` / ${costForCurrent.materials} material` : ''}
-                              {costForCurrent.pop > 0 ? ` / ${costForCurrent.pop} pop` : ''}
-                            </div>
-                          )}
-                        </div>
+                        <button
+                          key={b}
+                          onClick={() => onAction('build', selectedProvince.id, b)}
+                          disabled={isMaxFortify}
+                          className={`text-[10px] font-bold uppercase py-3 min-h-[44px] rounded-sm transition-all flex flex-col items-center justify-center gap-1
+                            ${isMaxFortify 
+                              ? 'bg-stone-900 border-stone-800 text-stone-600 cursor-not-allowed' 
+                              : 'bg-stone-800 border-stone-700 hover:border-amber-500 text-stone-400 hover:text-amber-200'}`}
+                          title={isMaxFortify ? 'Defesa no limite máximo (5)' : costStr}
+                        >
+                          {isMaxFortify ? 'Defesa Máxima' : labels[b]}
+                          <span className="text-[9px] text-stone-500 font-normal normal-case">{isMaxFortify ? 'Nível 5' : costStr}</span>
+                        </button>
                       );
                     })}
-
-                    {/* Summary and Recruit Button */}
-                    {(() => {
-                      const totalUnits = (recruitComposition.infantry || 0) + (recruitComposition.archers || 0) +
-                        (recruitComposition.cavalry || 0) + (recruitComposition.scouts || 0);
-                      if (totalUnits <= 0) return null;
-
-                      const totalCosts = { gold: 0, food: 0, materials: 0, pop: 0 };
-                      (['infantry', 'archers', 'cavalry', 'scouts'] as UnitType[]).forEach(type => {
-                        const amount = recruitComposition[type] || 0;
-                        const stats = UNIT_STATS[type];
-                        totalCosts.gold += stats.cost.gold * amount;
-                        totalCosts.food += stats.cost.food * amount;
-                        totalCosts.materials += stats.cost.materials * amount;
-                        totalCosts.pop += stats.cost.pop * amount;
-                      });
-
-                      return (
-                        <div className="pt-2 border-t border-stone-700">
-                          <div className="text-[10px] text-stone-400 mb-2">
-                            Total: {totalUnits} unidades — {totalCosts.gold > 0 ? `${totalCosts.gold} ouro` : ''}
-                            {totalCosts.food > 0 ? ` / ${totalCosts.food} comida` : ''}
-                            {totalCosts.materials > 0 ? ` / ${totalCosts.materials} material` : ''}
-                            {totalCosts.pop > 0 ? ` / ${totalCosts.pop} pop` : ''}
-                          </div>
-                          <button
-                            onClick={() => onAction('recruit', selectedProvince.id)}
-                            className="w-full py-3 min-h-[44px] bg-amber-600/20 border border-amber-600 text-amber-200 text-[10px] font-black uppercase tracking-widest hover:bg-amber-600/30 transition-all rounded-sm flex items-center justify-center gap-2"
-                          >
-                            <PlusCircle size={14} /> Recrutar
-                          </button>
-                        </div>
-                      );
-                    })()}
-                  </div>
-
-                  {/* Building Section with Costs */}
-                  <div>
-                    <div className="flex justify-between items-center mb-1">
-                      <span className="text-[10px] font-bold uppercase text-amber-200">Projetos</span>
-                      <span className="text-[10px] text-stone-500 italic">Custo: {ACTION_COSTS.build} AP</span>
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                      {['farms', 'mines', 'workshops', 'courts'].map(b => {
-                        const buildingStats = BUILDING_STATS[b as keyof typeof BUILDING_STATS];
-                        const labels: Record<string, string> = {
-                          farms: 'Fazendas',
-                          mines: 'Minas',
-                          workshops: 'Oficinas',
-                          courts: 'Corte'
-                        };
-                        const costs: string[] = [];
-                        if (buildingStats?.gold) costs.push(`${buildingStats.gold} ouro`);
-                        if (buildingStats?.materials) costs.push(`${buildingStats.materials} materiais`);
-                        const costStr = costs.join(' / ');
-
-                        return (
-                          <button
-                            key={b}
-                            onClick={() => onAction('build', selectedProvince.id, b)}
-                            className="text-[10px] font-bold uppercase py-3 min-h-[44px] bg-stone-800 border border-stone-700 hover:border-amber-500 rounded-sm text-stone-400 hover:text-amber-200 transition-all flex flex-col items-center justify-center gap-1"
-                            title={costStr}
-                          >
-                            {labels[b]}
-                            <span className="text-[9px] text-stone-500 font-normal normal-case">{costStr}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1125,40 +1501,45 @@ export const HUD: React.FC<HUDProps> = ({
             <p className="text-[10px] md:text-sm font-serif italic text-stone-500">Selecione uma província no mapa<br />para ver detalhes e emitir ordens.</p>
           </div>
         )}
+
+        {/* Marchas em Andamento (Dentro da área de conteúdo rolável) */}
+        {marchOrders.some(o => o.realmId === gameState.playerRealmId) && (
+          <div className="p-3 bg-stone-950/60 border border-amber-900/30 rounded-md space-y-2 font-sans mt-4">
+            <div className="flex items-center justify-between pb-1.5 border-b border-stone-800">
+              <p className="text-xs text-amber-400 font-bold uppercase tracking-wider flex items-center gap-1.5">
+                <span>🚩</span> Marchas em Andamento ({marchOrders.filter(o => o.realmId === gameState.playerRealmId).length})
+              </p>
+            </div>
+            <div className="max-h-48 overflow-y-auto custom-scrollbar space-y-1.5 pr-1">
+              {marchOrders.filter(o => o.realmId === gameState.playerRealmId).map(order => {
+                const destProv = gameState.provinces[order.remainingPath[order.remainingPath.length - 1] || order.currentProvId];
+                const totalTroops = order.troops.infantry + order.troops.archers + order.troops.cavalry + order.troops.scouts;
+                const turnsLeft = order.remainingPath.length;
+                return (
+                  <div key={order.id} className="flex items-center justify-between bg-stone-900/80 p-2 rounded border border-stone-800 hover:border-amber-700/50 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-amber-200 truncate">
+                        {totalTroops} tropas → {destProv?.name || '???'}
+                      </p>
+                      <p className="text-[10px] text-stone-400">{turnsLeft} turno{turnsLeft !== 1 ? 's' : ''} restantes</p>
+                    </div>
+                    <button
+                      onClick={() => onCancelMarchOrder(order.id)}
+                      className="ml-2 px-2 py-1 text-[10px] font-bold uppercase bg-red-950/60 border border-red-700/50 text-red-300 rounded hover:bg-red-900 transition-colors shrink-0"
+                      title="Cancelar esta marcha"
+                    >
+                      ✕ Cancelar
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Active Marches */}
-      {marchOrders.length > 0 && (
-        <div className="p-4 bg-black/40 border-t border-amber-900/20">
-          <p className="text-[10px] md:text-[11px] text-stone-500 font-black uppercase mb-2">Marchas em Andamento</p>
-          <div className="space-y-2">
-            {marchOrders.filter(o => o.realmId === gameState.playerRealmId).map(order => {
-              const destProv = gameState.provinces[order.remainingPath[order.remainingPath.length - 1] || order.currentProvId];
-              const totalTroops = order.troops.infantry + order.troops.archers + order.troops.cavalry + order.troops.scouts;
-              const turnsLeft = order.remainingPath.length;
-              return (
-                <div key={order.id} className="flex items-center justify-between bg-stone-800/50 p-2 rounded-sm border border-stone-700">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[9px] font-bold text-amber-200 truncate">
-                      {totalTroops} tropas → {destProv?.name || '???'}
-                    </p>
-                    <p className="text-[10px] text-stone-500">{turnsLeft} turno{turnsLeft !== 1 ? 's' : ''}</p>
-                  </div>
-                  <button
-                    onClick={() => onCancelMarchOrder(order.id)}
-                    className="ml-2 p-1 text-[10px] font-bold uppercase bg-red-900/30 border border-red-700/50 text-red-300 rounded hover:bg-red-800/50 transition-colors"
-                  >
-                    ✕
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
-
-      {/* Actions Bottom */}
-      <div className="p-2 md:p-4 bg-black/60 border-t border-amber-900/30 space-y-1.5 md:space-y-2">
+      {/* Actions Bottom (Fixado e Sempre Visível no Rodapé) */}
+      <div className="shrink-0 sticky bottom-0 z-20 p-2 md:p-3 bg-stone-950/95 border-t border-amber-900/40 backdrop-blur-md space-y-1.5 md:space-y-2">
         <div className="md:hidden flex items-center justify-between gap-2">
           <div className="min-w-0 flex items-center gap-1.5">
             <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${playerRealmColorClass}`}>
@@ -1195,21 +1576,85 @@ export const HUD: React.FC<HUDProps> = ({
               <MapIcon size={10} />
             </button>
           </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={onEndTurn}
+              title="Encerrar Turno [Enter]"
+              className="h-8 px-2 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-[10px] uppercase rounded border border-amber-700 flex items-center gap-1"
+            >
+              <Play size={11} className="fill-stone-950" /> Turno
+            </button>
+            <button
+              onClick={onToggleAutoPlay}
+              title={isAutoPlayActive ? 'Pausar Auto' : `Auto-Turno (${autoPlaySpeed / 1000}s)`}
+              className={`h-8 px-2 rounded border font-bold text-[10px] uppercase flex items-center gap-1 ${
+                isAutoPlayActive ? 'bg-emerald-950 border-emerald-500 text-emerald-300 animate-pulse' : 'bg-stone-800 border-stone-700 text-amber-300'
+              }`}
+            >
+              {isAutoPlayActive ? <Pause size={12} /> : <FastForward size={12} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Velocidades de Auto-Play */}
+        <div className="flex items-center justify-between gap-1.5 bg-stone-900/90 p-1.5 rounded border border-stone-800 font-sans">
+          <span className="text-[10px] font-bold text-stone-400 uppercase tracking-wide flex items-center gap-1">
+            ⚡ Auto:
+          </span>
+          <div className="flex items-center gap-1">
+            {[
+              { label: '0.5s', value: 500 },
+              { label: '1s', value: 1000 },
+              { label: '2s', value: 2000 },
+              { label: '5s', value: 5000 },
+            ].map(spd => (
+              <button
+                key={spd.value}
+                onClick={() => onChangeAutoPlaySpeed?.(spd.value)}
+                className={`px-2 py-0.5 text-[10px] font-bold rounded transition-all ${
+                  autoPlaySpeed === spd.value
+                    ? 'bg-amber-500 text-stone-950 shadow-sm'
+                    : 'bg-stone-800 text-stone-400 hover:text-amber-200'
+                }`}
+              >
+                {spd.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Desktop Turn & Auto-Play Buttons */}
+        <div className="hidden md:flex gap-2 font-sans">
           <button
             onClick={onEndTurn}
             title="Encerrar Turno [Enter]"
-            className="h-8 px-2.5 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-[10px] uppercase tracking-[0.08em] rounded-sm border border-amber-700 active:scale-[0.98] flex items-center justify-center gap-1.5"
+            className="flex-1 h-10 md:h-11 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-sm uppercase tracking-wider transition-all rounded shadow-md active:scale-[0.98] flex items-center justify-center gap-2"
           >
-            <Play size={12} className="fill-stone-950" /> Turno
+            <Play size={16} className="fill-stone-950" /> Encerrar Turno
+          </button>
+
+          <button
+            onClick={onToggleAutoPlay}
+            title={isAutoPlayActive ? 'Pausar Auto-Execução' : `Auto-Executar (a cada ${autoPlaySpeed / 1000}s)`}
+            className={`px-4 h-10 md:h-11 rounded font-bold text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border shadow-md active:scale-[0.98] ${
+              isAutoPlayActive
+                ? 'bg-emerald-950 border-emerald-500 text-emerald-300 animate-pulse shadow-[0_0_15px_rgba(16,185,129,0.3)]'
+                : 'bg-stone-800/90 border-stone-700 text-amber-300 hover:bg-stone-700 hover:border-amber-600/50'
+            }`}
+          >
+            {isAutoPlayActive ? (
+              <>
+                <Pause size={16} className="fill-emerald-300" />
+                <span>Pausar</span>
+              </>
+            ) : (
+              <>
+                <FastForward size={16} />
+                <span>Auto</span>
+              </>
+            )}
           </button>
         </div>
-        <button
-          onClick={onEndTurn}
-          title="Encerrar Turno [Enter]"
-          className="hidden md:flex w-full h-10 md:h-12 bg-amber-600 hover:bg-amber-500 text-stone-950 font-black text-xs md:text-lg uppercase tracking-[0.12em] md:tracking-widest transition-all rounded-sm shadow-[0_4px_20px_rgba(245,158,11,0.3)] active:scale-[0.98] items-center justify-center gap-2 md:gap-3"
-        >
-          <Play size={16} className="fill-stone-950 md:w-5 md:h-5" /> Encerrar Turno
-        </button>
 
         <div className="grid grid-cols-5 gap-2">
           <button

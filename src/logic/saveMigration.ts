@@ -1,8 +1,52 @@
 import { GameState, GovernmentType, TechCategory } from '../types';
+import { REALM_COLORS, getUniqueRealmColor } from './game-constants';
 
 export const SCHEMA_VERSION = 2;
 
 const TECH_LEVELS_DEFAULT: Record<TechCategory, number> = { movement: 0, assimilation: 0, recruitment: 0, combat: 0 };
+
+/**
+ * REGRA INQUEBRÁVEL: Nenhum reino rival/inimigo pode compartilhar a mesma cor do jogador.
+ * Audita todos os reinos e reatribui cores 100% únicas caso haja colisão com a cor do jogador ou duplicação.
+ */
+export function fixRealmColorCollisions(state: GameState): void {
+  if (!state || !state.realms) return;
+
+  const playerRealm = state.realms[state.playerRealmId] || Object.values(state.realms).find(r => r.isPlayer);
+  if (!playerRealm) return;
+
+  const playerColor = (playerRealm.color || REALM_COLORS[0]).toLowerCase();
+  const usedColors = new Set<string>([playerColor]);
+  const totalRealms = Object.keys(state.realms).length;
+
+  let colorIndex = 1;
+  Object.values(state.realms).forEach(realm => {
+    if (realm.id === playerRealm.id || realm.isPlayer || realm.id === 'neutral') return;
+
+    let realmColor = (realm.color || '').toLowerCase();
+    
+    // Se o reino tiver a MESMA cor que o jogador OU tiver cor duplicada de outro reino:
+    if (!realmColor || realmColor === playerColor || usedColors.has(realmColor)) {
+      let newColor = getUniqueRealmColor(colorIndex, totalRealms);
+      while (newColor.toLowerCase() === playerColor || usedColors.has(newColor.toLowerCase())) {
+        colorIndex++;
+        newColor = getUniqueRealmColor(colorIndex, totalRealms + colorIndex + 10);
+      }
+      realm.color = newColor;
+      realmColor = newColor.toLowerCase();
+      colorIndex++;
+    }
+    usedColors.add(realmColor);
+  });
+
+  Object.values(state.provinces || {}).forEach(prov => {
+    const armyTroops = prov.army ? (prov.army.infantry + prov.army.archers + prov.army.cavalry + prov.army.scouts) : 0;
+    const totalTroops = Math.max(prov.troops || 0, armyTroops);
+    if (prov.isWater && totalTroops > 0 && !prov.occupantRealmId) {
+      prov.occupantRealmId = state.playerRealmId;
+    }
+  });
+}
 
 /**
  * Migra um save antigo (schemaVersion < 2) para o schema atual.
@@ -38,6 +82,9 @@ export function migrateSaveGame(data: unknown): GameState {
 
     state.schemaVersion = 2;
   }
+
+  // Garantir a Regra Inquebrável de cores em TODOS os saves carregados (antigos ou atuais)
+  fixRealmColorCollisions(state);
 
   return state;
 }

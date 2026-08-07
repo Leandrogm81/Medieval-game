@@ -15,7 +15,9 @@ import { processVassalLiberty } from './vassalLogic';
 
 export function calculateVisibility(state: GameState): string[] {
   const visible = new Set<string>();
-  const playerProvinces = Object.values(state.provinces).filter(p => p.ownerId === state.playerRealmId);
+  const playerProvinces = Object.values(state.provinces).filter(p => 
+    p.ownerId === state.playerRealmId || (p.occupantRealmId === state.playerRealmId && p.troops > 0)
+  );
   
   playerProvinces.forEach(p => {
     visible.add(p.id);
@@ -38,8 +40,12 @@ export function calculateVisibility(state: GameState): string[] {
   (state.marchOrders || []).filter(o => o.realmId === state.playerRealmId).forEach(o => {
     visible.add(o.currentProvId);
     const prov = state.provinces[o.currentProvId];
-    if (prov && o.kind !== 'scout') (prov.neighbors || []).forEach(nId => visible.add(nId));
+    if (prov) (prov.neighbors || []).forEach(nId => visible.add(nId));
   });
+
+  if (state.recentlyScoutedProvinceIds) {
+    state.recentlyScoutedProvinceIds.forEach(id => visible.add(id));
+  }
   
   return Array.from(visible);
 }
@@ -63,9 +69,9 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
 
   if (state.settings.victoryCondition === 'conquest') {
     for (const realmId in provinceCounts) {
-      if (realmId === 'neutral') continue; // FIX: províncias neutras não podem vencer
+      if (realmId === 'neutral') continue;
       const realm = state.realms[realmId];
-      if (!realm) continue; // FIX: reino eliminado não pode vencer
+      if (!realm) continue;
       if (provinceCounts[realmId] >= totalProvinces * 0.7) {
         return {
           winnerId: realmId,
@@ -118,39 +124,44 @@ export function checkGameOver(state: GameState): { winnerId: string, reason: str
 
   return null;
 }
+
 export function findPath(
   state: GameState,
   fromId: string,
   toId: string,
   realmId: string,
-  isScout = false,
-  allowEnemyDestination = false
+  isScout: boolean = false,
+  allowEnemyDestination: boolean = false
 ): string[] {
-
   if (fromId === toId) return [];
+
   const fromProv = state.provinces[fromId];
   if (!fromProv) return [];
 
-  // Check if target is adjacent - allow direct march to neighboring enemy/neutral
-  const isAdjacent = fromProv.neighbors.includes(toId);
-
-  // Simplified: if target is a direct neighbor, allow 1-hop march
-  // This enables marching to adjacent enemy/neutral territories
-  if (isAdjacent) {
+  if (fromProv.neighbors.includes(toId)) {
     const targetProv = state.provinces[toId];
     if (!targetProv) return [];
-    // MEGA MAPA: oceano nunca é destino válido
-    if (targetProv.isWater) return [];
-    // Scouts can traverse anything; regular troops can only march to their own land
-    if (isScout || targetProv.ownerId === realmId || allowEnemyDestination) {
+    
+    // Batedores têm passagem livre
+    if (isScout) return [toId];
+
+    // Oceanos e movimentações de/para oceanos têm passagem livre
+    const isWater = !!targetProv.isWater;
+    const isOwned = targetProv.ownerId === realmId;
+    const isNeutral = targetProv.ownerId === 'neutral';
+    const isFromWater = !!fromProv.isWater;
+    const isAtWar = targetProv.ownerId !== realmId && targetProv.ownerId !== 'neutral' && isWarBetween(state, realmId, targetProv.ownerId);
+
+    if (isWater || isOwned || isNeutral || allowEnemyDestination || isFromWater || isAtWar) {
       return [toId];
     }
     return [];
   }
 
-  // For non-adjacent targets, use BFS but still allow traversing to adjacent enemies
+  // For non-adjacent targets, use BFS
   const visited = new Set<string>([fromId]);
   const queue: { id: string; path: string[] }[] = [{ id: fromId, path: [] }];
+  const isFromWater = !!fromProv.isWater;
 
   while (queue.length > 0) {
     const { id, path } = queue.shift()!;
@@ -162,9 +173,7 @@ export function findPath(
       const neighbor = state.provinces[nId];
       if (!neighbor) continue;
 
-      // Scouts can traverse anything (exceto oceano no mega mapa)
       if (isScout) {
-        if (neighbor.isWater) continue;
         const newPath = [...path, nId];
         if (nId === toId) return newPath;
         visited.add(nId);
@@ -172,8 +181,12 @@ export function findPath(
         continue;
       }
 
-      // For non-scouts: allow if friendly, neutral, or if it's the destination
-      const canTraverse = neighbor.ownerId === realmId || (allowEnemyDestination && nId === toId);
+      const isWater = !!neighbor.isWater;
+      const isOwned = neighbor.ownerId === realmId;
+      const isNeutral = neighbor.ownerId === 'neutral';
+      const isAtWar = neighbor.ownerId !== realmId && neighbor.ownerId !== 'neutral' && isWarBetween(state, realmId, neighbor.ownerId);
+
+      const canTraverse = isWater || isOwned || isNeutral || isFromWater || (nId === toId ? (allowEnemyDestination || isAtWar) : isAtWar);
       if (!canTraverse) continue;
 
       const newPath = [...path, nId];
@@ -203,20 +216,20 @@ function processMarchOrders(state: GameState) {
     army.infantry + army.archers + army.cavalry + army.scouts;
 
   const finishMove = (order: (typeof state.marchOrders)[number], prov: Province) => {
-    if (prov.ownerId === 'neutral') {
+    if (prov.ownerId === 'neutral' && !prov.isWater) {
       prov.ownerId = order.realmId;
       prov.loyalty = 50;
       prov.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
     }
 
-    if (prov.ownerId === order.realmId) {
+    if (prov.ownerId === order.realmId || prov.isWater) {
       prov.army.infantry += order.troops.infantry;
       prov.army.archers += order.troops.archers;
       prov.army.cavalry += order.troops.cavalry;
       prov.army.scouts += order.troops.scouts;
       prov.troops = recalcTroops(prov.army);
       if (order.realmId === state.playerRealmId) {
-        state.logs.push(`Tropas chegaram em ${prov.name}.`);
+        state.logs.push(prov.isWater ? `Tropas navegaram e posicionaram-se em ${prov.name}.` : `Tropas chegaram em ${prov.name}.`);
       }
     }
   };
@@ -239,55 +252,207 @@ function processMarchOrders(state: GameState) {
     }
   };
 
+  // Pre-pass: Interceptar ordens inimigas cruzando províncias no mesmo turno (P1 -> P2 e P2 -> P1)
+  const interceptedOrders = new Map<string, string>(); // orderId -> collisionProvinceId
+  const allOrdersList = [...state.marchOrders];
+
+  for (let i = 0; i < allOrdersList.length; i++) {
+    const orderA = allOrdersList[i];
+    if (orderA.kind === 'scout' || orderA.remainingPath.length === 0) continue;
+
+    for (let j = i + 1; j < allOrdersList.length; j++) {
+      const orderB = allOrdersList[j];
+      if (orderB.kind === 'scout' || orderB.remainingPath.length === 0) continue;
+      if (orderA.realmId === orderB.realmId) continue; // Aliados não se atacam em trânsito
+
+      const fromA = orderA.currentProvId;
+      const toA = orderA.remainingPath[0];
+      const fromB = orderB.currentProvId;
+      const toB = orderB.remainingPath[0];
+
+      // Se A vai de P1->P2 e B vai de P2->P1: forçar confronto direto em P2
+      if (fromA === toB && toA === fromB) {
+        interceptedOrders.set(orderA.id, toA);
+        interceptedOrders.set(orderB.id, toA);
+        orderA.kind = 'attack';
+        orderB.kind = 'attack';
+      }
+    }
+  }
+
+  const depositOrderTroopsToCurrentProv = (order: (typeof state.marchOrders)[number]) => {
+    if (!order.troops) return;
+    const count = recalcTroops(order.troops);
+    if (count <= 0) return;
+
+    let targetProv = state.provinces[order.currentProvId];
+    if (!targetProv || (targetProv.ownerId !== order.realmId && !targetProv.isWater)) {
+      const originP = order.originProvinceId ? state.provinces[order.originProvinceId] : null;
+      if (originP && originP.ownerId === order.realmId) {
+        targetProv = originP;
+      } else {
+        const friendlyNeighbor = (targetProv?.neighbors || [])
+          .map(id => state.provinces[id])
+          .find(n => n && n.ownerId === order.realmId);
+        const capitalId = state.realms[order.realmId]?.capitalId;
+        const capitalP = capitalId ? state.provinces[capitalId] : null;
+        targetProv = friendlyNeighbor || (capitalP && capitalP.ownerId === order.realmId ? capitalP : null) ||
+          Object.values(state.provinces).find(p => p.ownerId === order.realmId) || targetProv;
+      }
+    }
+
+    if (targetProv) {
+      targetProv.army.infantry += order.troops.infantry || 0;
+      targetProv.army.archers += order.troops.archers || 0;
+      targetProv.army.cavalry += order.troops.cavalry || 0;
+      targetProv.army.scouts += order.troops.scouts || 0;
+      targetProv.troops = recalcTroops(targetProv.army);
+      if (targetProv.isWater && (!targetProv.occupantRealmId || targetProv.occupantRealmId === 'neutral')) {
+        targetProv.occupantRealmId = order.realmId;
+      }
+    }
+    order.troops = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+  };
+
   state.marchOrders.forEach(order => {
-    const nextProvId = order.remainingPath[0];
-    const nextProv = nextProvId ? state.provinces[nextProvId] : state.provinces[order.currentProvId];
-
-    if (!nextProv) {
-      toRemove.add(order.id);
-      return;
-    }
-
-    // FIX: validar que o próximo passo é VIZINHO da província atual (caminho
-    // não pode ter sido corrompido) e que o território não mudou de dono.
-    const currentProv = state.provinces[order.currentProvId];
-    if (order.remainingPath.length > 0) {
-      const isAdjacent = currentProv && currentProv.neighbors.includes(nextProvId);
-      if (!isAdjacent) {
-        // Caminho inválido: cancelar a ordem, tropas ficam onde estão
-        if (order.realmId === state.playerRealmId) {
-          state.logs.push(`Ordem de marcha cancelada: caminho para ${nextProv.name} não está mais disponível.`);
+    if (order.kind === 'scout') {
+      // Batedores têm movimentação livre instantânea: avançam todo o caminho restante no mesmo turno
+      let hasError = false;
+      while (order.remainingPath.length > 0) {
+        const nextProvId = order.remainingPath[0];
+        const nextProv = state.provinces[nextProvId];
+        if (!nextProv) {
+          depositOrderTroopsToCurrentProv(order);
+          toRemove.add(order.id);
+          hasError = true;
+          break;
         }
+
+        const currentProv = state.provinces[order.currentProvId];
+        const isAdjacent = currentProv && currentProv.neighbors.includes(nextProvId);
+        if (!isAdjacent) {
+          depositOrderTroopsToCurrentProv(order);
+          toRemove.add(order.id);
+          hasError = true;
+          break;
+        }
+
+        const fromProvId = order.currentProvId;
+        order.currentProvId = nextProvId;
+        order.remainingPath.shift();
+
+        state.lastTurnMovements = state.lastTurnMovements || [];
+        state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
+
+        if (order.realmId === state.playerRealmId) {
+          state.recentlyScoutedProvinceIds = state.recentlyScoutedProvinceIds || [];
+          if (!state.recentlyScoutedProvinceIds.includes(nextProvId)) {
+            state.recentlyScoutedProvinceIds.push(nextProvId);
+          }
+          if (nextProv.neighbors) {
+            nextProv.neighbors.forEach(nId => {
+              if (!state.recentlyScoutedProvinceIds!.includes(nId)) {
+                state.recentlyScoutedProvinceIds!.push(nId);
+              }
+            });
+          }
+        }
+      }
+
+      if (!hasError && order.currentProvId === order.destinationId) {
+        arrivedOrders.push({ order, prov: state.provinces[order.destinationId] });
+      }
+    } else {
+      // Tropas regulares movem-se apenas 1 província por turno
+      const nextProvId = order.remainingPath[0];
+      const nextProv = nextProvId ? state.provinces[nextProvId] : state.provinces[order.currentProvId];
+
+      if (!nextProv) {
+        depositOrderTroopsToCurrentProv(order);
         toRemove.add(order.id);
         return;
       }
-      // Para ordens de movimento (não ataque/scout): bloquear se o próximo
-      // passo agora pertence a outro reino (território conquistado entre turnos)
-      if (order.kind === 'move' && nextProv.ownerId !== order.realmId && nextProv.ownerId !== 'neutral') {
-        if (order.realmId === state.playerRealmId) {
-          state.logs.push(`Ordem de marcha bloqueada: ${nextProv.name} agora pertence a ${state.realms[nextProv.ownerId]?.name || 'outro reino'}.`);
-        }
-        toRemove.add(order.id);
+
+      // REGRA: Se foi interceptada em rota de colisão cruzada, forçar parada e combate na província de confronto
+      const interceptedDestId = interceptedOrders.get(order.id);
+      if (interceptedDestId) {
+        const targetProv = state.provinces[interceptedDestId] || nextProv;
+        order.currentProvId = interceptedDestId;
+        order.remainingPath = [];
+        arrivedOrders.push({ order, prov: targetProv });
         return;
       }
-    }
 
-    if (order.remainingPath.length > 0) {
-      const fromProvId = order.currentProvId;
-      order.currentProvId = nextProvId;
-      order.remainingPath.shift();
-      state.lastTurnMovements = state.lastTurnMovements || [];
-      state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
-    }
+      const currentProv = state.provinces[order.currentProvId];
+      if (order.remainingPath.length > 0) {
+        const isAdjacent = currentProv && currentProv.neighbors.includes(nextProvId);
+        if (!isAdjacent) {
+          if (order.realmId === state.playerRealmId) {
+            state.logs.push(`Ordem de marcha cancelada: caminho para ${nextProv.name} não está mais disponível.`);
+          }
+          depositOrderTroopsToCurrentProv(order);
+          toRemove.add(order.id);
+          return;
+        }
 
-    if (order.currentProvId === order.destinationId) {
-      arrivedOrders.push({ order, prov: nextProv });
+        // Se adentrar território de outra nação, exige guerra ativa (jogador NUNCA declara guerra automaticamente)
+        const isOwnTerritory = nextProv.ownerId === order.realmId;
+        const isNeutralOrWater = nextProv.ownerId === 'neutral' || nextProv.isWater;
+        if (!isOwnTerritory && !isNeutralOrWater) {
+          const isAtWar = isWarBetween(state, order.realmId, nextProv.ownerId);
+          if (!isAtWar) {
+            if (order.realmId === state.playerRealmId) {
+              state.logs.push(`Marcha/Campanha interrompida em ${currentProv?.name || 'província'}: ${nextProv.name} pertence a ${state.realms[nextProv.ownerId]?.name || 'outro reino'} e não há guerra declarada. Declare guerra no painel de Diplomacia.`);
+              depositOrderTroopsToCurrentProv(order);
+              toRemove.add(order.id);
+              return;
+            } else {
+              declareWar(state, order.realmId, nextProv.ownerId);
+            }
+          }
+        }
+      }
+
+      if (order.remainingPath.length > 0) {
+        const fromProvId = order.currentProvId;
+        order.currentProvId = nextProvId;
+        order.remainingPath.shift();
+        state.lastTurnMovements = state.lastTurnMovements || [];
+        state.lastTurnMovements.push({ fromId: fromProvId, toId: nextProvId, realmId: order.realmId });
+
+        if (order.realmId === state.playerRealmId) {
+          state.recentlyScoutedProvinceIds = state.recentlyScoutedProvinceIds || [];
+          if (!state.recentlyScoutedProvinceIds.includes(nextProvId)) {
+            state.recentlyScoutedProvinceIds.push(nextProvId);
+          }
+          if (nextProv && nextProv.neighbors) {
+            nextProv.neighbors.forEach(nId => {
+              if (!state.recentlyScoutedProvinceIds!.includes(nId)) {
+                state.recentlyScoutedProvinceIds!.push(nId);
+              }
+            });
+          }
+        }
+      }
+
+      const isTargetEnemyOrNeutral = (order.kind === 'attack' || !!order.waypoints) && nextProv.ownerId !== order.realmId && !nextProv.isWater;
+      if (order.currentProvId === order.destinationId || isTargetEnemyOrNeutral) {
+        arrivedOrders.push({ order, prov: nextProv });
+      }
     }
   });
 
   const attackGroups = new Map<string, { orders: (typeof state.marchOrders)[number][]; prov: Province }>();
-  const applyRetreat = (realmId: string, provinceId: string, remainingArmy: { infantry: number; archers: number; cavalry: number; scouts: number }) => {
-    const retreatDest = getRetreatDestination(state, provinceId, realmId);
+  const applyRetreat = (
+    realmId: string, 
+    provinceId: string, 
+    remainingArmy: { infantry: number; archers: number; cavalry: number; scouts: number },
+    forbiddenProvinceId?: string
+  ) => {
+    let retreatDest = getRetreatDestination(state, provinceId, realmId, forbiddenProvinceId);
+    if (!retreatDest) {
+      retreatDest = forbiddenProvinceId || provinceId;
+    }
     if (!retreatDest) return null;
 
     const retreating = calculateRetreat(remainingArmy);
@@ -338,7 +503,16 @@ function processMarchOrders(state: GameState) {
     const attackerName = state.realms[baseOrder.realmId]?.name || 'Reino';
 
     if (defenderRealmId !== 'neutral' && !isWarBetween(state, baseOrder.realmId, defenderRealmId)) {
-      declareWar(state, baseOrder.realmId, defenderRealmId);
+      if (baseOrder.realmId === state.playerRealmId) {
+        state.logs.push(`Ataque em ${prov.name} cancelado: não há guerra declarada com ${defenderName}. Declare guerra no painel de Diplomacia.`);
+        orders.forEach(o => {
+          depositOrderTroopsToCurrentProv(o);
+          toRemove.add(o.id);
+        });
+        return;
+      } else {
+        declareWar(state, baseOrder.realmId, defenderRealmId);
+      }
     }
 
     const combinedTroops = orders.reduce((army, current) => ({
@@ -368,13 +542,36 @@ function processMarchOrders(state: GameState) {
     let retreatInfo = null;
 
     if (result.won) {
-      retreatInfo = applyRetreat(defenderRealmId, prov.id, result.defenderRemaining);
+      // REGRA INQUEBRÁVEL: O defensor derrotado NÃO pode recuar para a província de origem do atacante
+      retreatInfo = applyRetreat(
+        defenderRealmId, 
+        prov.id, 
+        result.defenderRemaining,
+        baseOrder.originProvinceId || baseOrder.currentProvId
+      );
       if (prov.ownerId !== 'neutral') prov.originalOwnerId = prov.ownerId; // Fase 2: dono pré-guerra (capitulação)
       prov.ownerId = baseOrder.realmId;
       prov.loyalty = 40;
       prov.recentlyConquered = 3;
-      prov.army = result.attackerRemaining;
-      prov.troops = recalcTroops(prov.army);
+
+      const isCampaignInProgress = baseOrder.remainingPath.length > 0;
+      baseOrder.currentProvId = prov.id;
+
+      if (isCampaignInProgress) {
+        baseOrder.troops = result.attackerRemaining;
+        prov.army = { infantry: 0, archers: 0, cavalry: 0, scouts: 0 };
+        prov.troops = 0;
+        if (baseOrder.realmId === state.playerRealmId) {
+          state.logs.push(`VITÓRIA! Suas tropas conquistaram ${prov.name} e continuam a marcha para o próximo objetivo!`);
+        }
+      } else {
+        prov.army = result.attackerRemaining;
+        prov.troops = recalcTroops(prov.army);
+        if (baseOrder.realmId === state.playerRealmId) {
+          state.logs.push(`VITÓRIA! Suas tropas conquistaram ${prov.name}!`);
+        }
+      }
+
       playConquestSound();
       state.visualEffects = state.visualEffects || [];
       state.visualEffects.push({
@@ -385,15 +582,17 @@ function processMarchOrders(state: GameState) {
         startTime: Date.now(),
         duration: 1200
       });
-      if (baseOrder.realmId === state.playerRealmId) {
-        state.logs.push(`VITORIA! Suas tropas conquistaram ${prov.name}!`);
-      }
     } else {
-      retreatInfo = applyRetreat(baseOrder.realmId, prov.id, result.attackerRemaining);
+      retreatInfo = applyRetreat(
+        baseOrder.realmId, 
+        prov.id, 
+        result.attackerRemaining,
+        prov.id
+      );
       prov.army = result.defenderRemaining;
       prov.troops = recalcTroops(prov.army);
       if (baseOrder.realmId === state.playerRealmId) {
-        state.logs.push(`DERROTA! Seu exercito foi destruido em ${prov.name}!`);
+        state.logs.push(`DERROTA! Seu exército foi derrotado em ${prov.name}!`);
       }
     }
 
@@ -414,7 +613,19 @@ function processMarchOrders(state: GameState) {
       defenderRealm.battlesWon = (defenderRealm.battlesWon || 0) + 1;
     }
 
-    orders.forEach(order => toRemove.add(order.id));
+    // Se a campanha ainda tiver caminho restante e o atacante venceu, preserva a ordem principal
+    orders.forEach(order => {
+      if (!result.won || order.remainingPath.length === 0 || order.id !== baseOrder.id) {
+        toRemove.add(order.id);
+      }
+    });
+  });
+
+  toRemove.forEach(id => {
+    const o = state.marchOrders.find(x => x.id === id);
+    if (o) {
+      depositOrderTroopsToCurrentProv(o);
+    }
   });
 
   state.marchOrders = state.marchOrders.filter(o => !toRemove.has(o.id));
@@ -619,6 +830,7 @@ function handleRandomEvents(state: GameState) {
 
 export function processEndOfTurn(state: GameState): GameState {
   const newState = deepClone(state);
+  newState.recentlyScoutedProvinceIds = [];
 
   Object.values(newState.realms).forEach(realm => {
     if (realm.id === 'neutral') return;
@@ -695,9 +907,14 @@ export function processEndOfTurn(state: GameState): GameState {
         p.turnsWithoutWar = (p.turnsWithoutWar || 0) + 1;
       }
 
-      const dist = distances[p.id] || 0;
-      const adminPenalty = Math.max(0, (dist * 2) - (p.buildings.courts || 0));
-      loyaltyChange -= adminPenalty;
+      const dist = distances[p.id] !== undefined ? distances[p.id] : 4;
+      const courts = p.buildings?.courts || 0;
+      // Cada corte protege 3 saltos de distância da capital e concede +1 de lealdade passiva por turno
+      const effectiveDist = Math.max(0, dist - (courts * 3));
+      const adminPenalty = Math.min(4, Math.floor(effectiveDist * 0.4));
+      const courtLoyaltyBonus = courts * 1;
+
+      loyaltyChange = loyaltyChange - adminPenalty + courtLoyaltyBonus;
 
       // Fase 2 — Governo: Republic penaliza estabilidade em províncias distantes (>=2 saltos)
       if ((realm.government === 'republic') && isProvinceDistant(newState, p.id, realm)) {
@@ -717,14 +934,40 @@ export function processEndOfTurn(state: GameState): GameState {
       p.loyalty = Math.max(0, Math.min(100, p.loyalty + loyaltyChange));
       
       if (p.loyalty < 10 && Math.random() < 0.15) {
+        const loyalArmy = { ...p.army };
+        const totalLoyalTroops = (loyalArmy.infantry || 0) + (loyalArmy.archers || 0) + (loyalArmy.cavalry || 0) + (loyalArmy.scouts || 0);
+
+        if (totalLoyalTroops > 0) {
+          const friendlyNeighbor = p.neighbors
+            .map(nId => newState.provinces[nId])
+            .find(n => n && n.ownerId === realm.id && n.id !== p.id);
+          const capitalP = realm.capitalId ? newState.provinces[realm.capitalId] : null;
+          const safeCapital = capitalP && capitalP.ownerId === realm.id && capitalP.id !== p.id ? capitalP : null;
+          const fallbackProv = Object.values(newState.provinces).find(other => other.ownerId === realm.id && other.id !== p.id);
+
+          const destProv = friendlyNeighbor || safeCapital || fallbackProv;
+
+          if (destProv) {
+            destProv.army.infantry += loyalArmy.infantry || 0;
+            destProv.army.archers += loyalArmy.archers || 0;
+            destProv.army.cavalry += loyalArmy.cavalry || 0;
+            destProv.army.scouts += loyalArmy.scouts || 0;
+            destProv.troops = destProv.army.infantry + destProv.army.archers + destProv.army.cavalry + (destProv.army.scouts || 0);
+
+            if (realm.id === state.playerRealmId) {
+              newState.logs.push(`RECUO DE TROPAS: ${totalLoyalTroops} soldados em ${p.name} recuaram com segurança para ${destProv.name} devido à rebelião.`);
+            }
+          } else if (realm.id === state.playerRealmId) {
+            newState.logs.push(`REBELIÃO: As tropas de ${p.name} foram desmobilizadas pois o reino não possui mais territórios seguros.`);
+          }
+        }
+
         newState.logs.push(`REBELIÃO: Instabilidade política levou à queda do governo em ${p.name}!`);
         p.ownerId = 'neutral';
         p.loyalty = 40;
         p.stability = Math.max(5, (p.stability || 70) - 20);
-        p.army.infantry = Math.floor(p.army.infantry * 0.4) + 10;
-        p.army.archers = Math.floor(p.army.archers * 0.4);
-        p.army.cavalry = Math.floor(p.army.cavalry * 0.4);
-        p.troops = p.army.infantry + p.army.archers + p.army.cavalry + (p.army.scouts || 0);
+        p.army = { infantry: 10, archers: 5, cavalry: 0, scouts: 0 };
+        p.troops = 15;
       }
 
       const stabilityDelta = calculateStabilityDelta(p, realm, newState);
@@ -750,7 +993,8 @@ export function processEndOfTurn(state: GameState): GameState {
       if (p.strategicResource === 'stone') materialIncome += 5 * efficiency;
 
       if (p.population < p.maxPopulation) {
-        const growth = Math.floor(p.population * 0.07 * efficiency * govStats.populationGrowth);
+        const potentialGrowth = Math.floor(p.population * 0.07 * efficiency * govStats.populationGrowth);
+        const growth = Math.max(1, potentialGrowth);
         p.population = Math.min(p.maxPopulation, p.population + growth);
       }
 
@@ -879,5 +1123,31 @@ export function processEndOfTurn(state: GameState): GameState {
   }
 
   return newState;
+}
+
+export function buildCampaignFullPath(
+  state: GameState,
+  originId: string,
+  waypoints: string[],
+  playerRealmId: string
+): string[] {
+  let fullPath: string[] = [];
+  let currentPos = originId;
+
+  for (const wpId of waypoints) {
+    const segment = findPath(state, currentPos, wpId, playerRealmId, false, true);
+    if (segment.length > 0) {
+      fullPath = [...fullPath, ...segment];
+      currentPos = wpId;
+    } else {
+      const currentProv = state.provinces[currentPos];
+      if (currentProv && currentProv.neighbors.includes(wpId)) {
+        fullPath.push(wpId);
+        currentPos = wpId;
+      }
+    }
+  }
+
+  return fullPath;
 }
 

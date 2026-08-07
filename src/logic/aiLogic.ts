@@ -1,5 +1,5 @@
 import { GameState, Realm, Province } from '../types';
-import { executeRecruitment, executeBuilding } from './economyLogic';
+import { executeRecruitment, executeBuilding, assimilateProvince } from './economyLogic';
 import { resolveCombat, calculateRetreat, getRetreatDestination } from './combatLogic';
 import { ACTION_COSTS } from './game-constants';
 import { canUnlockTech, unlockTech } from './techLogic';
@@ -258,7 +258,15 @@ export function processAI(state: GameState) {
     shuffled.forEach(prov => {
       if (realm.actionPoints <= 0) return;
 
-      if (Math.random() < 0.3) {
+      // Se a lealdade da província está baixa (< 55), a IA prioriza assimilar ou construir Tribunais (courts)
+      if (prov.loyalty < 55) {
+        if (realm.gold >= 50 && prov.loyalty < 50) {
+          assimilateProvince(state, realm.id, prov.id);
+        }
+        if (executeBuilding(state, realm, prov, 'courts')) {
+          realm.actionPoints -= ACTION_COSTS.build;
+        }
+      } else if (Math.random() < 0.3) {
         const buildingTypes: ('farms' | 'mines' | 'workshops' | 'courts')[] = ['farms', 'mines', 'workshops', 'courts'];
         const type = buildingTypes[Math.floor(Math.random() * buildingTypes.length)];
         if (executeBuilding(state, realm, prov, type)) {

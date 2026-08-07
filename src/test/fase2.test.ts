@@ -18,6 +18,8 @@ import { canAppeaseVassal, appeaseVassal as appeaseDiplomacy } from '../logic/di
 import { processVassalLiberty, appeaseVassal, LIBERTY_REBELLION_THRESHOLD } from '../logic/vassalLogic';
 import { getMaxLoanAmount, getLoanPayment, takeLoan, canTakeLoan, processRealmLoans } from '../logic/financeLogic';
 import { calculateMilitaryPower, executeAIAttack } from '../logic/aiLogic';
+import { generateInitialState } from '../logic/mapGeneration';
+import { processEndOfTurn } from '../logic/turnLogic';
 import { makeState } from './helpers';
 import { GameState, Realm } from '../types';
 
@@ -557,5 +559,33 @@ describe('Fase 2 — Conquista da IA (bug tropas fantasma)', () => {
     executeAIAttack(state, attProv.id, defProv.id, attackerId);
     expect(defProv.ownerId).not.toBe(attackerId);
     expect(defProv.troops).toBeGreaterThan(0);
+  });
+});
+
+describe('Fase 2 — Preservação de Tropas na Rebelião', () => {
+  it('quando uma província se torna neutra por falta de lealdade, as tropas leais recuam para província vizinha amigável', () => {
+    const state = makeState();
+    const playerRealmId = state.playerRealmId;
+    const playerProvs = Object.values(state.provinces).filter(p => p.ownerId === playerRealmId);
+
+    if (playerProvs.length < 2) return;
+
+    const p1 = playerProvs[0];
+    const p2 = playerProvs[1];
+
+    p1.loyalty = 0;
+    p1.army = { infantry: 50, archers: 30, cavalry: 10, scouts: 5 };
+    p1.troops = 95;
+
+    const initialP2Infantry = p2.army.infantry;
+
+    // Forçar Math.random() < 0.15 para disparar a rebelião
+    vi.spyOn(Math, 'random').mockReturnValue(0.05);
+
+    processEndOfTurn(state);
+
+    expect(p1.ownerId).toBe('neutral'); // província virou neutra
+    expect(p2.army.infantry).toBe(initialP2Infantry + 50); // tropas leais recuaram intactas para P2
+    expect(state.logs.some(l => l.includes('RECUO DE TROPAS'))).toBe(true);
   });
 });

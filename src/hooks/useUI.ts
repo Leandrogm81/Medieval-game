@@ -18,6 +18,7 @@ export function useUI() {
   const [showTurnSummary, setShowTurnSummary] = useState<boolean>(false);
   const [turnSummaryData, setTurnSummaryData] = useState<TurnSummaryData | null>(null);
   const [showCombatPreview, setShowCombatPreview] = useState<boolean>(false);
+  const [combatModalMode, setCombatModalMode] = useState<'attack' | 'move'>('attack');
   const [combatAttackerProvId, setCombatAttackerProvId] = useState<string | null>(null);
   const [combatDefenderProvId, setCombatDefenderProvId] = useState<string | null>(null);
   const [combatAttackingArmy, setCombatAttackingArmy] = useState<Army | null>(null);
@@ -66,6 +67,15 @@ export function useUI() {
   const [disbandComposition, setDisbandComposition] = useState<Army>({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
   const [isDisbandMode, setIsDisbandMode] = useState(false);
 
+  // ===== Migration State =====
+  const [showMigrationModal, setShowMigrationModal] = useState<boolean>(false);
+  const [migrationSourceId, setMigrationSourceId] = useState<string | null>(null);
+  const [migrationTargetId, setMigrationTargetId] = useState<string | null>(null);
+
+  // ===== Campaign Waypoints State =====
+  const [campaignWaypoints, setCampaignWaypoints] = useState<string[]>([]);
+  const [isCampaignMode, setIsCampaignMode] = useState<boolean>(false);
+
   const [marchAnimations, setMarchAnimations] = useState<{ id: string; from: [number, number]; to: [number, number]; troops: Army; kind?: 'move' | 'attack' | 'scout'; realmId?: string }[]>([]);
 
   const triggerMarchAnimation = (from: [number, number], to: [number, number], troops: Army, kind: 'move' | 'attack' | 'scout' = 'move', realmId?: string) => {
@@ -101,6 +111,7 @@ export function useUI() {
     showTurnSummary, setShowTurnSummary,
     turnSummaryData, setTurnSummaryData,
     showCombatPreview, setShowCombatPreview,
+    combatModalMode, setCombatModalMode,
     combatAttackerProvId, setCombatAttackerProvId,
     combatDefenderProvId, setCombatDefenderProvId,
     combatAttackingArmy, setCombatAttackingArmy,
@@ -131,6 +142,11 @@ export function useUI() {
     isDisbandMode, setIsDisbandMode,
     toast, showToast,
     marchAnimations, triggerMarchAnimation,
-    updateTrigger, setUpdateTrigger
+    updateTrigger, setUpdateTrigger,
+    showMigrationModal, setShowMigrationModal,
+    migrationSourceId, setMigrationSourceId,
+    migrationTargetId, setMigrationTargetId,
+    campaignWaypoints, setCampaignWaypoints,
+    isCampaignMode, setIsCampaignMode
   };
 }

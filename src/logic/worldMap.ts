@@ -135,13 +135,75 @@ function pointInPolygon(x: number, y: number, polygon: [number, number][]): bool
   return inside;
 }
 
+const INLAND_LAKES: [number, number][][] = [
+  // Caspian Sea
+  [[630, 240], [645, 230], [658, 242], [652, 268], [638, 270], [628, 255]],
+  // Black Sea
+  [[570, 220], [592, 215], [608, 222], [598, 238], [576, 234]],
+  // Great Lakes
+  [[210, 180], [228, 175], [238, 188], [222, 198], [205, 190]],
+  // Lake Victoria
+  [[535, 410], [550, 405], [558, 420], [542, 428]]
+];
+
 /**
- * True se o ponto é TERRA (dentro de algum continente).
+ * True se o ponto é TERRA (dentro de algum continente e fora de lagos continentais).
  */
 export function isLand(x: number, y: number): boolean {
   // Margem oceânica
   if (x < 30 || x > WORLD_WIDTH - 30 || y < 25 || y > WORLD_HEIGHT - 25) return false;
-  return CONTINENTS.some(c => pointInPolygon(x, y, c.points));
+  const inContinent = CONTINENTS.some(c => pointInPolygon(x, y, c.points));
+  if (!inContinent) return false;
+  if (INLAND_LAKES.some(lake => pointInPolygon(x, y, lake))) return false;
+  return true;
+}
+
+export function isLakeArea(x: number, y: number): boolean {
+  return INLAND_LAKES.some(lake => pointInPolygon(x, y, lake));
+}
+
+/**
+ * Determina o bioma geograficamente realista com base em coordenadas reais da Terra.
+ */
+export function getBiomeForCoordinate(x: number, y: number, isWater: boolean, isCoastal: boolean): import('../types').Terrain {
+  if (isWater) return 'plains';
+  if (isLakeArea(x, y) && !isCoastal) return 'lake';
+
+  // Desertos: Saara, Arábia, Gobi, Outback Australiano
+  if ((x >= 450 && x <= 630 && y >= 280 && y <= 370) ||
+      (x >= 630 && x <= 720 && y >= 290 && y <= 360) ||
+      (x >= 750 && x <= 880 && y >= 220 && y <= 310) ||
+      (x >= 990 && x <= 1090 && y >= 490 && y <= 550)) {
+    return 'desert';
+  }
+
+  // Estepes: Estepes da Eurásia, Grandes Planícies, Savana Africana
+  if ((x >= 640 && x <= 860 && y >= 150 && y <= 230) ||
+      (x >= 120 && x <= 220 && y >= 200 && y <= 320) ||
+      (x >= 480 && x <= 580 && y >= 430 && y <= 530)) {
+    return 'steppe';
+  }
+
+  // Montanhas: Himalaia, Alpes, Andes, Rochosas
+  if ((x >= 700 && x <= 850 && y >= 260 && y <= 350) ||
+      (x >= 490 && x <= 570 && y >= 170 && y <= 210) ||
+      (x >= 230 && x <= 265 && y >= 390 && y <= 620) ||
+      (x >= 100 && x <= 150 && y >= 140 && y <= 280)) {
+    return 'mountain';
+  }
+
+  // Florestas: Amazônia, Congo, Taiga, Selva Asiática
+  if ((x >= 250 && x <= 330 && y >= 390 && y <= 510) ||
+      (x >= 460 && x <= 560 && y >= 350 && y <= 450) ||
+      (x >= 500 && x <= 850 && y >= 100 && y <= 165) ||
+      (x >= 800 && x <= 920 && y >= 380 && y <= 490)) {
+    return 'forest';
+  }
+
+  // Litoral / Praias
+  if (isCoastal) return 'coastal';
+
+  return 'plains';
 }
 
 /**

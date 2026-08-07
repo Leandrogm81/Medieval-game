@@ -5,14 +5,19 @@ import { playBattleSound } from './sfxLogic';
 export function getRetreatDestination(
   state: GameState,
   defeatedProvinceId: string,
-  realmId: string
+  realmId: string,
+  forbiddenProvinceId?: string
 ): string | null {
   const defeatedProvince = state.provinces[defeatedProvinceId];
   if (!defeatedProvince) return null;
 
   const candidates = (defeatedProvince.neighbors || [])
     .map(neighborId => state.provinces[neighborId])
-    .filter((province): province is NonNullable<typeof province> => !!province && province.ownerId === realmId);
+    .filter((province): province is NonNullable<typeof province> => 
+      !!province && 
+      province.ownerId === realmId &&
+      province.id !== forbiddenProvinceId // REGRA: Tropas derrotadas NÃO podem recuar para a província de onde o ataque se originou
+    );
 
   if (candidates.length === 0) return null;
 

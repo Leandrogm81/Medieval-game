@@ -1,10 +1,10 @@
 export type StrategicResource = 'none' | 'iron' | 'wood' | 'horse' | 'stone';
 export type PersonalityType = 'expansionist' | 'defensive' | 'diplomatic' | 'opportunistic' | 'commercial';
 export type StrategicObjective = 'regional_dominance' | 'destroy_rival' | 'wealth' | 'resource_control' | 'defensive_block';
-export type Terrain = 'plains' | 'forest' | 'mountain' | 'coastal';
+export type Terrain = 'plains' | 'forest' | 'mountain' | 'coastal' | 'desert' | 'steppe' | 'lake';
 export type GovernmentType = 'monarchy' | 'republic' | 'feudal' | 'theocracy' | 'despotism' | 'oligarchy' | 'tribal';
 export type TechCategory = 'movement' | 'assimilation' | 'recruitment' | 'combat';
-export type ActionType = 'idle' | 'move' | 'attack' | 'recruit' | 'build' | 'diplomacy' | 'dispatching_scouts' | 'trade' | 'routing' | 'disband' | 'moving' | 'attacking';
+export type ActionType = 'idle' | 'move' | 'attack' | 'recruit' | 'build' | 'diplomacy' | 'dispatching_scouts' | 'trade' | 'routing' | 'disband' | 'moving' | 'attacking' | 'migrate';
 export type DiplomacyAction = 
   | 'alliance' 
   | 'nonAggressionPact' 
@@ -58,6 +58,8 @@ export interface Province {
   originalOwnerId?: string; // Fase 2: dono pré-guerra (capitulação)
   postWarInstability?: number; // Fase 2: turnos restantes de -4 loyalty (capitulação)
   isWater?: boolean; // Mega mapa: célula oceânica (não-jogável)
+  occupantRealmId?: string; // Reino ocupante de tropas/frotas posicionadas (ex: oceano ou área neutra)
+  organicPath?: string; // Caminho SVG suavizado com perturbação orgânica
 }
 
 export interface Technology {
@@ -157,6 +159,7 @@ export interface MarchOrder {
   troops: Army;
   kind: 'move' | 'attack' | 'scout';
   arrivalTurn?: number;
+  waypoints?: string[];
 }
 
 export interface War {
@@ -189,6 +192,7 @@ export interface GameState {
   visualEffects: VisualEffect[];
   coalitions: { targetId: string; members: string[] }[];
   visibleProvinces: string[];
+  recentlyScoutedProvinceIds?: string[];
   marchOrders: MarchOrder[];
   activeWars: War[];
   settings: GameSettings;
@@ -231,6 +235,7 @@ export interface TurnSummaryData {
   foodNet: number;
   materialsIncome: number;
   materialsNet: number;
+  populationNet?: number;
   provincesGained: string[];
   provincesLost: string[];
   newWars: string[];

@@ -1,5 +1,6 @@
 import { GameState, Realm, Province, UnitType, Army } from '../types';
 import { UNIT_STATS, BUILDING_STATS } from './game-constants';
+import { GOVERNMENT_STATS } from './governmentLogic';
 
 const TRADE_BASE_RATES: Record<'gold' | 'food' | 'materials', Record<'gold' | 'food' | 'materials', number>> = {
   gold: { gold: 1, food: 3, materials: 2 },
@@ -148,9 +149,12 @@ export function assimilateProvince(state: GameState, realmId: string, provinceId
   if (realm.gold < cost || province.loyalty >= 100) return { success: false, cost: 0 };
 
   realm.gold = normalizeNaturalAmount(realm.gold - cost);
-  province.loyalty = Math.min(100, province.loyalty + 5);
+  province.loyalty = Math.min(100, province.loyalty + 25);
+  if (province.postWarInstability && province.postWarInstability > 0) {
+    province.postWarInstability = Math.max(0, province.postWarInstability - 2);
+  }
   if (realm.isPlayer) {
-    state.logs.push(`ASSIMILAÇÃO: ${province.name} recebeu reforço administrativo.`);
+    state.logs.push(`ASSIMILAÇÃO: ${province.name} recebeu forte reforço administrativo (+25 lealdade).`);
   }
 
   return { success: true, cost };
@@ -192,6 +196,7 @@ export function massBuildFarms(state: GameState, realmId: string): { count: numb
     canApply: canMassBuildFarms,
     apply: province => {
       province.buildings.farms += 1;
+      province.maxPopulation += 500;
     }
   });
 }
@@ -306,25 +311,36 @@ export function getMaxRecruitable(state: GameState, realm: Realm, prov: Province
     if (!hasResource) return 0;
   }
   
-  const maxByGold = stats.cost.gold > 0 ? Math.floor(realm.gold / stats.cost.gold) : Infinity;
-  const maxByFood = stats.cost.food > 0 ? Math.floor(realm.food / stats.cost.food) : Infinity;
-  const maxByMaterials = stats.cost.materials > 0 ? Math.floor(realm.materials / stats.cost.materials) : Infinity;
-  const maxByPop = stats.cost.pop > 0 ? Math.floor(prov.population / stats.cost.pop) : Infinity;
+  const unitCost = getRecruitCost(type, 1, realm);
   
-  const base = Math.max(0, Math.min(maxByGold, maxByFood, maxByMaterials, maxByPop));
-  // Bônus de tecnologia de recrutamento: +10% por nível (Fase 2)
-  const recruitmentBonus = (realm.techLevels?.recruitment ?? 0) * 0.1;
-  return Math.floor(base * (1 + recruitmentBonus));
+  const maxByGold = unitCost.gold > 0 ? Math.floor(realm.gold / unitCost.gold) : Infinity;
+  const maxByFood = unitCost.food > 0 ? Math.floor(realm.food / unitCost.food) : Infinity;
+  const maxByMaterials = unitCost.materials > 0 ? Math.floor(realm.materials / unitCost.materials) : Infinity;
+  const maxByPop = unitCost.pop > 0 ? Math.floor(prov.population / unitCost.pop) : Infinity;
+  
+  return Math.max(0, Math.min(maxByGold, maxByFood, maxByMaterials, maxByPop));
 }
 
 // Get cost breakdown for N units of a type
-export function getRecruitCost(type: UnitType, amount: number): { gold: number; food: number; materials: number; pop: number } {
+export function getRecruitCost(type: UnitType, amount: number, realm?: Realm): { gold: number; food: number; materials: number; pop: number } {
   const stats = UNIT_STATS[type];
+  
+  let govCostMult = 1.0;
+  let recruitmentBonus = 0;
+  
+  if (realm) {
+    const govStats = GOVERNMENT_STATS[realm.government || 'monarchy'];
+    if (govStats) govCostMult = govStats.recruitmentCost || 1.0;
+    if (realm.techLevels) {
+      recruitmentBonus = (realm.techLevels.recruitment || 0) * 0.1;
+    }
+  }
+
   return {
-    gold: stats.cost.gold * amount,
-    food: stats.cost.food * amount,
-    materials: stats.cost.materials * amount,
-    pop: stats.cost.pop * amount
+    gold: Math.floor(stats.cost.gold * amount * govCostMult),
+    food: Math.floor(stats.cost.food * amount * govCostMult),
+    materials: Math.floor(stats.cost.materials * amount * govCostMult),
+    pop: Math.floor((stats.cost.pop * amount * govCostMult) / (1 + recruitmentBonus))
   };
 }
 
@@ -348,12 +364,12 @@ export function executeRecruitmentWithComposition(
     const actualAmount = Math.min(desiredAmount, maxCanRecruit);
     
     if (actualAmount > 0) {
-      const cost = getRecruitCost(type, actualAmount);
+      const cost = getRecruitCost(type, actualAmount, realm);
       prov.army[type] += actualAmount;
       prov.troops += actualAmount;
-      prov.population -= cost.pop;
-      realm.gold -= cost.gold;
-      realm.food -= cost.food;
+      prov.population = Math.max(0, prov.population - cost.pop);
+      realm.gold = Math.max(0, realm.gold - cost.gold);
+      realm.food = Math.max(0, realm.food - cost.food);
       realm.materials = normalizeNaturalAmount(realm.materials - cost.materials);
       recruited[type] = actualAmount;
       anySuccess = true;
@@ -372,12 +388,12 @@ export function executeRecruitment(state: GameState, realm: Realm, prov: Provinc
     const amount = Math.min(maxCanRecruit, 5);
     
     if (amount > 0) {
-      const cost = getRecruitCost(type, amount);
+      const cost = getRecruitCost(type, amount, realm);
       prov.army[type] += amount;
       prov.troops += amount;
-      prov.population -= cost.pop;
-      realm.gold -= cost.gold;
-      realm.food -= cost.food;
+      prov.population = Math.max(0, prov.population - cost.pop);
+      realm.gold = Math.max(0, realm.gold - cost.gold);
+      realm.food = Math.max(0, realm.food - cost.food);
       realm.materials = normalizeNaturalAmount(realm.materials - cost.materials);
       return true;
     }
@@ -411,6 +427,9 @@ export function executeBuilding(state: GameState, realm: Realm, prov: Province, 
       }
     } else {
       prov.buildings[type] += 1;
+      if (type === 'farms') {
+        prov.maxPopulation += 500;
+      }
       realm.gold -= goldCost;
       realm.materials = normalizeNaturalAmount(realm.materials - matCost);
       state.visualEffects = state.visualEffects || [];

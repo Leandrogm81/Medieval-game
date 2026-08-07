@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { GameState, ActionType, Army, DiplomacyAction, CallToArmsRequest, TechCategory, GovernmentType } from '../types';
 import { generateInitialState } from '../logic/mapGeneration';
-import { processEndOfTurn, findPath } from '../logic/turnLogic';
+import { processEndOfTurn, findPath, buildCampaignFullPath } from '../logic/turnLogic';
 import { allocateTechPoints, getTechUpgradeCost } from '../logic/technologyLogic';
 import { changeGovernment, GOVERNMENT_CHANGE_LOYALTY_PENALTY, GOVERNMENT_CHANGE_LOYALTY_TURNS } from '../logic/governmentLogic';
 import { canTakeLoan, takeLoan, getMaxLoanAmount } from '../logic/financeLogic';
@@ -22,7 +22,7 @@ import {
   MassActionType
 } from '../logic/economyLogic';
 import { processAI } from '../logic/aiLogic';
-import { ACTION_COSTS, DIPLOMACY_ACTION_COSTS } from '../logic/game-constants';
+import { ACTION_COSTS, DIPLOMACY_ACTION_COSTS, isPlayerFleetOrTerritory } from '../logic/game-constants';
 import {
   playBuildSound,
   playEndTurnSound,
@@ -55,10 +55,17 @@ import {
 import { persistence } from '../persistence';
 import { useUI } from './useUI';
 import { deepClone } from '../utils/deepClone';
+import { fixRealmColorCollisions } from '../logic/saveMigration';
 
 export function useGameController(gameState: GameState | null, setGameState: React.Dispatch<React.SetStateAction<GameState | null>>, ui: ReturnType<typeof useUI>) {
   const timeoutIds = useRef<number[]>([]);
   const pinchDistanceRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (gameState) {
+      fixRealmColorCollisions(gameState);
+    }
+  }, [gameState]);
 
   useEffect(() => {
     return () => {
@@ -100,6 +107,22 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     });
   }, [setGameState]);
 
+  const [isAutoPlayActive, setIsAutoPlayActive] = useState(false);
+  const [autoPlaySpeed, setAutoPlaySpeed] = useState(2000);
+  const isAutoPlayActiveRef = useRef(isAutoPlayActive);
+
+  useEffect(() => {
+    isAutoPlayActiveRef.current = isAutoPlayActive;
+  }, [isAutoPlayActive]);
+
+  const handleToggleAutoPlay = useCallback(() => {
+    setIsAutoPlayActive(prev => !prev);
+  }, []);
+
+  const handleChangeAutoPlaySpeed = useCallback((speed: number) => {
+    setAutoPlaySpeed(speed);
+  }, []);
+
   const handleEndTurn = useCallback(() => {
     playEndTurnSound();
     setGameState(prev => {
@@ -112,7 +135,6 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
       // REGRA: aviso de guerra declarada contra o jogador (antes da invasão)
       const warsBefore = new Set((prev.activeWars || []).map(w => w.id));
-      const warsAfter = new Set((stateToProcess.activeWars || []).map(w => w.id));
 
       processAI(stateToProcess);
 
@@ -133,6 +155,16 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
       persistence.saveAutoSave(next);
 
+      let totalPopGrowth = 0;
+      Object.values(next.provinces).forEach(p => {
+        if (p.ownerId === next.playerRealmId) {
+          const prevProv = prev.provinces[p.id];
+          if (prevProv && prevProv.ownerId === prev.playerRealmId) {
+            totalPopGrowth += Math.max(0, p.population - prevProv.population);
+          }
+        }
+      });
+
       const playerNext = next.realms[next.playerRealmId];
       ui.setTurnSummaryData({
         goldIncome: playerNext.goldIncome || 0,
@@ -143,6 +175,7 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         foodNet: playerNext.food - playerRealmPrior.food,
         materialsIncome: playerNext.materialsIncome || 0,
         materialsNet: playerNext.materials - playerRealmPrior.materials,
+        populationNet: totalPopGrowth,
         provincesGained: [],
         provincesLost: [],
         newWars: [],
@@ -150,23 +183,42 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         events: next.currentEvent ? [next.currentEvent.name] : [],
         rebellionRisk: []
       });
-      ui.setShowTurnSummary(true);
 
-      if (next.pendingBattleResults && next.pendingBattleResults.length > 0) {
-        const battle = next.pendingBattleResults[0];
-        ui.setBattleResultData(battle.result);
-        ui.setBattleResultMeta({
-          attackerName: battle.attackerName,
-          defenderName: battle.defenderName,
-          provinceName: battle.provinceName,
-          conquered: battle.conquered
-        });
-        ui.setShowBattleResult(true);
+      // No modo Auto-Play, ignorar o modal de resumo do turno e resultados de batalha manuais para permitir fluxo contínuo sem cliques
+      if (!isAutoPlayActiveRef.current) {
+        ui.setShowTurnSummary(true);
+
+        if (next.pendingBattleResults && next.pendingBattleResults.length > 0) {
+          const battle = next.pendingBattleResults[0];
+          ui.setBattleResultData(battle.result);
+          ui.setBattleResultMeta({
+            attackerName: battle.attackerName,
+            defenderName: battle.defenderName,
+            provinceName: battle.provinceName,
+            conquered: battle.conquered
+          });
+          ui.setShowBattleResult(true);
+        }
       }
 
       return next;
     });
   }, [setGameState, ui]);
+
+  useEffect(() => {
+    if (!isAutoPlayActive) return;
+
+    if (ui.showWarDeclaredModal || ui.showMenu) {
+      setIsAutoPlayActive(false);
+      return;
+    }
+
+    const timer = setInterval(() => {
+      handleEndTurn();
+    }, autoPlaySpeed);
+
+    return () => clearInterval(timer);
+  }, [isAutoPlayActive, autoPlaySpeed, ui.showWarDeclaredModal, ui.showMenu, handleEndTurn]);
 
   const handleAction = useCallback((type: ActionType, provinceId: string, extra?: string | { from: 'gold' | 'food' | 'materials'; to: 'gold' | 'food' | 'materials'; amount: number }) => {
     if (!gameState) return;
@@ -352,6 +404,135 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         : `Investimento concluído em ${province.name}.`,
       'success'
     );
+  }, [gameState, setGameState, ui]);
+
+  const handleBatchAction = useCallback((
+    actionType: 'buildFarms' | 'buildMines' | 'buildWorkshops' | 'buildCourts' | 'buildFortifications' | 'invest' | 'assimilate' | 'recruit' | 'disband',
+    provinceIds: string[],
+    recruitComposition?: Army
+  ) => {
+    if (!gameState) return;
+
+    const clone = deepClone(gameState);
+    const realm = clone.realms[clone.playerRealmId];
+    if (!realm) return;
+
+    let successCount = 0;
+    let totalCostGold = 0;
+    let totalCostMaterials = 0;
+    let playedSound = false;
+
+    for (const provId of provinceIds) {
+      const province = clone.provinces[provId];
+      if (!province || province.ownerId !== realm.id) continue;
+
+      if (actionType === 'invest') {
+        const result = investProvince(clone, realm.id, provId);
+        if (result.success) {
+          totalCostGold += result.cost;
+          successCount++;
+        }
+      } else if (actionType === 'assimilate') {
+        const result = assimilateProvince(clone, realm.id, provId);
+        if (result.success) {
+          totalCostGold += result.cost;
+          successCount++;
+        }
+      } else if (actionType === 'buildFarms') {
+        if ((realm.actionPoints || 0) >= 1) {
+          if (executeBuilding(clone, realm, province, 'farms')) {
+            realm.actionPoints -= 1;
+            totalCostGold += 25;
+            totalCostMaterials += 15;
+            successCount++;
+            if (!playedSound) {
+              try { playBuildSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'buildMines') {
+        if ((realm.actionPoints || 0) >= 1) {
+          if (executeBuilding(clone, realm, province, 'mines')) {
+            realm.actionPoints -= 1;
+            totalCostGold += 40;
+            totalCostMaterials += 20;
+            successCount++;
+            if (!playedSound) {
+              try { playBuildSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'buildWorkshops') {
+        if ((realm.actionPoints || 0) >= 1) {
+          if (executeBuilding(clone, realm, province, 'workshops')) {
+            realm.actionPoints -= 1;
+            totalCostGold += 35;
+            totalCostMaterials += 15;
+            successCount++;
+            if (!playedSound) {
+              try { playBuildSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'buildCourts') {
+        if ((realm.actionPoints || 0) >= 1) {
+          if (executeBuilding(clone, realm, province, 'courts')) {
+            realm.actionPoints -= 1;
+            totalCostGold += 60;
+            totalCostMaterials += 30;
+            successCount++;
+            if (!playedSound) {
+              try { playBuildSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'buildFortifications') {
+        if ((realm.actionPoints || 0) >= 1) {
+          if (executeBuilding(clone, realm, province, 'fortify')) {
+            realm.actionPoints -= 1;
+            totalCostGold += 20;
+            totalCostMaterials += 10;
+            successCount++;
+            if (!playedSound) {
+              try { playBuildSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'recruit' && recruitComposition) {
+        if ((realm.actionPoints || 0) >= 1) {
+          const { success } = executeRecruitmentWithComposition(clone, realm, province, recruitComposition);
+          if (success) {
+            realm.actionPoints -= 1;
+            successCount++;
+            if (!playedSound) {
+              try { playRecruitSound(); } catch {}
+              playedSound = true;
+            }
+          }
+        }
+      } else if (actionType === 'disband') {
+        if ((realm.actionPoints || 0) >= 1) {
+          const provinceTroops = { ...province.army };
+          const { success } = executeDisband(clone, realm, province, provinceTroops);
+          if (success) {
+            realm.actionPoints -= 1;
+            successCount++;
+          }
+        }
+      }
+    }
+
+    if (successCount > 0) {
+      setGameState(clone);
+      ui.showToast(`Ação em lote realizada com sucesso em ${successCount} províncias!`, 'success');
+    } else {
+      ui.showToast('Recursos insuficientes ou nenhuma província pôde realizar a ação.', 'error');
+    }
   }, [gameState, setGameState, ui]);
 
   const handleDiplomacyAction = useCallback((action: DiplomacyAction, payload?: { amount?: number }) => {
@@ -602,52 +783,87 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     }
   }, [gameState, setGameState, ui]);
 
-  const handleProvinceClick = useCallback((id: string, wasDragging: boolean) => {
+  const handleProvinceClick = useCallback((id: string, wasDragging: boolean, isDoubleClick?: boolean) => {
     if (wasDragging) return;
 
+    if (ui.isCampaignMode && ui.actionSourceId) {
+      if (id === ui.actionSourceId) return;
+      if (ui.campaignWaypoints.length >= 20) {
+        ui.showToast("Limite máximo de 20 pontos de campanha atingido!", "error");
+        return;
+      }
+      const lastWp = ui.campaignWaypoints[ui.campaignWaypoints.length - 1];
+      if (id === lastWp) return;
+
+      const newWaypoints = [...ui.campaignWaypoints, id];
+      ui.setCampaignWaypoints(newWaypoints);
+
+      const fullPath = buildCampaignFullPath(gameState!, ui.actionSourceId, newWaypoints, gameState!.playerRealmId);
+      ui.setPreviewPath(fullPath);
+      ui.setActionBannerMessage(`⚔️ ROTA DE CAMPANHA (${newWaypoints.length}/20 Alvos) — ${newWaypoints.length} províncias marcadas na rota`);
+      return;
+    }
+
     if (ui.actionState === 'moving' && ui.actionSourceId) {
-      // Don't allow marching to the source province
       if (id === ui.actionSourceId) return;
 
       const sourceProvince = gameState!.provinces[ui.actionSourceId];
       if (!sourceProvince) return;
 
-      // Check if total troops to move is > 0
-      const totalTroops = ui.moveComposition.infantry + ui.moveComposition.archers + ui.moveComposition.cavalry + ui.moveComposition.scouts;
-      if (totalTroops <= 0) {
-        ui.showToast("Selecione pelo menos uma tropa para marchar!", "error");
+      const path = findPath(gameState!, ui.actionSourceId, id, gameState!.playerRealmId, false, true);
+      if (path.length === 0) {
+        ui.showToast("Destino inacessível! O trajeto exige passagem por oceanos, terras próprias, terras neutras ou reinos em guerra declarada.", "error");
         return;
       }
 
-      const path = findPath(gameState!, ui.actionSourceId, id, gameState!.playerRealmId);
-      if (path.length > 0) {
+      if (isDoubleClick) {
+        // DUPLO CLIQUE: envia 100% das tropas da província/oceano imediatamente!
+        const fullArmy = {
+          infantry: sourceProvince.army.infantry || 0,
+          archers: sourceProvince.army.archers || 0,
+          cavalry: sourceProvince.army.cavalry || 0,
+          scouts: sourceProvince.army.scouts || 0
+        };
+
+        const totalTroops = fullArmy.infantry + fullArmy.archers + fullArmy.cavalry + fullArmy.scouts;
+        if (totalTroops <= 0) {
+          ui.showToast("Não há tropas disponíveis nesta localização!", "error");
+          return;
+        }
+
         setGameState(prev => {
           if (!prev) return prev;
           const next = deepClone(prev);
           const src = next.provinces[ui.actionSourceId!];
           if (!src || !next.realms[next.playerRealmId]) return prev;
+
+          const targetProv = next.provinces[id];
+          const isEnemy = targetProv && targetProv.ownerId !== next.playerRealmId && targetProv.ownerId !== 'neutral';
+
           const order = {
             id: `march_${Date.now()}`,
             realmId: next.playerRealmId,
             currentProvId: ui.actionSourceId!,
             destinationId: id,
+            originProvinceId: ui.actionSourceId!,
             remainingPath: path,
-            troops: { ...ui.moveComposition },
-            kind: 'move' as const
+            troops: { ...fullArmy },
+            kind: (isEnemy ? 'attack' : 'move') as 'attack' | 'move'
           };
-          src.army.infantry -= ui.moveComposition.infantry;
-          src.army.archers -= ui.moveComposition.archers;
-          src.army.cavalry -= ui.moveComposition.cavalry;
-          src.army.scouts -= ui.moveComposition.scouts;
-          src.troops = src.army.infantry + src.army.archers + src.army.cavalry + src.army.scouts;
+
+          src.army.infantry = 0;
+          src.army.archers = 0;
+          src.army.cavalry = 0;
+          src.army.scouts = 0;
+          src.troops = 0;
+          src.occupantRealmId = undefined;
+
           next.marchOrders.push(order);
           next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.move;
 
-          // Trigger march animation
           const from = src.center as [number, number];
-          const destProv = next.provinces[id];
-          const to = destProv ? (destProv.center as [number, number]) : from;
-          ui.triggerMarchAnimation(from, to, ui.moveComposition, 'move');
+          const to = targetProv ? (targetProv.center as [number, number]) : from;
+          ui.triggerMarchAnimation(from, to, fullArmy, isEnemy ? 'attack' : 'move');
 
           ui.setActionState('idle');
           ui.setActionSourceId(null);
@@ -657,11 +873,25 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
           ui.setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
           return next;
         });
-        // Use setTimeout to ensure toast is shown after React state batch
-        setTimeout(() => ui.showToast(`Tropas marchando para ${gameState!.provinces[id].name}!`, "success"), 0);
-      } else {
-        setTimeout(() => ui.showToast("Destino inacessível! A marcha só pode ocorrer entre províncias do seu reino.", "error"), 0);
+
+        const targetProv = gameState!.provinces[id];
+        const isEnemy = targetProv && targetProv.ownerId !== gameState!.playerRealmId && targetProv.ownerId !== 'neutral';
+        setTimeout(() => ui.showToast(isEnemy ? `⚡ Marcha rápida para atacar ${gameState!.provinces[id].name} (100% das tropas)!` : `⚡ Marcha rápida para ${gameState!.provinces[id].name} (100% das tropas)!`, "success"), 0);
+        return;
       }
+
+      // CLIQUE SIMPLES: abre a tela/modal para selecionar a quantidade exata de tropas!
+      ui.setCombatAttackerProvId(ui.actionSourceId);
+      ui.setCombatDefenderProvId(id);
+      ui.setCombatAttackingArmy({
+        infantry: sourceProvince.army.infantry || 0,
+        archers: sourceProvince.army.archers || 0,
+        cavalry: sourceProvince.army.cavalry || 0,
+        scouts: sourceProvince.army.scouts || 0
+      });
+      ui.setCombatModalMode('move');
+      ui.setShowCombatPreview(true);
+      ui.setActionBannerMessage(null);
       return;
     }
 
@@ -669,7 +899,6 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       const src = gameState!.provinces[ui.actionSourceId];
       if (!src) return;
 
-      // BUG FIX: Não permitir atacar províncias próprias
       const targetProv = gameState!.provinces[id];
       if (!targetProv) return;
       if (targetProv.ownerId === gameState!.playerRealmId) {
@@ -677,13 +906,88 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
         return;
       }
 
-      if (src.neighbors.includes(id)) {
-        ui.setCombatAttackerProvId(ui.actionSourceId);
-        ui.setCombatDefenderProvId(id);
-        ui.setCombatAttackingArmy({ ...src.army, scouts: 0 });
-        ui.setShowCombatPreview(true);
-        ui.setActionBannerMessage(null);
+      if (!src.neighbors.includes(id)) {
+        ui.showToast("Para atacar províncias distantes, use a ação de Marchar (W). Suas tropas marcharão turno a turno e iniciarão o combate ao chegar.", "info");
+        return;
       }
+
+      if (isDoubleClick) {
+        // DUPLO CLIQUE: envia o ataque automaticamente com 100% das tropas de combate!
+        const combatArmy = {
+          infantry: src.army.infantry || 0,
+          archers: src.army.archers || 0,
+          cavalry: src.army.cavalry || 0,
+          scouts: 0
+        };
+
+        const totalTroops = combatArmy.infantry + combatArmy.archers + combatArmy.cavalry;
+        if (totalTroops <= 0) {
+          ui.showToast("Esta província não possui tropas de combate suficientes!", "error");
+          return;
+        }
+
+        if (targetProv.ownerId !== 'neutral' && !isWarBetween(gameState!, gameState!.playerRealmId, targetProv.ownerId)) {
+          ui.showToast('⚠️ Declare guerra antes de invadir! Use a diplomacia (4).', 'error');
+          ui.setShowDiplomacyModal(true);
+          return;
+        }
+
+        const path = findPath(gameState!, ui.actionSourceId, id, gameState!.playerRealmId, false, true);
+        if (path.length === 0) return;
+
+        setGameState(prev => {
+          if (!prev) return prev;
+          const next = deepClone(prev);
+          const atkProv = next.provinces[ui.actionSourceId!];
+          const defProv = next.provinces[id];
+          if (!atkProv || !defProv || !next.realms[next.playerRealmId]) return prev;
+
+          const order = {
+            id: `march_${Date.now()}`,
+            realmId: next.playerRealmId,
+            currentProvId: ui.actionSourceId!,
+            destinationId: id,
+            remainingPath: path,
+            troops: { ...combatArmy },
+            kind: 'attack' as const
+          };
+
+          atkProv.army.infantry = Math.max(0, atkProv.army.infantry - combatArmy.infantry);
+          atkProv.army.archers = Math.max(0, atkProv.army.archers - combatArmy.archers);
+          atkProv.army.cavalry = Math.max(0, atkProv.army.cavalry - combatArmy.cavalry);
+          atkProv.troops = atkProv.army.infantry + atkProv.army.archers + atkProv.army.cavalry + atkProv.army.scouts;
+          if (atkProv.troops <= 0) atkProv.occupantRealmId = undefined;
+
+          next.marchOrders.push(order);
+          next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.attack;
+
+          const from = atkProv.center as [number, number];
+          const to = defProv.center as [number, number];
+          ui.triggerMarchAnimation(from, to, combatArmy, 'attack');
+
+          ui.setActionState('idle');
+          ui.setActionSourceId(null);
+          ui.setPreviewPath([]);
+          ui.setActionBannerMessage(null);
+          return next;
+        });
+
+        ui.showToast(`⚡ Ataque total iniciado contra ${targetProv.name}!`, 'success');
+        return;
+      }
+
+      // CLIQUE SIMPLES: abre a tela para selecionar a quantidade de tropas de ataque!
+      ui.setCombatAttackerProvId(ui.actionSourceId);
+      ui.setCombatDefenderProvId(id);
+      ui.setCombatAttackingArmy({
+        infantry: src.army.infantry || 0,
+        archers: src.army.archers || 0,
+        cavalry: src.army.cavalry || 0,
+        scouts: 0
+      });
+      ui.setCombatModalMode('attack');
+      ui.setShowCombatPreview(true);
+      ui.setActionBannerMessage(null);
       return;
     }
 
@@ -730,7 +1034,6 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
           ui.setActionState('idle');
           ui.setActionSourceId(null);
           ui.setPreviewPath([]);
-          ui.setActionBannerMessage(null);
           ui.showToast(`Batedores enviados para ${gameState!.provinces[id].name}.`, 'success');
           return next;
         });
@@ -740,8 +1043,162 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       return;
     }
 
+    if (ui.actionState === 'migrate' && ui.actionSourceId) {
+      if (id === ui.actionSourceId) {
+        ui.showToast("Escolha uma província de destino diferente da origem.", "info");
+        return;
+      }
+
+      const sourceProvince = gameState!.provinces[ui.actionSourceId];
+      const targetProvince = gameState!.provinces[id];
+      if (!sourceProvince || !targetProvince) return;
+
+      if (targetProvince.ownerId !== gameState!.playerRealmId) {
+        ui.showToast("Você só pode migrar população para províncias do seu próprio reino!", "error");
+        return;
+      }
+
+      const path = findPath(gameState!, ui.actionSourceId, id, gameState!.playerRealmId, false, false);
+      if (path.length === 0) {
+        ui.showToast("Não há um caminho seguro e conectado entre essas províncias!", "error");
+        return;
+      }
+
+      ui.setMigrationSourceId(ui.actionSourceId);
+      ui.setMigrationTargetId(id);
+      ui.setShowMigrationModal(true);
+
+      ui.setActionState('idle');
+      ui.setActionSourceId(null);
+      ui.setActionBannerMessage(null);
+      return;
+    }
+
     ui.setSelectedProvinceId(id);
   }, [gameState, ui, setGameState]);
+
+  const handleStartCampaignMode = useCallback((sourceProvId: string) => {
+    if (!gameState) return;
+    const prov = gameState.provinces[sourceProvId];
+    if (!prov || !isPlayerFleetOrTerritory(prov, gameState.playerRealmId)) return;
+
+    const totalCombatTroops = (prov.army.infantry || 0) + (prov.army.archers || 0) + (prov.army.cavalry || 0);
+    if (totalCombatTroops <= 0) {
+      ui.showToast("Esta província não tem tropas de combate (infantaria, arqueiros ou cavalaria) para iniciar uma campanha!", "error");
+      return;
+    }
+
+    ui.setActionSourceId(sourceProvId);
+    ui.setIsCampaignMode(true);
+    ui.setCampaignWaypoints([]);
+    ui.setActionState('moving');
+    ui.setSelectingMoveComposition(true);
+    ui.setMoveComposition({
+      infantry: prov.army.infantry || 0,
+      archers: prov.army.archers || 0,
+      cavalry: prov.army.cavalry || 0,
+      scouts: 0
+    });
+    ui.setActionBannerMessage('⚔️ ROTA DE CAMPANHA (0/20 Alvos) — Clique nas províncias no mapa em sequência para definir a rota');
+  }, [gameState, ui]);
+
+  const handleUndoCampaignWaypoint = useCallback(() => {
+    if (ui.campaignWaypoints.length === 0) return;
+    const updated = ui.campaignWaypoints.slice(0, -1);
+    ui.setCampaignWaypoints(updated);
+    if (updated.length > 0 && ui.actionSourceId && gameState) {
+      const fullPath = buildCampaignFullPath(gameState, ui.actionSourceId, updated, gameState.playerRealmId);
+      ui.setPreviewPath(fullPath);
+      ui.setActionBannerMessage(`⚔️ ROTA DE CAMPANHA (${updated.length}/20 Alvos) — ${updated.length} províncias marcadas na rota`);
+    } else {
+      ui.setPreviewPath([]);
+      ui.setActionBannerMessage('⚔️ ROTA DE CAMPANHA (0/20 Alvos) — Clique nas províncias no mapa em sequência para definir a rota');
+    }
+  }, [ui, gameState]);
+
+  const handleConfirmCampaignRoute = useCallback(() => {
+    if (!gameState || !ui.actionSourceId || ui.campaignWaypoints.length === 0) {
+      ui.showToast("Selecione pelo menos uma província alvo para a campanha!", "error");
+      return;
+    }
+
+    const realm = gameState.realms[gameState.playerRealmId];
+    if (realm.actionPoints < ACTION_COSTS.attack) {
+      ui.showToast("Pontos de ação insuficientes para iniciar a campanha!", "error");
+      return;
+    }
+
+    const totalTroops = ui.moveComposition.infantry + ui.moveComposition.archers + ui.moveComposition.cavalry + ui.moveComposition.scouts;
+    if (totalTroops <= 0) {
+      ui.showToast("Selecione pelo menos uma tropa para a campanha de ataque!", "error");
+      return;
+    }
+
+    const fullPath = buildCampaignFullPath(gameState, ui.actionSourceId, ui.campaignWaypoints, gameState.playerRealmId);
+    if (fullPath.length === 0) {
+      ui.showToast("Caminho de campanha inacessível!", "error");
+      return;
+    }
+
+    setGameState(prev => {
+      if (!prev) return prev;
+      const next = deepClone(prev);
+      const src = next.provinces[ui.actionSourceId!];
+      if (!src || !next.realms[next.playerRealmId]) return prev;
+
+      const finalDestId = ui.campaignWaypoints[ui.campaignWaypoints.length - 1];
+
+      const order = {
+        id: `campaign_${Date.now()}`,
+        realmId: next.playerRealmId,
+        currentProvId: ui.actionSourceId!,
+        destinationId: finalDestId,
+        originProvinceId: ui.actionSourceId!,
+        remainingPath: fullPath,
+        troops: { ...ui.moveComposition },
+        kind: 'attack' as const,
+        waypoints: [...ui.campaignWaypoints]
+      };
+
+      src.army.infantry -= ui.moveComposition.infantry;
+      src.army.archers -= ui.moveComposition.archers;
+      src.army.cavalry -= ui.moveComposition.cavalry;
+      src.army.scouts -= ui.moveComposition.scouts;
+      src.troops = src.army.infantry + src.army.archers + src.army.cavalry + src.army.scouts;
+
+      next.marchOrders.push(order);
+      next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.attack;
+
+      const from = src.center as [number, number];
+      const destProv = next.provinces[finalDestId];
+      const to = destProv ? (destProv.center as [number, number]) : from;
+      ui.triggerMarchAnimation(from, to, ui.moveComposition, 'attack');
+
+      ui.setIsCampaignMode(false);
+      ui.setCampaignWaypoints([]);
+      ui.setActionState('idle');
+      ui.setActionSourceId(null);
+      ui.setPreviewPath([]);
+      ui.setActionBannerMessage(null);
+      ui.setSelectingMoveComposition(false);
+      ui.setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+
+      return next;
+    });
+
+    ui.showToast(`⚔️ Rota de campanha com ${ui.campaignWaypoints.length} alvos iniciada!`, "success");
+  }, [gameState, setGameState, ui]);
+
+  const handleCancelCampaignRoute = useCallback(() => {
+    ui.setIsCampaignMode(false);
+    ui.setCampaignWaypoints([]);
+    ui.setActionState('idle');
+    ui.setActionSourceId(null);
+    ui.setPreviewPath([]);
+    ui.setActionBannerMessage(null);
+    ui.setSelectingMoveComposition(false);
+    ui.setMoveComposition({ infantry: 0, archers: 0, cavalry: 0, scouts: 0 });
+  }, [ui]);
 
   const confirmAttack = useCallback(() => {
     if (!ui.combatAttackerProvId || !ui.combatDefenderProvId || !ui.combatAttackingArmy) return;
@@ -755,13 +1212,14 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
       const sentArmy = ui.combatAttackingArmy!;
       const targetOwnerId = defProv.ownerId;
-      if (targetOwnerId === next.playerRealmId) {
+      const isMoveMode = ui.combatModalMode === 'move';
+
+      if (targetOwnerId === next.playerRealmId && !isMoveMode) {
         ui.showToast('Você não pode atacar suas próprias províncias!', 'error');
         return prev;
       }
 
-      // REGRA: invasão exige guerra declarada (nada de guerra automática)
-      if (targetOwnerId !== 'neutral' && !isWarBetween(next, next.playerRealmId, targetOwnerId)) {
+      if (!isMoveMode && targetOwnerId !== 'neutral' && !isWarBetween(next, next.playerRealmId, targetOwnerId)) {
         ui.showToast('⚠️ Declare guerra antes de invadir! Use a diplomacia (4).', 'error');
         ui.setShowDiplomacyModal(true);
         return prev;
@@ -769,29 +1227,44 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
 
       const path = findPath(next, ui.combatAttackerProvId!, ui.combatDefenderProvId!, next.playerRealmId, false, true);
       if (path.length === 0) return prev;
+
+      const totalSent = (sentArmy.infantry || 0) + (sentArmy.archers || 0) + (sentArmy.cavalry || 0) + (isMoveMode ? (sentArmy.scouts || 0) : 0);
+      if (totalSent <= 0) {
+        ui.showToast('Selecione pelo menos uma tropa para enviar!', 'error');
+        return prev;
+      }
+
+      const isEnemy = targetOwnerId !== next.playerRealmId && targetOwnerId !== 'neutral';
+
       const order = {
         id: `march_${Date.now()}`,
         realmId: next.playerRealmId,
         currentProvId: ui.combatAttackerProvId!,
         destinationId: ui.combatDefenderProvId!,
+        originProvinceId: ui.combatAttackerProvId!,
         remainingPath: path,
         troops: { ...sentArmy },
-        kind: 'attack' as const
+        kind: (isMoveMode ? (isEnemy ? 'attack' : 'move') : 'attack') as 'attack' | 'move'
       };
 
       atkProv.army = {
-        infantry: Math.max(0, atkProv.army.infantry - sentArmy.infantry),
-        archers: Math.max(0, atkProv.army.archers - sentArmy.archers),
-        cavalry: Math.max(0, atkProv.army.cavalry - sentArmy.cavalry),
-        scouts: atkProv.army.scouts
+        infantry: Math.max(0, atkProv.army.infantry - (sentArmy.infantry || 0)),
+        archers: Math.max(0, atkProv.army.archers - (sentArmy.archers || 0)),
+        cavalry: Math.max(0, atkProv.army.cavalry - (sentArmy.cavalry || 0)),
+        scouts: isMoveMode ? Math.max(0, atkProv.army.scouts - (sentArmy.scouts || 0)) : atkProv.army.scouts
       };
       atkProv.troops = atkProv.army.infantry + atkProv.army.archers + atkProv.army.cavalry + atkProv.army.scouts;
+      if (atkProv.troops <= 0) {
+        atkProv.occupantRealmId = undefined;
+      }
+
       next.marchOrders.push(order);
-      next.realms[next.playerRealmId].actionPoints -= ACTION_COSTS.attack;
+      const actionCost = isMoveMode ? ACTION_COSTS.move : ACTION_COSTS.attack;
+      next.realms[next.playerRealmId].actionPoints -= actionCost;
 
       const from = atkProv.center as [number, number];
       const to = defProv.center as [number, number];
-      ui.triggerMarchAnimation(from, to, sentArmy, 'attack');
+      ui.triggerMarchAnimation(from, to, sentArmy, isMoveMode ? (isEnemy ? 'attack' : 'move') : 'attack');
 
       ui.setShowBattleResult(false);
       ui.setShowCombatPreview(false);
@@ -799,10 +1272,11 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
       ui.setActionSourceId(null);
       ui.setPreviewPath([]);
       ui.setActionBannerMessage(null);
-      const attackToast = targetOwnerId === 'neutral'
-        ? 'Ataque enviado. O combate sera resolvido na chegada.'
-        : 'Ataque enviado. O combate sera resolvido na chegada.';
-      ui.showToast(attackToast, 'info');
+
+      const msg = isMoveMode 
+        ? (isEnemy ? `Tropas marchando para atacar ${defProv.name}!` : `Tropas marchando para ${defProv.name}!`)
+        : `Ataque enviado para ${defProv.name}!`;
+      ui.showToast(msg, 'success');
 
       return next;
     });
@@ -1049,12 +1523,64 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     });
   }, [ui]);
 
+  const handleMigratePopulation = useCallback((sourceId: string, targetId: string, amount: number) => {
+    if (!gameState) return;
+    if (amount <= 0) return;
+
+    setGameState(prev => {
+      if (!prev) return prev;
+      const next = deepClone(prev);
+      const realm = next.realms[next.playerRealmId];
+      const source = next.provinces[sourceId];
+      const target = next.provinces[targetId];
+
+      if (!realm || !source || !target) return prev;
+      if (source.ownerId !== realm.id || target.ownerId !== realm.id) return prev;
+
+      const goldCost = Math.max(1, Math.ceil(amount / 10));
+      if (realm.gold < goldCost) {
+        setTimeout(() => ui.showToast("Ouro insuficiente para custear o transporte dos colonos!", "error"), 0);
+        return prev;
+      }
+      if (realm.actionPoints < 1) {
+        setTimeout(() => ui.showToast("Pontos de Ação (AP) insuficientes!", "error"), 0);
+        return prev;
+      }
+
+      const maxTransferrable = Math.min(
+        Math.max(0, source.population - 10),
+        Math.max(0, target.maxPopulation - target.population)
+      );
+      const actualAmount = Math.min(amount, maxTransferrable);
+      if (actualAmount <= 0) {
+        setTimeout(() => ui.showToast("Migração inválida devido aos limites de população.", "error"), 0);
+        return prev;
+      }
+
+      source.population -= actualAmount;
+      target.population += actualAmount;
+      realm.gold = Math.max(0, realm.gold - goldCost);
+      realm.actionPoints = Math.max(0, realm.actionPoints - 1);
+
+      next.logs.unshift(`Migração: ${actualAmount} colonos transferidos de ${source.name} para ${target.name}.`);
+      setTimeout(() => ui.showToast(`${actualAmount} colonos migraram com sucesso para ${target.name}!`, "success"), 0);
+
+      return next;
+    });
+  }, [gameState, setGameState, ui]);
+
   return {
     startNewGame,
     handleEndTurn,
+    isAutoPlayActive,
+    autoPlaySpeed,
+    handleToggleAutoPlay,
+    handleChangeAutoPlaySpeed,
     handleAction,
     handleMassAction,
     handleProvinceAction,
+    handleBatchAction,
+    handleMigratePopulation,
     handleDiplomacyAction,
     handleCallToArmsResponse,
     handleDisband,
@@ -1063,6 +1589,10 @@ export function useGameController(gameState: GameState | null, setGameState: Rea
     handleTakeLoan,
     handleProvinceClick,
     confirmAttack,
+    handleStartCampaignMode,
+    handleUndoCampaignWaypoint,
+    handleConfirmCampaignRoute,
+    handleCancelCampaignRoute,
     handleSave,
     handleQuickSave,
     handleLoad,

@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { GameState, ViewMode, ActionType, Province } from '../types';
 import { motion } from 'motion/react';
+import { isPlayerFleetOrTerritory } from '../logic/game-constants';
 
 interface MapProps {
   gameState: GameState;
   selectedProvinceId: string | null;
-  onProvinceClick: (id: string) => void;
+  onProvinceClick: (id: string, isDoubleClick?: boolean) => void;
   viewMode: ViewMode;
   previewPath: string[];
   marchAnimations: { id: string; from: [number, number]; to: [number, number]; troops: { infantry: number; archers: number; cavalry: number; scouts: number }; kind?: 'move' | 'attack' | 'scout'; realmId?: string }[];
@@ -16,6 +17,9 @@ interface MapProps {
   onMultiSelectChange: (ids: string[]) => void;
   playerRealmId: string;
   zoom?: number; // Nível de zoom (LOD): re-renderiza labels/escudos para legibilidade
+  onQuickAction?: (action: 'move' | 'attack' | 'disband', provinceId: string) => void;
+  campaignWaypoints?: string[];
+  isCampaignMode?: boolean;
 }
 
 function getHeatColor(value: number, hue: number): string {
@@ -147,11 +151,14 @@ function useIsMobile(): boolean {
 // Terrain base color per province type (rich medieval natural tones)
 function getTerrainBaseColor(terrain: string): string {
   switch (terrain) {
-    case 'forest': return '#14251c';
-    case 'mountain': return '#2b2622';
-    case 'coastal': return '#122524';
-    case 'plains': return '#242a1e';
-    default: return '#242a1e';
+    case 'forest': return '#163020'; // Rich deep woodland green
+    case 'mountain': return '#2f2926'; // High mountain stone gray
+    case 'coastal': return '#1d332d'; // Coastal tide green-amber
+    case 'desert': return '#3a301d'; // Arid desert golden sand
+    case 'steppe': return '#32331f'; // Steppe savanna bronze
+    case 'lake': return '#0e2b44'; // Inland lake deep blue
+    case 'plains': return '#252e1e'; // Fertile rolling plains
+    default: return '#252e1e';
   }
 }
 
@@ -168,7 +175,10 @@ export const Map: React.FC<MapProps> = ({
   multiSelectedProvinceIds,
   onMultiSelectChange,
   playerRealmId,
-  zoom = 1
+  zoom = 1,
+  onQuickAction,
+  campaignWaypoints,
+  isCampaignMode
 }) => {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [selectionRect, setSelectionRect] = useState<SelectionRect | null>(null);
@@ -176,28 +186,22 @@ export const Map: React.FC<MapProps> = ({
   const isMobile = useIsMobile();
 
   // ===== LOD (Level of Detail): re-renderiza conforme o zoom =====
-  // Counter-scale REAL: o wrapper aplica scale(zoom) via CSS, então o fontSize
-  // interno deve ser ALVO/zoom para que a letra NA TELA fique pequena e estável.
-  // Ex: alvo 7px na tela → fontSize interno = 7/zoom (zoom 0.5: 14; zoom 2: 3.5).
-  // Resultado: ao aproximar, letras e contornos ficam MENORES (não explodem).
+  // Counter-scale REAL com vector-effect="non-scaling-stroke":
+  // O wrapper aplica scale(zoom) via CSS. Aplicamos scale(1/zoom) nos grupos de rótulos
+  // para que o tamanho na tela fique 100% constante, nítido e sem sobreposição.
   const lod = {
-    // Letra na tela: ~7px constante (discreta, não cobre as províncias)
-    fontSize: Math.max(2.5, Math.min(16, 7 / zoom)),
-    // Contorno na tela: ~1px constante (fino em qualquer nível)
-    borderWidth: Math.max(0.35, Math.min(3, 1 / zoom)),
-    // Escudo de tropas na tela: ~0.85x constante
-    shieldScale: Math.max(0.25, Math.min(2.4, 0.85 / zoom)),
     // Prioridade de labels (densidade progressiva):
-    //   0 = capitais (sempre)
-    //   1 = províncias com tropas (zoom > 0.55)
-    //   2 = províncias com edifícios (zoom > 0.8)
-    //   3 = todas as outras (zoom > 1.15)
-    labelLevel: zoom < 0.55 ? 0 : zoom < 0.8 ? 1 : zoom < 1.15 ? 2 : 3,
+    //   0 = capitais, seleção, hover, províncias com conflito/tropas (zoom < 0.65)
+    //   1 = províncias com tropas ou de jogadores (zoom 0.65 - 0.95)
+    //   2 = províncias desenvolvidas (zoom 0.95 - 1.3)
+    //   3 = todas as províncias visíveis (zoom >= 1.3)
+    labelLevel: zoom < 0.65 ? 0 : zoom < 0.95 ? 1 : zoom < 1.3 ? 2 : 3,
   };
 
   // Calcula prioridade de label por província
   const getLabelPriority = (prov: Province): number => {
     if (prov.isWater) return 99; // nunca mostra label de oceano
+    if (selectedProvinceId === prov.id || hoveredProvId === prov.id) return 0;
     if (gameState.realms[prov.ownerId]?.capitalId === prov.id) return 0;
     if (prov.troops > 0) return 1;
     const hasBuildings = (prov.buildings?.farms || 0) + (prov.buildings?.mines || 0) + (prov.buildings?.workshops || 0) + (prov.buildings?.courts || 0) > 0;
@@ -208,6 +212,8 @@ export const Map: React.FC<MapProps> = ({
   const provinces = useMemo(() => Object.values(gameState.provinces), [gameState.provinces]);
   const multiSelectedSet = useMemo(() => new Set(multiSelectedProvinceIds), [multiSelectedProvinceIds]);
   const sourceProv = actionSourceId ? gameState.provinces[actionSourceId] : null;
+  const selectedProvince = selectedProvinceId ? gameState.provinces[selectedProvinceId] : null;
+  const isOwn = isPlayerFleetOrTerritory(selectedProvince, playerRealmId);
 
   const getSvgPoint = (clientX: number, clientY: number) => {
     const svg = svgRef.current;
@@ -235,13 +241,15 @@ export const Map: React.FC<MapProps> = ({
     };
 
     const finalizeSelection = (event: MouseEvent) => {
-      updateSelection(event.clientX, event.clientY);
-      setSelectionRect(current => {
-        if (!current) return current;
-        const left = Math.min(current.startX, current.endX);
-        const right = Math.max(current.startX, current.endX);
-        const top = Math.min(current.startY, current.endY);
-        const bottom = Math.max(current.startY, current.endY);
+      const point = getSvgPoint(event.clientX, event.clientY);
+      const endX = point ? point.x : selectionRect?.endX ?? 0;
+      const endY = point ? point.y : selectionRect?.endY ?? 0;
+
+      if (selectionRect) {
+        const left = Math.min(selectionRect.startX, endX);
+        const right = Math.max(selectionRect.startX, endX);
+        const top = Math.min(selectionRect.startY, endY);
+        const bottom = Math.max(selectionRect.startY, endY);
 
         const inside = provinces
           .filter(prov => prov.ownerId === playerRealmId)
@@ -249,8 +257,8 @@ export const Map: React.FC<MapProps> = ({
           .map(prov => prov.id);
 
         onMultiSelectChange(inside);
-        return null;
-      });
+      }
+      setSelectionRect(null);
     };
 
     window.addEventListener('mousemove', handleMove);
@@ -273,23 +281,58 @@ export const Map: React.FC<MapProps> = ({
     return { maxEco: maxEco || 1, maxMil: maxMil || 1 };
   }, [provinces]);
 
+  const clickTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const lastClickRef = useRef<{ provId: string; time: number } | null>(null);
+
   const handleProvinceClick = (provId: string, isShiftPressed: boolean) => {
     const province = gameState.provinces[provId];
     if (!province) return;
-    // MEGA MAPA: oceano não é selecionável
-    if (province.isWater) return;
 
-    if (isShiftPressed) {
-      if (province.ownerId !== playerRealmId) return;
-      const next = multiSelectedSet.has(provId)
-        ? multiSelectedProvinceIds.filter(id => id !== provId)
-        : [...multiSelectedProvinceIds, provId];
-      onMultiSelectChange(next);
+    const now = Date.now();
+    if (lastClickRef.current && lastClickRef.current.provId === provId && (now - lastClickRef.current.time) < 300) {
+      if (clickTimerRef.current) {
+        clearTimeout(clickTimerRef.current);
+        clickTimerRef.current = null;
+      }
+      lastClickRef.current = null;
+      onMultiSelectChange([]);
+      onProvinceClick(provId, true);
       return;
     }
 
-    onMultiSelectChange([]);
-    onProvinceClick(provId);
+    lastClickRef.current = { provId, time: now };
+    if (clickTimerRef.current) clearTimeout(clickTimerRef.current);
+
+    clickTimerRef.current = setTimeout(() => {
+      lastClickRef.current = null;
+      if (isShiftPressed) {
+        if (province.ownerId !== playerRealmId) return;
+
+        let currentList = [...multiSelectedProvinceIds];
+
+        if (currentList.length === 0 && selectedProvinceId) {
+          const prevSelected = gameState.provinces[selectedProvinceId];
+          if (prevSelected && prevSelected.ownerId === playerRealmId) {
+            if (selectedProvinceId === provId) {
+              onMultiSelectChange([provId]);
+              return;
+            }
+            currentList = [selectedProvinceId];
+          }
+        }
+
+        const currentSet = new Set(currentList);
+        const next = currentSet.has(provId)
+          ? currentList.filter(id => id !== provId)
+          : [...currentList, provId];
+
+        onMultiSelectChange(next);
+        return;
+      }
+
+      onMultiSelectChange([]);
+      onProvinceClick(provId, false);
+    }, 220);
   };
 
   const beginSelection = (clientX: number, clientY: number) => {
@@ -417,6 +460,14 @@ export const Map: React.FC<MapProps> = ({
             <feColorMatrix type="matrix" values="1 0 0 0 0.96  0 1 0 0 0.7  0 0 1 0 0.15  0 0 0 1 0" />
             <feComposite in="SourceGraphic" in2="blur" operator="over" />
           </filter>
+          <filter id="multi-select-glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="10" result="blur" />
+            <feColorMatrix type="matrix" values="1 0 0 0 0.98  0 1 0 0 0.75  0 0 1 0 0.05  0 0 0 1 0" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
           <filter id="red-glow" x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur stdDeviation="6" result="blur" />
             <feColorMatrix type="matrix" values="1 0 0 0 0.9  0 1 0 0 0.1  0 0 1 0 0.1  0 0 0 1 0" />
@@ -428,11 +479,11 @@ export const Map: React.FC<MapProps> = ({
             <path d={continentPath} />
           </clipPath>
 
-          {/* Vintage Parchment-like radial gradient on land */}
+          {/* Natural land base gradient */}
           <radialGradient id="land-gradient" cx="50%" cy="50%" r="65%">
-            <stop offset="0%" stopColor="#3c3025" />
-            <stop offset="70%" stopColor="#251f18" />
-            <stop offset="100%" stopColor="#17130f" />
+            <stop offset="0%" stopColor="#1e281f" />
+            <stop offset="70%" stopColor="#162017" />
+            <stop offset="100%" stopColor="#101811" />
           </radialGradient>
 
           {/* Sleek Strategic Sea Atmosphere */}
@@ -598,7 +649,7 @@ export const Map: React.FC<MapProps> = ({
               fillColor = cellColor;
             }
 
-            const cellPath = `M ${prov.polygon.map(p => p.join(',')).join(' L ')} Z`;
+            const cellPath = prov.organicPath || `M ${prov.polygon.map(p => p.join(',')).join(' L ')} Z`;
 
             return (
               <g key={`cell-${prov.id}`}>
@@ -606,8 +657,9 @@ export const Map: React.FC<MapProps> = ({
                 <path
                   d={cellPath}
                   fill={fillColor}
-                  stroke="#18181b"
-                  strokeWidth={lod.borderWidth}
+                  stroke={fillColor}
+                  strokeWidth="0.8"
+                  vectorEffect="non-scaling-stroke"
                   className="transition-all duration-300"
                   opacity={isVisible ? 1 : 0.6}
                 />
@@ -615,26 +667,26 @@ export const Map: React.FC<MapProps> = ({
                 {/* View mode & faction overlay (interactive layer) */}
                 <path
                   d={cellPath}
-                  fill={overlayColor}
-                  fillOpacity={overlayOpacity}
+                  fill={isMultiSelected ? '#f59e0b' : overlayColor}
+                  fillOpacity={isMultiSelected ? 0.75 : overlayOpacity}
                   opacity={isVisible ? 1 : isValidTarget ? 1 : 0.5}
                   stroke={
-                    isMultiSelected ? '#fbbf24' :
+                    isMultiSelected ? '#fef08a' :
                     isSelected ? '#fbbf24' :
                     isSource ? '#f59e0b' :
                     isValidTarget ? '#fcd34d' : 'transparent'
                   }
                   strokeWidth={
-                    isMultiSelected ? 2 :
-                    isSelected || isSource ? 4 :
-                    isValidTarget ? 3 : 0
+                    isMultiSelected ? 2.5 :
+                    isSelected || isSource ? 2.5 :
+                    isValidTarget ? 1.5 : 0
                   }
+                  vectorEffect="non-scaling-stroke"
+                  filter={isHighlighted ? 'url(#gold-glow)' : 'none'}
                   style={{
-                    filter: isHighlighted ? 'drop-shadow(0 0 8px rgba(251, 191, 36, 0.8))' : 'none',
                     strokeDasharray: isValidTarget ? '6 3' : undefined,
-                    animation: isMultiSelected ? 'pulse-gold 1s infinite' : undefined
                   }}
-                  className={`cursor-pointer transition-all duration-300 hover:brightness-110 ${actionState !== 'idle' ? 'cursor-crosshair' : ''} ${isSource ? 'animate-pulse-slow' : ''}`}
+                  className={`cursor-pointer transition-all duration-300 hover:brightness-125 ${actionState !== 'idle' ? 'cursor-crosshair' : ''} ${isSource ? 'animate-pulse-slow' : ''}`}
                   onMouseEnter={() => setHoveredProvId(prov.id)}
                   onMouseLeave={() => setHoveredProvId(null)}
                   onClick={(e) => {
@@ -649,7 +701,8 @@ export const Map: React.FC<MapProps> = ({
                     d={cellPath}
                     fill="none"
                     stroke={isSelected ? '#38bdf8' : factionColor}
-                    strokeWidth={isSelected ? '4.5' : isHovered ? '3' : '1.8'}
+                    strokeWidth={isSelected ? '1.25' : isHovered ? '1' : '0.6'}
+                    vectorEffect="non-scaling-stroke"
                     strokeOpacity={isSelected ? 1.0 : isHovered ? 0.95 : 0.85}
                     className="pointer-events-none transition-all duration-300"
                   />
@@ -677,16 +730,18 @@ export const Map: React.FC<MapProps> = ({
                     x1={prov.center[0]} y1={prov.center[1]}
                     x2={neighbor.center[0]} y2={neighbor.center[1]}
                     stroke="#090d16"
-                    strokeWidth="4.5"
+                    strokeWidth="0.8"
+                    vectorEffect="non-scaling-stroke"
                     strokeLinecap="round"
-                    opacity="0.8"
+                    opacity="0.5"
                   />
                   <line
                     x1={prov.center[0]} y1={prov.center[1]}
                     x2={neighbor.center[0]} y2={neighbor.center[1]}
                     stroke={isPathHighlighted ? '#f59e0b' : isSelectingPath ? '#facc15' : '#e2e8f0'}
-                    strokeWidth={isPathHighlighted ? '4.5' : isSelectingPath ? '2.5' : '1.5'}
-                    strokeDasharray={isPathHighlighted ? 'none' : isSelectingPath ? 'none' : '8,6'}
+                    strokeWidth={isPathHighlighted ? '1.0' : isSelectingPath ? '0.8' : '0.4'}
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray={isPathHighlighted ? 'none' : isSelectingPath ? 'none' : '4,4'}
                     strokeLinecap="round"
                     opacity={isPathHighlighted ? 1 : isSelectingPath ? 0.85 : 0.35}
                     className="transition-all duration-300"
@@ -701,9 +756,11 @@ export const Map: React.FC<MapProps> = ({
         {/* FLOATING INDICATORS, LABELS & ARMED TROOPS BADGES OVERLAY */}
         {/* ======================================================== */}
         {provinces.map((prov) => {
-          const owner = gameState.realms[prov.ownerId];
-          const factionColor = owner ? owner.color : '#4b5563';
+          const occupant = prov.occupantRealmId ? gameState.realms[prov.occupantRealmId] : null;
+          const owner = (prov.ownerId && prov.ownerId !== 'neutral') ? gameState.realms[prov.ownerId] : occupant;
+          const factionColor = owner ? owner.color : '#0284c7';
           const isSelected = selectedProvinceId === prov.id;
+          const isMultiSelected = multiSelectedSet.has(prov.id);
           const isHovered = hoveredProvId === prov.id;
           const isVisible = gameState.visibleProvinces.includes(prov.id);
           if (!isVisible) return null;
@@ -713,12 +770,12 @@ export const Map: React.FC<MapProps> = ({
 
           // Check if eligible target for actions to pulsate
           let isEligibleTarget = false;
-          if (!prov.isWater && sourceProv && sourceProv.neighbors.includes(prov.id)) {
-            if (actionState === 'moving' && prov.ownerId === playerRealmId) {
+          if (sourceProv && sourceProv.neighbors.includes(prov.id)) {
+            if (actionState === 'moving') {
               isEligibleTarget = true;
-            } else if (actionState === 'attacking' && prov.ownerId !== playerRealmId) {
+            } else if (actionState === 'attacking' && prov.ownerId !== playerRealmId && !prov.isWater) {
               isEligibleTarget = true;
-            } else if (actionState === 'dispatching_scouts' && prov.ownerId !== playerRealmId) {
+            } else if (actionState === 'dispatching_scouts') {
               isEligibleTarget = true;
             }
           }
@@ -737,19 +794,21 @@ export const Map: React.FC<MapProps> = ({
                 <g>
                   <circle
                     cx="0" cy="0"
-                    r="52"
+                    r="30"
                     fill="none"
                     stroke={actionState === 'attacking' ? '#f87171' : '#facc15'}
-                    strokeWidth="3"
-                    className="animate-ping opacity-75"
+                    strokeWidth="1.0"
+                    vectorEffect="non-scaling-stroke"
+                    className="animate-ping opacity-50"
                   />
                   <circle
                     cx="0" cy="0"
-                    r="24"
+                    r="15"
                     fill={actionState === 'attacking' ? 'rgba(239,68,68,0.25)' : 'rgba(234,179,8,0.2)'}
                     stroke={actionState === 'attacking' ? '#ef4444' : '#fbbf24'}
-                    strokeWidth="2"
-                    strokeDasharray="4,2"
+                    strokeWidth="0.8"
+                    vectorEffect="non-scaling-stroke"
+                    strokeDasharray="2,2"
                   />
                 </g>
               )}
@@ -758,13 +817,33 @@ export const Map: React.FC<MapProps> = ({
               {isSelected && (
                 <circle
                   cx="0" cy="0"
-                  r="45"
+                  r="26"
                   fill="none"
                   stroke="#fbbf24"
-                  strokeWidth="3"
-                  strokeDasharray="5,4"
+                  strokeWidth="1.0"
+                  vectorEffect="non-scaling-stroke"
+                  strokeDasharray="3,2"
                   filter="url(#gold-glow)"
                 />
+              )}
+
+              {/* Multi-Selected Indicator: Clean Static Checkmark Badge */}
+              {isMultiSelected && (
+                <g transform={`translate(0, ${-20 / zoom}) scale(${0.85 / zoom})`}>
+                  <circle cx="0" cy="0" r="9" fill="#b45309" stroke="#fef08a" strokeWidth="1.2" />
+                  <text
+                    x="0"
+                    y="3"
+                    textAnchor="middle"
+                    fill="#fef08a"
+                    fontSize="9.5"
+                    fontWeight="900"
+                    className="font-sans font-black select-none"
+                    filter="drop-shadow(0px 1px 1.5px rgba(0,0,0,0.9))"
+                  >
+                    ✓
+                  </text>
+                </g>
               )}
 
               {/* Hand-drawn Terrain vectors decorations to enrich empty spots */}
@@ -805,42 +884,63 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Royal Capital Banners — counter-scale no transform; strokes internos FIXOS */}
+              {!isMobile && prov.terrain === 'desert' && (
+                <g transform="translate(-16, -26) scale(0.85)" opacity="0.8" fill="none" stroke="#fde047" strokeWidth="1" strokeLinecap="round">
+                  <path d="M-10,4 C-5,-2 0,-2 5,4 C10,10 15,10 20,4" />
+                  <path d="M-15,10 C-10,4 -5,4 0,10 C5,16 10,16 15,10" opacity="0.6" />
+                </g>
+              )}
+
+              {!isMobile && prov.terrain === 'steppe' && (
+                <g transform="translate(12, -26) scale(0.85)" opacity="0.75" fill="none" stroke="#eab308" strokeWidth="1" strokeLinecap="round">
+                  <path d="M-6,8 L-4,-2 M-2,8 L0,-5 M2,8 L3,-3 M6,8 L7,-1" />
+                </g>
+              )}
+
+              {!isMobile && prov.isWater && (
+                <g transform="translate(0, -22) scale(0.85)" opacity="0.85" fill="none" stroke="#38bdf8" strokeWidth="1" strokeLinecap="round">
+                  <path d="M-10,0 C-5,-3 0,-3 5,0 C10,3 15,3 20,0" />
+                  <path d="M-6,6 C-2,3 2,3 6,6 C10,9 14,9 18,6" opacity="0.6" />
+                </g>
+              )}
+
+              {/* Royal Capital Banners — counter-scaled por 1/zoom */}
               {isCapital && (
-                <g transform={`translate(0, -32) scale(${1.1 * lod.shieldScale})`}>
-                  <rect x="-10" y="-4" width="20" height="9" fill="#d97706" stroke="#fff" strokeWidth="1" rx="1" />
-                  <rect x="-10" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <rect x="-2" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <rect x="6" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" />
-                  <line x1="0" y1="-8" x2="0" y2="-17" stroke="#fff" strokeWidth="1.2" />
-                  <path d="M 0 -17 L 12 -21 L 0 -25 Z" fill={factionColor} stroke="#fff" strokeWidth="1" />
+                <g transform={`translate(0, ${-34 / zoom}) scale(${(isMobile ? 0.85 : 1.0) / zoom})`}>
+                  <rect x="-10" y="-4" width="20" height="9" fill="#d97706" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" rx="1" />
+                  <rect x="-10" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <rect x="-2" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <rect x="6" y="-8" width="4" height="4" fill="#d97706" stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                  <line x1="0" y1="-8" x2="0" y2="-17" stroke="#fff" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
+                  <path d="M 0 -17 L 12 -21 L 0 -25 Z" fill={factionColor} stroke="#fff" strokeWidth="1" vectorEffect="non-scaling-stroke" />
                   <circle cx="0" cy="-4" r="2.5" fill="#fef08a" />
                 </g>
               )}
 
-              {/* Province Name / Value Banner Text — fontSize faz o counter-scale; transform FIXO */}
+              {/* Province Name / Value Banner Text — counter-scaled por 1/zoom para tamanho de tela fixo e sem sobreposição */}
               {!prov.isWater && getLabelPriority(prov) <= lod.labelLevel && isSafeLabelPosition(prov.center) && (
-                <g transform={`translate(0, 31) scale(${labelScale})`}>
+                <g transform={`translate(0, ${26 / zoom}) scale(${(isMobile ? 0.75 : 1.0) / zoom})`}>
                   <rect
-                    x="-54"
-                    y="-10"
-                    width="108"
-                    height="17"
-                    rx="4"
+                    x="-38"
+                    y="-8"
+                    width="76"
+                    height="16"
+                    rx="3"
                     fill="#090d16"
                     fillOpacity="0.95"
                     stroke={isSelected ? '#fbbf24' : isHovered ? '#ffffff' : '#4b5563'}
-                    strokeWidth={isSelected ? '2' : '1'}
+                    strokeWidth={isSelected ? '1.8' : '1.2'}
+                    vectorEffect="non-scaling-stroke"
                     className="shadow-2xl"
                   />
                   <text
                     x="0"
-                    y="1.8"
+                    y="2.5"
                     textAnchor="middle"
                     fill="#f8fafc"
-                    fontSize={lod.fontSize}
+                    fontSize="8"
                     fontWeight="900"
-                    className="select-none uppercase font-serif tracking-widest"
+                    className="select-none uppercase font-serif tracking-wider"
                   >
                     {viewMode === 'economic'
                       ? `${(prov.wealth || 0) + (prov.foodProduction || 0) + (prov.materialProduction || 0)}`
@@ -853,9 +953,9 @@ export const Map: React.FC<MapProps> = ({
                 </g>
               )}
 
-              {/* Medieval Shield with Troop strength figure — counter-scale no transform; numero FIXO */}
-              {(!prov.isWater && totalTroops > 0) && (
-                <g transform={`translate(0, -2) scale(${(isMobile ? 0.85 : 1.1) * lod.shieldScale})`}>
+              {/* Medieval Shield / Naval Fleet Badge with Troop strength figure — counter-scaled por 1/zoom */}
+              {(totalTroops > 0) && (
+                <g transform={`translate(0, ${-6 / zoom}) scale(${(isMobile ? 0.85 : 1.0) / zoom})`}>
                   <path
                     d="M -13 -15 L 13 -15 C 13 -15 13 5 0 15 C -13 5 -13 -15 -13 -15 Z"
                     fill="#000000"
@@ -864,22 +964,23 @@ export const Map: React.FC<MapProps> = ({
                   />
                   <path
                     d="M -13 -15 L 13 -15 C 13 -15 13 5 0 15 C -13 5 -13 -15 -13 -15 Z"
-                    fill={factionColor}
-                    stroke={isSelected ? '#ffffff' : '#f1f5f9'}
-                    strokeWidth={isSelected ? '2.5' : '1.3'}
+                    fill={prov.isWater ? '#0284c7' : factionColor}
+                    stroke={isSelected ? '#fef08a' : prov.isWater ? '#38bdf8' : '#f1f5f9'}
+                    strokeWidth={isSelected ? '2' : '1.2'}
+                    vectorEffect="non-scaling-stroke"
                     opacity="0.98"
                   />
                   <text
                     x="0"
-                    y="3"
+                    y="3.5"
                     textAnchor="middle"
                     fill="#ffffff"
-                    fontSize="9.5"
+                    fontSize="10"
                     fontWeight="900"
                     className="select-none font-sans font-black tracking-tight"
                     filter="drop-shadow(0px 1px 1.5px rgba(0,0,0,0.8))"
                   >
-                    {totalTroops}
+                    {prov.isWater ? `⚓ ${totalTroops}` : totalTroops}
                   </text>
                 </g>
               )}
@@ -969,44 +1070,49 @@ export const Map: React.FC<MapProps> = ({
                   x2={nextProv.center[0]}
                   y2={nextProv.center[1]}
                   stroke={lineColor}
-                  strokeWidth={3}
-                  strokeDasharray="8 4"
-                  opacity={0.8}
+                  strokeWidth={1.2}
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
+                  opacity={0.85}
                 />
-                <circle
-                  cx={midX}
-                  cy={midY}
-                  r={8}
-                  fill={fillColor}
-                  stroke="#1e293b"
-                  strokeWidth={2}
-                />
-                <text
-                  x={midX}
-                  y={midY + 4}
-                  textAnchor="middle"
-                  fontSize={10}
-                  fontWeight={900}
-                  fill="white"
-                  paintOrder="stroke"
-                  stroke="black"
-                  strokeWidth={2}
-                >
-                  {totalTroops}
-                </text>
-                <text
-                  x={midX}
-                  y={midY + 18}
-                  textAnchor="middle"
-                  fontSize={7}
-                  fontWeight={700}
-                  fill={lineColor}
-                  paintOrder="stroke"
-                  stroke="black"
-                  strokeWidth={1.5}
-                >
-                  {label}
-                </text>
+                <g transform={`translate(${midX}, ${midY}) scale(${0.75 / zoom})`}>
+                  <circle
+                    cx={0}
+                    cy={0}
+                    r={6}
+                    fill={fillColor}
+                    stroke="#1e293b"
+                    strokeWidth={1.0}
+                  />
+                  <text
+                    x={0}
+                    y={2.5}
+                    textAnchor="middle"
+                    fontSize={7.5}
+                    fontWeight={900}
+                    fill="white"
+                    paintOrder="stroke"
+                    stroke="black"
+                    strokeWidth={1.0}
+                    className="select-none font-sans font-black tracking-tight"
+                  >
+                    {totalTroops}
+                  </text>
+                  <text
+                    x={0}
+                    y={13}
+                    textAnchor="middle"
+                    fontSize={6}
+                    fontWeight={700}
+                    fill={lineColor}
+                    paintOrder="stroke"
+                    stroke="black"
+                    strokeWidth={0.8}
+                    className="select-none font-sans font-bold"
+                  >
+                    {label}
+                  </text>
+                </g>
               </g>
             );
           })}
@@ -1029,8 +1135,9 @@ export const Map: React.FC<MapProps> = ({
                   x2={x2}
                   y2={y2}
                   stroke={lineColor}
-                  strokeWidth="3"
-                  strokeDasharray="8 4"
+                  strokeWidth="1.2"
+                  strokeDasharray="4 3"
+                  vectorEffect="non-scaling-stroke"
                   initial={{ opacity: 0 }}
                   animate={{ opacity: [0, 1, 1, 0] }}
                   transition={{ duration: 1.5, times: [0, 0.1, 0.8, 1] }}
@@ -1038,8 +1145,10 @@ export const Map: React.FC<MapProps> = ({
                 <motion.circle
                   cx={x1}
                   cy={y1}
-                  r="12"
+                  r={6 / zoom}
                   fill={circleColor}
+                  stroke="#1e293b"
+                  strokeWidth={1 / zoom}
                   initial={{ opacity: 0 }}
                   animate={{
                     cx: [x1, x2],
@@ -1050,11 +1159,14 @@ export const Map: React.FC<MapProps> = ({
                 />
                 <motion.text
                   x={x1}
-                  y={y1}
+                  y={y1 + 2.5 / zoom}
                   textAnchor="middle"
-                  fontSize="8"
+                  fontSize={7.5 / zoom}
                   fontWeight="bold"
                   fill="white"
+                  paintOrder="stroke"
+                  stroke="black"
+                  strokeWidth={1.0 / zoom}
                   initial={{ opacity: 0 }}
                   animate={{
                     x: [x1, x2],
@@ -1082,6 +1194,38 @@ export const Map: React.FC<MapProps> = ({
             strokeDasharray="8 4"
             pointerEvents="none"
           />
+        )}
+
+        {/* Campaign Waypoints Numbered Badges Overlay */}
+        {campaignWaypoints && campaignWaypoints.length > 0 && (
+          <g pointerEvents="none">
+            {campaignWaypoints.map((wpId, idx) => {
+              const prov = gameState.provinces[wpId];
+              if (!prov) return null;
+
+              return (
+                <g
+                  key={`campaign-wp-badge-${wpId}-${idx}`}
+                  transform={`translate(${prov.center[0]}, ${prov.center[1] - 8 / zoom}) scale(${1.1 / zoom})`}
+                >
+                  <circle cx="0" cy="0" r="14" fill="#ef4444" opacity="0.35" className="animate-ping" />
+                  <circle cx="0" cy="0" r="12" fill="#7f1d1d" stroke="#fde047" strokeWidth="2" />
+                  <text
+                    x="0"
+                    y="4"
+                    textAnchor="middle"
+                    fill="#fef08a"
+                    fontSize="11"
+                    fontWeight="900"
+                    className="font-sans font-black select-none"
+                    filter="drop-shadow(0px 1px 2px rgba(0,0,0,0.9))"
+                  >
+                    {idx + 1}
+                  </text>
+                </g>
+              );
+            })}
+          </g>
         )}
       </svg>
 
@@ -1131,6 +1275,59 @@ export const Map: React.FC<MapProps> = ({
             </div>
           );
         })}
+
+        {/* Quick Action Popup Menu */}
+        {selectedProvince && isOwn && !selectedProvince.isWater && (
+          <div
+            className="absolute pointer-events-auto z-30"
+            style={{
+              left: `${(selectedProvince.center[0] / MAP_WIDTH) * 100}%`,
+              top: `${(selectedProvince.center[1] / MAP_HEIGHT) * 100}%`,
+              transform: `translate(-50%, -135%) scale(${Math.max(0.3, Math.min(0.75, 0.5 / (zoom || 1)))})`,
+              transformOrigin: 'bottom center',
+              transition: 'transform 0.15s ease-out, left 0.2s ease-out, top 0.2s ease-out',
+            }}
+          >
+            {/* Glassmorphic menu card */}
+            <div className="flex items-center gap-1.5 p-1.5 bg-[#090d16]/95 border border-amber-500/50 rounded-lg shadow-2xl backdrop-blur-md">
+              {/* March button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickAction?.('move', selectedProvince.id);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-amber-500/10 hover:bg-amber-500/30 text-amber-200 hover:text-amber-100 transition-all border border-amber-500/20 text-[10px] font-black uppercase tracking-wider cursor-pointer"
+              >
+                🚀 Marchar
+              </button>
+
+              {/* Attack button */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onQuickAction?.('attack', selectedProvince.id);
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-red-500/10 hover:bg-red-500/30 text-red-300 hover:text-red-100 transition-all border border-red-500/20 text-[10px] font-black uppercase tracking-wider cursor-pointer"
+              >
+                ⚔️ Atacar
+              </button>
+
+              {selectedProvince.troops > 0 && (
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onQuickAction?.('disband', selectedProvince.id);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-white transition-all border border-stone-600/30 text-[10px] font-black uppercase tracking-wider cursor-pointer"
+                >
+                  🛡️ Dispensar
+                </button>
+              )}
+            </div>
+            {/* Small arrow pointing down to the province */}
+            <div className="w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-[#090d16]/95 mx-auto mt-[-1px]" />
+          </div>
+        )}
       </div>
     </div>
   );

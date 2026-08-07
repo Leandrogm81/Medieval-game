@@ -36,7 +36,7 @@ export const TechnologyModal: React.FC<TechnologyModalProps> = ({
 
   const enemyTech = Object.values(gameState.realms)
     .filter(r => r.id !== playerRealmId && r.id !== 'neutral' && r.techLevels)
-    .map(r => ({ name: r.name, levels: r.techLevels }));
+    .map(r => ({ id: r.id, name: r.name, levels: r.techLevels }));
 
   return (
     <AnimatePresence>
@@ -128,7 +128,7 @@ export const TechnologyModal: React.FC<TechnologyModalProps> = ({
                 <span className="font-bold text-slate-100">Reinos rivais:</span>
                 <div className="mt-2 space-y-1">
                   {enemyTech.map(r => (
-                    <p key={r.name} className="text-slate-400">
+                    <p key={r.id} className="text-slate-400">
                       • {r.name}: Mov {r.levels.movement} | Ass {r.levels.assimilation} | Rec {r.levels.recruitment} | Comb {r.levels.combat}
                     </p>
                   ))}

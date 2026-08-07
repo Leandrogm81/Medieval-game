@@ -78,6 +78,14 @@ describe('turnLogic — calculateVisibility', () => {
     expect(Array.isArray(visible)).toBe(true);
     expect(visible.length).toBeGreaterThan(0);
   });
+
+  it('inclui províncias recém-descobertas em recentlyScoutedProvinceIds', () => {
+    const state = makeState();
+    state.recentlyScoutedProvinceIds = ['prov-scout-1', 'prov-scout-2'];
+    const visible = calculateVisibility(state);
+    expect(visible).toContain('prov-scout-1');
+    expect(visible).toContain('prov-scout-2');
+  });
 });
 
 describe('turnLogic — checkGameOver', () => {
